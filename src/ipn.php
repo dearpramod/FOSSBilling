@@ -21,7 +21,9 @@ global $request;
 $di = include Path::join(PATH_ROOT, 'di.php');
 $di['translate']();
 
-$invoiceID = $request->get('invoice_id');
+// bb_invoice_id required to maintain compatibility with older IPNs (subscriptions) 
+$invoiceID = $request->get('invoice_id') ?? $request->get('bb_invoice_id');
+
 if ($invoiceID !== null) {
     $invoiceID = filter_var($invoiceID, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if ($invoiceID === false) {
@@ -29,8 +31,8 @@ if ($invoiceID !== null) {
         exit;
     }
 }
-
-$gatewayID = $request->get('gateway_id');
+// bb_gateway_id required to maintain compatibility with older IPNs (subscriptions)
+$gatewayID = $request->get('gateway_id') ?? $request->get('bb_gateway_id');
 
 if ($gatewayID !== null) {
     $gatewayID = filter_var($gatewayID, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
