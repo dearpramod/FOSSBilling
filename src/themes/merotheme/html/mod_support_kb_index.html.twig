@@ -1,0 +1,251 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Knowledge Base{% endblock %}
+{% block page_header %}Knowledge Base{% endblock %}
+
+{% block content %}
+{% if request.q %}
+    {% set kbcategories = guest.support_kb_category_get_list({ "q": request.q }) %}
+{% else %}
+    {% set kbcategories = guest.support_kb_category_get_list %}
+{% endif %}
+{% set article_page = (request.article_page|default(1))|number_format(0,'','') %}
+{% set all_articles = guest.support_kb_article_get_list({ "per_page": 8, "page": article_page }) %}
+
+<div class="space-y-8">
+
+    {# ── Hero search ── #}
+    <div class="rounded-2xl p-10 md:p-14 text-center relative overflow-hidden border border-slate-200 dark:border-white/[0.06]">
+        {# Light mode background #}
+        <div class="absolute inset-0 dark:opacity-0 transition-opacity" style="background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);"></div>
+        {# Dark mode background #}
+        <div class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity" style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb,99,102,241),0.15) 0%, rgba(var(--color-primary-rgb,99,102,241),0.06) 100%);"></div>
+        <div class="absolute -top-20 -right-20 w-64 h-64 rounded-full blur-3xl pointer-events-none" style="background: rgba(var(--color-primary-rgb, 99,102,241), 0.07);"></div>
+        <div class="relative z-10 max-w-2xl mx-auto">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-3 tracking-tight">
+                How can we help you today?
+            </h1>
+            <p class="text-slate-500 dark:text-slate-400 text-[15px] mb-8 leading-relaxed">
+                Search our help centre for quick answers and detailed configuration guides.
+            </p>
+            <form method="get" action="" class="max-w-xl mx-auto">
+                <input type="hidden" name="_url" value="/support/kb">
+                <div class="flex items-center bg-white dark:bg-white/[0.06] rounded-2xl overflow-hidden shadow-lg shadow-slate-200/60 dark:shadow-black/30 border border-slate-200 dark:border-white/[0.08]">
+                    <svg class="flex-shrink-0 ml-5 w-5 h-5 text-slate-400 dark:text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" name="q" value="{{ request.q }}"
+                           placeholder="Search for articles, keywords, or error codes..."
+                           class="flex-1 pl-3.5 pr-2 py-4 bg-transparent text-slate-800 dark:text-slate-100 text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none">
+                    <button type="submit"
+                            class="flex-shrink-0 m-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                        Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ── No results ── #}
+    {% if request.q and kbcategories.total == 0 %}
+    <div class="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/[0.06] py-16 text-center">
+        <div class="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1.5">No results for "{{ request.q }}"</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mb-5 max-w-xs mx-auto">Try broader search terms or browse categories below.</p>
+        <a href="{{ 'support/kb'|url }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all">
+            ← Clear search
+        </a>
+    </div>
+    {% endif %}
+
+    {# ── Category grid ── #}
+    {% if kbcategories.list|length > 0 %}
+    <div>
+        <div class="flex items-center justify-between mb-6">
+            {% if request.q %}
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Results for <span class="text-slate-800 dark:text-slate-100 font-semibold">"{{ request.q }}"</span>
+                <span class="mx-1.5">·</span>
+                {{ kbcategories.total }} categor{{ kbcategories.total != 1 ? 'ies' : 'y' }}
+            </p>
+            <a href="{{ 'support/kb'|url }}" class="text-xs font-semibold hover:underline transition-colors" style="color: var(--color-primary);">Clear</a>
+            {% else %}
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Browse Categories</h2>
+            <a href="{{ 'support/kb'|url }}" class="text-xs font-semibold hover:underline transition-colors flex items-center gap-1" style="color: var(--color-primary);">View All Topics <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg></a>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {% for category in kbcategories.list %}
+            <a href="{{ ('support/kb')|url }}/{{ category.slug }}"
+               class="group bg-white dark:bg-white/[0.04] p-6 rounded-2xl border border-slate-200 dark:border-white/[0.07] shadow-sm hover:shadow-md dark:hover:bg-white/[0.06] transition-all duration-200 flex flex-col"
+               style="--tw-shadow-color: rgba(var(--color-primary-rgb, 99,102,241), 0.12);">
+                {# Icon #}
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all duration-200 group-hover:scale-105"
+                     style="background: rgba(var(--color-primary-rgb, 99,102,241), 0.08); border: 1px solid rgba(var(--color-primary-rgb, 99,102,241), 0.16);">
+                    <svg class="w-6 h-6 transition-colors" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                </div>
+
+                {# Title + description #}
+                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-[color:var(--color-primary)] transition-colors mb-1.5 leading-snug">{{ category.title }}</h3>
+                {% if category.description %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed flex-1 mb-4">{{ category.description }}</p>
+                {% else %}
+                <div class="flex-1"></div>
+                {% endif %}
+
+                {# Footer #}
+                <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/[0.06] mt-auto">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        {{ category.articles|length }} article{{ category.articles|length != 1 ? 's' : '' }}
+                    </span>
+                    <svg class="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all -translate-x-1"
+                         style="color: var(--color-primary);"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Recently updated articles ── #}
+    {% if not request.q and all_articles.list|length > 0 %}
+    <div class="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/[0.06] overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100">Recently Updated Articles</h3>
+            <span class="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-white/[0.04] px-3 py-1 rounded-full border border-slate-100 dark:border-white/[0.06]">
+                Latest articles
+            </span>
+        </div>
+        <div class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+            {% for article in all_articles.list %}
+            <a href="{{ ('support/kb')|url }}/{{ article.category.slug }}/{{ article.slug }}"
+               class="flex items-start justify-between gap-6 px-6 py-5 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
+                <div class="min-w-0">
+                    <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-[color:var(--color-primary)] transition-colors mb-1 leading-snug">
+                        {{ article.title }}
+                    </h4>
+                    <p class="text-sm text-slate-400 dark:text-slate-500 truncate">{{ article.category.title }}</p>
+                </div>
+                <div class="flex items-center gap-6 flex-shrink-0">
+                    <div class="hidden sm:flex flex-col items-end">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Views</span>
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ article.views }}</span>
+                    </div>
+                    <div class="flex flex-col items-end">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Updated</span>
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ article.updated_at|date('M j') }}</span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+
+        {# ── Article pagination ── #}
+        {% if all_articles.pages > 1 %}
+        <div class="flex items-center justify-center gap-1.5 px-6 py-4 border-t border-slate-100 dark:border-white/[0.06]">
+            {# Prev #}
+            {% if article_page > 1 %}
+            <a href="{{ 'support/kb'|url }}?article_page={{ article_page - 1 }}"
+               class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </a>
+            {% else %}
+            <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 dark:border-white/[0.04] text-slate-300 dark:text-slate-600 cursor-not-allowed">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </span>
+            {% endif %}
+
+            {# Page numbers with smart truncation #}
+            {% for p in 1..all_articles.pages %}
+                {% set isActive = article_page == p %}
+                {% set nearCurrent = (p >= article_page - 2 and p <= article_page + 2) %}
+                {% set isEdge = (p == 1 or p == all_articles.pages) %}
+                {% if isEdge or nearCurrent %}
+                    {% if not loop.first and p == article_page - 2 and article_page - 2 > 2 %}
+                    <span class="px-1 text-slate-400 dark:text-slate-500 text-sm">…</span>
+                    {% endif %}
+                    {% if not loop.first and not nearCurrent and p == all_articles.pages and article_page + 2 < all_articles.pages - 1 %}
+                    <span class="px-1 text-slate-400 dark:text-slate-500 text-sm">…</span>
+                    {% endif %}
+                    <a href="{{ 'support/kb'|url }}?article_page={{ p }}"
+                       class="w-9 h-9 flex items-center justify-center rounded-lg text-sm font-medium transition-all {{ isActive ? 'text-white' : 'border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04]' }}"
+                       {% if isActive %}style="background: var(--color-primary);"{% endif %}>
+                        {{ p }}
+                    </a>
+                {% endif %}
+            {% endfor %}
+
+            {# Next #}
+            {% if article_page < all_articles.pages %}
+            <a href="{{ 'support/kb'|url }}?article_page={{ article_page + 1 }}"
+               class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            {% else %}
+            <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 dark:border-white/[0.04] text-slate-300 dark:text-slate-600 cursor-not-allowed">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+    </div>
+    {% endif %}
+
+    {# ── Still need a hand? CTA ── #}
+    <div class="rounded-2xl p-10 text-center relative overflow-hidden border border-transparent dark:border-white/[0.08]">
+        {# Light mode: vivid brand gradient #}
+        <div class="absolute inset-0 dark:opacity-0 transition-opacity" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary, var(--color-primary)) 100%);"></div>
+        {# Dark mode: dark navy #}
+        <div class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity" style="background: #1e293b;"></div>
+        {# Shared radial sheen #}
+        <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(circle at center, rgba(255,255,255,0.08) 0%, transparent 65%);"></div>
+        <div class="relative z-10">
+            <h2 class="text-2xl font-extrabold text-white mb-2" style="text-shadow: 0 2px 10px rgba(0,0,0,0.25);">Still need a hand?</h2>
+            <p class="text-white/90 text-sm mb-8 max-w-md mx-auto leading-relaxed">
+                Our expert support engineers are available 24/7 to help you with technical issues.
+            </p>
+            <div class="flex flex-wrap justify-center gap-4">
+                <a href="{{ 'support'|url }}"
+                   class="min-w-[200px] h-12 px-6 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 transition-all bg-white hover:bg-white/90 text-slate-800 shadow-lg shadow-black/10 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white dark:shadow-none dark:border dark:border-white/20">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    Submit Support Ticket
+                </a>
+                <a href="{{ 'support'|url }}"
+                   class="min-w-[200px] h-12 px-6 bg-white/[0.15] hover:bg-white/[0.25] text-white border-2 border-white/50 hover:border-white/70 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                    </svg>
+                    Contact Support
+                </a>
+            </div>
+            <div class="mt-8 flex flex-wrap items-center justify-center gap-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span class="text-xs text-white/80">Avg. response: 14 mins</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                    <span class="text-xs text-white/80">98% Satisfaction rate</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

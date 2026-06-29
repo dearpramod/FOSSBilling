@@ -1,0 +1,1225 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Checkout{% endblock %}
+{% block page_header %}Checkout{% endblock %}
+
+{% set cart      = guest.cart_get %}
+{% set gateways  = guest.invoice_gateways %}
+{% set _rc       = guest.extension_is_on({'mod': 'spamchecker'}) ? guest.spamchecker_recaptcha : {} %}
+{% set r         = guest.client_required %}
+{% set social    = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
+{% set countries = client ? {} : guest.system_countries %}
+
+{# Period-grouped totals for the order summary sidebar #}
+{% set period_totals = {} %}
+{% for item in cart.items %}
+    {% set pk = item.period | period_title %}
+    {% set period_totals = period_totals | merge({(pk): (period_totals[pk] | default(0)) + item.total}) %}
+{% endfor %}
+
+{% block content %}
+
+<script>
+{# Alpine component functions defined here. merotheme.js is deferred so Alpine.start()
+   runs after the full DOM is parsed — all inline scripts have already executed by then. #}
+function billingPage() {
+    return {
+        activeTab: '{{ request.auth_tab|default(request.auth_error ? "login" : "register") }}',
+        loading: false,
+        error: '',
+
+        // Login fields
+        loginEmail: '',
+        loginPassword: '',
+
+        // Register fields
+        firstName: '',
+        lastName: '',
+        regEmail: '',
+        phone: '',
+        phoneCC: '+1',
+        address1: '',
+        city: '',
+        country: '',
+        state: '',
+        postcode: '',
+        password: '',
+        passwordConfirm: '',
+        passwordModalOpen: false,
+        passwordLength: 12,
+        generatedPassword: '',
+        showGeneratedPassword: true,
+        passwordCopied: false,
+        copyToast: false,
+
+        sanitizePasswordLength() {
+            let len = parseInt(this.passwordLength, 10);
+            if (Number.isNaN(len)) len = 12;
+            this.passwordLength = Math.max(8, Math.min(64, len));
+        },
+
+        generatePasswordCandidate() {
+            this.sanitizePasswordLength();
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+            const bytes = new Uint32Array(this.passwordLength);
+            crypto.getRandomValues(bytes);
+            let pwd = '';
+            for (let i = 0; i < this.passwordLength; i++) pwd += chars.charAt(bytes[i] % chars.length);
+            this.generatedPassword = pwd;
+            this.passwordCopied = false;
+        },
+
+        openPasswordModal() {
+            this.passwordModalOpen = true;
+            this.showGeneratedPassword = true;
+            this.generatePasswordCandidate();
+        },
+
+        copyText(text) {
+            if (!text) return Promise.resolve(false);
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+            }
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            let copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch (e) {
+                copied = false;
+            }
+            document.body.removeChild(ta);
+            return Promise.resolve(copied);
+        },
+
+        copyGeneratedPassword() {
+            this.copyText(this.generatedPassword).then((ok) => {
+                this.passwordCopied = ok;
+                if (ok) {
+                    setTimeout(() => { this.passwordCopied = false; }, 1500);
+                    this.copyToast = true;
+                    setTimeout(() => { this.copyToast = false; }, 2200);
+                }
+            });
+        },
+
+        insertGeneratedPassword() {
+            if (!this.generatedPassword) this.generatePasswordCandidate();
+            this.password = this.generatedPassword;
+            this.passwordConfirm = this.generatedPassword;
+            this.copyText(this.generatedPassword).then(() => {
+                this.copyToast = true;
+                setTimeout(() => { this.copyToast = false; }, 2200);
+            });
+            this.passwordModalOpen = false;
+        },
+
+        // Login via server-side form POST (avoids AJAX session-cookie race condition)
+        submitLogin() {
+            const self = this;
+            self.error = '';
+            if (!self.loginEmail || !self.loginPassword) {
+                self.error = 'Please enter your email and password.';
+                return;
+            }
+            self.loading = true;
+            document.getElementById('co-login-form').submit();
+        },
+
+        submit() {
+            const self = this;
+            self.error = '';
+
+            if (self.activeTab === 'login') {
+                self.submitLogin();
+                return;
+            }
+
+            // Register
+            if (!self.firstName || !self.regEmail || !self.password) {
+                self.error = 'Please fill in all required fields.';
+                return;
+            }
+            if (self.password.length < 8) {
+                self.error = 'Password must be at least 8 characters.';
+                return;
+            }
+            if (self.password !== self.passwordConfirm) {
+                self.error = 'Passwords do not match.';
+                return;
+            }
+
+            self.loading = true;
+
+            API.guest.post(
+                'client/create',
+                {
+                    first_name:       self.firstName,
+                    last_name:        self.lastName,
+                    email:            self.regEmail,
+                    phone_cc:         self.phoneCC,
+                    phone:            self.phone,
+                    address_1:        self.address1,
+                    city:             self.city,
+                    country:          self.country,
+                    state:            self.state,
+                    postcode:         self.postcode,
+                    password:         self.password,
+                    password_confirm: self.passwordConfirm,
+                },
+                function () {
+                    // Registration succeeded — use server-side POST to log in and
+                    // redirect to checkout (avoids AJAX session-cookie race condition)
+                    document.getElementById('co-reg-login-email').value    = self.regEmail;
+                    document.getElementById('co-reg-login-password').value = self.password;
+                    document.getElementById('co-reg-login-form').submit();
+                },
+                function (err) {
+                    self.loading = false;
+                    self.error = err.message || 'Registration failed. Please try again.';
+                }
+            );
+        },
+
+        removeItem(id) {
+            API.guest.post(
+                'cart/remove_item',
+                { id: id },
+                function () { window.location.reload(); },
+                (err) => { this.error = err.message || 'Could not remove item.'; }
+            );
+        }
+    };
+}
+
+function orderCheckout() {
+    return {
+        selectedGateway: null,
+        loading: false,
+        error: '',
+
+        init() {
+            const firstGateway = document.querySelector('input[name="gateway_id"]');
+            if (firstGateway) {
+                this.selectedGateway = firstGateway.value;
+            }
+        },
+
+        removeItem(id) {
+            API.guest.post(
+                'cart/remove_item',
+                { id: id },
+                function () { window.location.reload(); },
+                (err) => { this.error = err.message || 'Could not remove item.'; }
+            );
+        },
+
+        checkout() {
+            if (this.loading) return;
+            if (!this.selectedGateway) {
+                this.error = 'Please select a payment method.';
+                return;
+            }
+            this.loading = true;
+
+            const data = {};
+            if (this.selectedGateway !== 'balance') {
+                data.gateway_id = this.selectedGateway;
+            }
+
+            const doCheckout = () => {
+                const checkoutUrl = new URL('cart/checkout', API.client.baseURL + '/').toString();
+                API.makeRequest('POST', checkoutUrl, data,
+                    (result) => {
+                    if (result.invoice_hash) {
+                        window.location.href = '{{ "invoice"|url }}/' + result.invoice_hash;
+                    } else {
+                        window.location.href = '{{ "/order/service"|url }}';
+                    }
+                },
+                (error) => {
+                    // Promo code already used — auto-remove it and retry once
+                    if (Number(error.code) === 9874) {
+                        API.guest.post('cart/remove_promo', {},
+                            () => {
+                                delete data.gateway_id;
+                                if (this.selectedGateway !== 'balance') {
+                                    data.gateway_id = this.selectedGateway;
+                                }
+                                doCheckout();
+                            },
+                            () => {
+                                this.loading = false;
+                                this.error = 'Your promo code has already been used and could not be removed. Please go to your cart and remove it manually.';
+                            }
+                        );
+                        return;
+                    }
+                    this.loading = false;
+                    this.error = error.message || 'Checkout failed. Please try again.';
+                },
+                true, 120000
+            );
+            };
+
+            {% if _rc.enabled and _rc.publickey and _rc.pages.checkout %}
+            {% if _rc.version == 3 %}
+            const self = this;
+            grecaptcha.enterprise.ready(function () {
+                grecaptcha.enterprise.execute('{{ _rc.publickey }}', { action: 'CHECKOUT' }).then(function (token) {
+                    data['g-recaptcha-response'] = token;
+                    doCheckout();
+                });
+            });
+            {% else %}
+            var rcResp = (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse) ? grecaptcha.getResponse() : '';
+            if (rcResp) data['g-recaptcha-response'] = rcResp;
+            doCheckout();
+            {% endif %}
+            {% else %}
+            doCheckout();
+            {% endif %}
+        }
+    }
+}
+</script>
+
+{# ══════════════════════════════════════════════════════════════════
+   GUEST VIEW — Billing Details (login / register) + order summary
+   ══════════════════════════════════════════════════════════════════ #}
+{% if not client %}
+
+{% if cart.items is empty %}
+<div class="flex flex-col items-center justify-center py-24 text-center">
+    <div class="w-20 h-20 rounded-2xl border border-white/[0.07] bg-white/[0.03] flex items-center justify-center mb-6">
+        <svg class="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+    </div>
+    <h2 class="text-xl font-bold text-white mb-2">Your cart is empty</h2>
+    <p class="text-gray-500 text-sm mb-8">Browse our plans and add something to get started.</p>
+    <a href="{{ '/order'|url }}"
+       class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-all"
+       style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.25);">
+        Browse Plans
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+        </svg>
+    </a>
+</div>
+{% else %}
+
+<div class="co-order-wrap py-4" x-data="billingPage()">
+
+    <h1 class="text-xl font-bold text-white mb-6">Review &amp; Checkout</h1>
+
+    {# Error banner (server-side auth errors) #}
+    {% if request.auth_error %}
+    <div class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;">
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span>{{ request.auth_error }}</span>
+    </div>
+    {% endif %}
+
+    {# Error banner (client-side validation errors) #}
+    <div x-show="error" x-transition
+         role="alert" aria-live="assertive"
+         class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span x-text="error"></span>
+    </div>
+
+    {# ── Two-column grid — matches order form (.order-two-col = 1fr 360px) ── #}
+    <div class="order-two-col">
+
+        {# ── Left column: Product Summary + Auth form ── #}
+        <div class="space-y-4 min-w-0">
+
+        {# ── Product / Order Summary card ── #}
+        <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+            <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                <h2 class="text-sm font-bold text-white uppercase tracking-wider">Your Order</h2>
+                <a href="{{ '/order'|url }}"
+                   class="flex items-center gap-1 text-xs font-medium hover:underline underline-offset-2"
+                   style="color:var(--color-primary);">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add more
+                </a>
+            </div>
+            <div class="divide-y divide-white/[0.05]">
+                {% for item in cart.items %}
+                <div class="flex items-center justify-between px-6 py-3.5 gap-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                             style="background:rgba(var(--color-primary-rgb),.10);">
+                            <svg class="w-4 h-4" style="color:var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-white truncate">{{ item.title }}</p>
+                            {% if item.period %}
+                            <p class="text-xs text-gray-400 mt-0.5">{{ item.period | period_title }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <div class="text-right">
+                            {% if item.discount_price %}
+                            <p class="text-xs text-gray-400 line-through">{{ item.total | money_convert }}</p>
+                            <p class="text-sm font-bold text-green-400">{{ (item.total - item.discount_price) | money_convert }}</p>
+                            {% else %}
+                            <p class="text-sm font-bold text-white">{{ item.total | money_convert }}</p>
+                            {% endif %}
+                            {% if item.setup_price > 0 %}
+                            <p class="text-xs text-gray-400">+ {{ item.setup_price | money_convert }} setup</p>
+                            {% endif %}
+                        </div>
+                        <button type="button" @click="removeItem({{ item.id }})"
+                                title="Remove {{ item.title }}"
+                                aria-label="Remove {{ item.title }} from cart"
+                                class="w-7 h-7 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 transition-all flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="px-6 py-3 border-t border-white/[0.06] flex items-center justify-between" style="background:rgba(255,255,255,0.02);">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Subtotal</span>
+                <span class="text-sm font-bold text-white">{{ cart.subtotal | money_convert }}</span>
+            </div>
+        </div>
+
+        {# ── Auth options card ── #}
+        <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+
+            {# Option 1: Existing Customer Login #}
+            <div class="border-b border-white/[0.06]">
+                {# Tab header row: radio label only #}
+                <div class="flex items-center gap-3 px-6 py-4">
+                    <button type="button" class="flex items-center gap-3 select-none focus:outline-none" @click="activeTab = 'login'"
+                            :aria-pressed="activeTab === 'login'">
+                        <div class="w-[1.125rem] h-[1.125rem] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                             :style="activeTab === 'login' ? 'border-color:var(--color-primary)' : 'border-color:var(--radio-inactive-border)'">
+                            <div class="w-2 h-2 rounded-full transition-transform"
+                                 :style="activeTab === 'login' ? 'transform:scale(1);background:var(--color-primary)' : 'transform:scale(0);background:var(--color-primary)'"></div>
+                        </div>
+                        <span class="text-base font-semibold text-white">Existing Customer Login</span>
+                    </button>
+                </div>
+
+                <div x-show="activeTab === 'login'"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 -translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     style="display:none;">
+                    {# Server-side form POST — avoids AJAX session-cookie race condition #}
+                    <form id="co-login-form" method="POST" action="{{ "/order/checkout/login"|url }}">
+                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+                    {# Google sign-in — shown only after expanding this panel #}
+                    {% if social.google_enabled %}
+                    <div class="px-6 pt-4 pb-2 space-y-3">
+                        <a href="{{ ('sociallogin/google?context=login&return_to=/order/checkout')|url }}"
+                           class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-200 text-sm font-semibold hover:bg-white/[0.08] transition-all"
+                           style="background:rgba(255,255,255,0.05);">
+                            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                            </svg>
+                            Continue with Google
+                        </a>
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 h-px" style="background:rgba(255,255,255,0.07);"></div>
+                            <span class="text-xs text-gray-600">or sign in with email</span>
+                            <div class="flex-1 h-px" style="background:rgba(255,255,255,0.07);"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {# Fields #}
+                    <div class="px-6 pt-2 pb-5 space-y-4">
+                        <div>
+                            <label for="co-login-email" class="co-label">Email Address <span style="color:var(--color-primary);">*</span></label>
+                            <input id="co-login-email" type="email" name="email" x-model="loginEmail" class="co-input"
+                                   placeholder="you@example.com" autocomplete="email"
+                                   @keydown.enter="submitLogin()">
+                        </div>
+                        <div>
+                            <label for="co-login-password" class="co-label">Password <span style="color:var(--color-primary);">*</span></label>
+                            <input id="co-login-password" type="password" name="password" x-model="loginPassword" class="co-input"
+                                   placeholder="Your password" autocomplete="current-password"
+                                   @keydown.enter="submitLogin()">
+                        </div>
+                    </div>
+                    {# Footer row — full-width border matching card pattern #}
+                    <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-between gap-3 rounded-b-2xl" style="background:rgba(255,255,255,0.02);">
+                        <a href="{{ '/password-reset'|url }}"
+                           class="text-xs font-medium hover:underline underline-offset-2"
+                           style="color:var(--color-primary);">Forgot password?</a>
+                        <button type="button" @click="submitLogin()" :disabled="loading" :aria-busy="loading"
+                                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 3px 10px rgba(var(--color-primary-rgb),.25);">
+                            <template x-if="loading">
+                                <svg class="w-3.5 h-3.5 animate-spin" aria-hidden="true" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                            </template>
+                            <span x-text="loading ? 'Signing in…' : 'Login'"></span>
+                        </button>
+                    </div>
+                    </form>
+                </div>
+            </div>
+
+            {# Option 2: Create a New Account #}
+            <div>
+                <button type="button" class="flex items-center gap-3 px-6 py-4 select-none w-full text-left focus:outline-none"
+                        @click="activeTab = 'register'" :aria-pressed="activeTab === 'register'">
+                    <div class="w-[1.125rem] h-[1.125rem] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                         :style="activeTab === 'register' ? 'border-color:var(--color-primary)' : 'border-color:var(--radio-inactive-border)'">
+                        <div class="w-2 h-2 rounded-full transition-transform"
+                             :style="activeTab === 'register' ? 'transform:scale(1);background:var(--color-primary)' : 'transform:scale(0);background:var(--color-primary)'"></div>
+                    </div>
+                    <span class="text-base font-semibold text-white">Create a New Account</span>
+                </button>
+
+                <div x-show="activeTab === 'register'"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 -translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     style="display:none;">
+
+                    {# Form fields #}
+                    <div class="px-6 pt-2 pb-5 space-y-6">
+
+                    {# Social login #}
+                    {% if social.google_enabled %}
+                    <div>
+                        <a href="{{ ('sociallogin/google?context=register&return_to=/order/checkout')|url }}"
+                           class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-300 text-sm font-semibold hover:bg-white/[0.08] transition-all"
+                           style="background:rgba(255,255,255,0.05);">
+                            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                            </svg>
+                            Continue with Google
+                        </a>
+                        <div class="relative flex items-center my-5">
+                            <div class="flex-grow border-t border-white/[0.08]"></div>
+                            <span class="mx-3 text-xs text-gray-400 font-medium flex-shrink">or fill the form below</span>
+                            <div class="flex-grow border-t border-white/[0.08]"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# Personal Information #}
+                    <div>
+                        <p class="co-section">Personal Information</p>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="co-reg-first-name" class="co-label">First Name <span style="color:var(--color-primary);">*</span></label>
+                                    <input id="co-reg-first-name" type="text" x-model="firstName" class="co-input"
+                                           placeholder="First name" autocomplete="given-name" maxlength="100">
+                                </div>
+                                <div>
+                                    <label for="co-reg-last-name" class="co-label">Last Name{% if 'last_name' in r %} <span style="color:var(--color-primary);">*</span>{% endif %}</label>
+                                    <input id="co-reg-last-name" type="text" x-model="lastName" class="co-input"
+                                           placeholder="Last name" autocomplete="family-name" maxlength="100">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="co-reg-email" class="co-label">Email Address <span style="color:var(--color-primary);">*</span></label>
+                                    <input id="co-reg-email" type="email" x-model="regEmail" class="co-input"
+                                           placeholder="you@example.com" autocomplete="email">
+                                </div>
+                                <div>
+                                    <label for="co-reg-phone" class="co-label">Phone Number{% if 'phone' in r %} <span style="color:var(--color-primary);">*</span>{% endif %}</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" x-model="phoneCC" class="co-input text-center"
+                                               style="width:5rem;flex-shrink:0;"
+                                               placeholder="+1" maxlength="6" inputmode="numeric" autocomplete="tel-country-code"
+                                               aria-label="Country code">
+                                        <input id="co-reg-phone" type="tel" x-model="phone" class="co-input"
+                                               placeholder="Phone number" maxlength="30" autocomplete="tel-national">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Billing Address #}
+                    {% if 'address_1' in r or 'city' in r or 'country' in r or 'state' in r or 'postcode' in r %}
+                    <div>
+                        <p class="co-section">Billing Address</p>
+                        <div class="space-y-4">
+                            {% if 'address_1' in r %}
+                            <div>
+                                <label class="co-label">Street Address <span style="color:var(--color-primary);">*</span></label>
+                                <input type="text" x-model="address1" class="co-input"
+                                       placeholder="Street address" autocomplete="address-line1">
+                            </div>
+                            {% endif %}
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {% if 'city' in r %}
+                                <div>
+                                    <label class="co-label">City <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="city" class="co-input"
+                                           placeholder="City" autocomplete="address-level2" maxlength="100">
+                                </div>
+                                {% endif %}
+                                {% if 'country' in r %}
+                                <div>
+                                    <label class="co-label">Country <span style="color:var(--color-primary);">*</span></label>
+                                    <select x-model="country" class="co-input" autocomplete="country">
+                                        <option value="">Select country…</option>
+                                        {% for val, label in countries %}
+                                            <option value="{{ val }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {% if 'state' in r %}
+                                <div>
+                                    <label class="co-label">State / Province <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="state" class="co-input"
+                                           placeholder="State / Province" autocomplete="address-level1" maxlength="100">
+                                </div>
+                                {% endif %}
+                                {% if 'postcode' in r %}
+                                <div>
+                                    <label class="co-label">Postcode <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="postcode" class="co-input"
+                                           placeholder="Postcode / ZIP" autocomplete="postal-code" maxlength="20">
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# Account Security #}
+                    <div>
+                        <p class="co-section">Account Security</p>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex items-center justify-between mb-1.5">
+                                        <label class="co-label" style="margin-bottom:0;">Password <span style="color:var(--color-primary);">*</span></label>
+                                        <span class="flex items-center gap-1 text-xs text-gray-400">
+                                            at least 8 characters
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <input type="password" x-model="password" class="co-input"
+                                           placeholder="Password" autocomplete="new-password">
+                                </div>
+                                <div>
+                                    <label class="co-label">Confirm Password <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="password" x-model="passwordConfirm" class="co-input"
+                                           placeholder="Repeat password" autocomplete="new-password">
+                                </div>
+                            </div>
+                            <button type="button" @click="openPasswordModal()"
+                                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-gray-300 border border-white/[0.10] hover:bg-white/[0.08] transition-all" style="background:rgba(255,255,255,0.05);">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581M4.582 9A7.001 7.001 0 0117.938 8m1.48 5A7.001 7.001 0 016.062 16"/>
+                                </svg>
+                                Generate Password
+                            </button>
+                        </div>
+                    </div>
+
+                    </div>{# end form fields #}
+
+                    {# Footer row — full-width, matching card pattern #}
+                    <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-end rounded-b-2xl" style="background:rgba(255,255,255,0.02);">
+                        <button type="button" @click="submit()" :disabled="loading" :aria-busy="loading"
+                                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 3px 10px rgba(var(--color-primary-rgb),.25);">
+                            <template x-if="loading">
+                                <svg class="w-3.5 h-3.5 animate-spin" aria-hidden="true" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                            </template>
+                            <span x-text="loading ? 'Creating account…' : 'Create Account'"></span>
+                        </button>
+                    </div>
+
+                    {# Hidden form: after AJAX registration succeeds, JS fills this and submits server-side login #}
+                    <form id="co-reg-login-form" method="POST" action="{{ "/order/checkout/login"|url }}" style="display:none;">
+                        <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+                        <input type="hidden" id="co-reg-login-email" name="email">
+                        <input type="hidden" id="co-reg-login-password" name="password">
+                    </form>
+
+                </div>
+            </div>
+
+        </div>{# end auth card #}
+
+        </div>{# end left column #}
+
+        {# ── Right column: sticky Order Summary sidebar ── #}
+        <div class="co-sidebar-outer">
+            <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+
+                {# Header #}
+                <div class="px-6 py-5 border-b border-white/[0.06]">
+                    <h2 class="text-lg font-bold text-white">Order Summary</h2>
+                </div>
+
+                {# Totals breakdown #}
+                <div class="px-5 py-4 space-y-3 border-b border-white/[0.06]">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400 font-medium">Subtotal</span>
+                        <span class="font-semibold text-white">{{ cart.subtotal | money_convert }}</span>
+                    </div>
+                    {% if cart.discount > 0 %}
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-green-400 font-medium">Discount</span>
+                        <span class="font-semibold text-green-400">− {{ cart.discount | money_convert }}</span>
+                    </div>
+                    {% endif %}
+                    {% if period_totals | length > 1 %}
+                    <div class="pt-1 space-y-1.5">
+                        <p class="text-xs font-bold uppercase tracking-wider text-gray-500">Totals</p>
+                        {% for period_label, period_amount in period_totals %}
+                        <div class="flex items-center justify-between text-sm pl-1">
+                            <span class="text-gray-400">{{ period_label }}</span>
+                            <span class="font-semibold text-white">{{ period_amount | money_convert }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# Total + CTA #}
+                <div class="px-5 py-5">
+                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Total Due Today</p>
+                    <p class="text-3xl font-extrabold text-white mb-5">{{ cart.total | money_convert }}</p>
+                    <p class="text-xs text-gray-500 mb-5">Tax (if applicable) calculated after account creation.</p>
+
+                    <button @click="submit()" :disabled="loading" :aria-busy="loading"
+                            class="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-white text-sm font-bold transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                            style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 18px rgba(var(--color-primary-rgb),.30);">
+                        <template x-if="!loading">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                            </svg>
+                        </template>
+                        <template x-if="loading">
+                            <svg class="w-4 h-4 animate-spin" aria-hidden="true" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                        </template>
+                        <span x-text="loading ? 'Please wait…' : 'Checkout'"></span>
+                    </button>
+
+                    <p class="text-center text-xs text-gray-500 mt-3">
+                        By continuing you agree to our
+                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}"
+                           target="_blank" class="underline hover:text-gray-300">Terms</a>.
+                    </p>
+                </div>{# end Total + CTA #}
+
+            </div>{# end dark card #}
+        </div>{# end co-sidebar-outer #}
+
+    </div>{# end order-two-col #}
+
+    {# Password Generator Modal — fixed position so it covers viewport from within the component scope #}
+    <div x-show="passwordModalOpen" x-cloak
+         @keydown.escape.window="passwordModalOpen = false"
+         class="pwd-gen-modal fixed inset-0 flex items-center justify-center p-4"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         style="z-index:9999;display:none;">
+        <div class="absolute inset-0 bg-black/60" @click="passwordModalOpen = false"></div>
+
+        {# Copy toast #}
+        <div x-show="copyToast"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-2"
+             class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2.5 px-4 py-3 rounded-xl border border-emerald-500/30 text-emerald-300 text-sm font-semibold shadow-xl"
+             style="z-index:10001;background:rgba(6,78,59,.92);display:none;">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            Password copied to clipboard
+        </div>
+
+        <div class="pwd-gen-modal-panel relative w-full max-w-xl rounded-2xl border border-white/[0.12] overflow-hidden"
+             style="background:linear-gradient(160deg, rgba(15,23,42,.96), rgba(2,6,23,.96)); box-shadow:0 24px 70px rgba(0,0,0,.55);">
+
+            <div class="h-1 w-full" style="background:linear-gradient(90deg,var(--color-primary),var(--color-secondary));"></div>
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+                <h3 class="text-xl font-semibold text-white">Generate Password</h3>
+                <button type="button" @click="passwordModalOpen = false" class="text-gray-500 hover:text-gray-300 transition-colors" aria-label="Close password generator">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="px-6 py-6 space-y-5">
+                <p class="text-xs text-gray-400">Create a secure password, copy it, and insert it into both password fields.</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-[170px_1fr] gap-3 items-center">
+                    <label for="co-pwd-length" class="text-left sm:text-right pr-0 sm:pr-2 text-sm font-medium text-gray-300">Password Length</label>
+                    <input id="co-pwd-length" type="number" min="8" max="64" x-model.number="passwordLength" @input="sanitizePasswordLength()"
+                           class="w-full max-w-[160px] px-3.5 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-white text-base font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-[170px_1fr] gap-3 items-center">
+                    <label for="co-generated-password" class="text-left sm:text-right pr-0 sm:pr-2 text-sm font-medium text-gray-300">Generated Password</label>
+                    <div class="flex items-center gap-2">
+                        <input id="co-generated-password" :type="showGeneratedPassword ? 'text' : 'password'" x-model="generatedPassword" readonly
+                               class="w-full px-3.5 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-white text-base font-mono tracking-wide">
+                        <button type="button" @click="showGeneratedPassword = !showGeneratedPassword"
+                                class="px-3 py-2 rounded-lg border border-white/[0.15] bg-white/[0.06] text-xs font-semibold text-gray-200 hover:bg-white/[0.10] transition-colors"
+                                :aria-label="showGeneratedPassword ? 'Hide password' : 'Show password'">
+                            <span x-text="showGeneratedPassword ? 'Hide' : 'Show'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sm:pl-[170px] space-y-3 pt-1">
+                    <button type="button" @click="generatePasswordCandidate()"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-gray-100 text-sm font-semibold hover:bg-white/[0.10] transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581M4.582 9A7.001 7.001 0 0117.938 8m1.48 5A7.001 7.001 0 016.062 16"/>
+                        </svg>
+                        Generate new password
+                    </button>
+                    <button type="button" @click="copyGeneratedPassword()"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all text-sm font-semibold"
+                            :class="passwordCopied ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.15] bg-white/[0.06] text-gray-100 hover:bg-white/[0.10]'">
+                        <svg x-show="!passwordCopied" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        <svg x-show="passwordCopied" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span x-text="passwordCopied ? 'Copied!' : 'Copy'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-5 border-t border-white/[0.08]">
+                <button type="button" @click="passwordModalOpen = false"
+                        class="px-5 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-sm font-semibold text-gray-100 hover:bg-white/[0.10] transition-colors">
+                    Close
+                </button>
+                <button type="button" @click="insertGeneratedPassword()"
+                        class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white hover:opacity-95 transition-all"
+                        style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary)); box-shadow:0 6px 20px rgba(var(--color-primary-rgb),.35);">
+                    Copy to clipboard and Insert
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>{# end co-order-wrap #}
+
+{% endif %}{# end cart.items is empty #}
+
+{# ══════════════════════════════════════════════════════════════════
+   LOGGED-IN VIEW — Order summary + Payment gateway selection
+   Uses the same two-column card layout as the guest view.
+   ══════════════════════════════════════════════════════════════════ #}
+{% else %}
+<div class="co-order-wrap py-4" x-data="orderCheckout()" x-init="init()">
+
+    <h1 class="text-xl font-bold text-white mb-6">Review &amp; Checkout</h1>
+
+    {# Error banner (logged-in view) #}
+    <div x-show="error" x-transition
+         role="alert" aria-live="assertive"
+         class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span x-text="error"></span>
+    </div>
+
+    {% if cart.items %}
+
+    {# Build tax vars before the layout #}
+    {% set tax_amount = 0 %}
+    {% set tax_rate   = 0 %}
+    {% if client and client.client_is_taxable %}
+        {% set tax_rate   = client.invoice_get_tax_rate %}
+        {% set tax_amount = cart.total * tax_rate / 100 %}
+    {% endif %}
+    {% set checkout_total   = cart.total + tax_amount %}
+    {% set client_balance   = client ? client.client_balance_get_total : 0 %}
+    {% set enough_balance   = client_balance >= checkout_total %}
+
+    {# Filter to real payment gateways that accept the cart currency #}
+    {% set available_gateways = [] %}
+    {% for gtw in gateways %}
+        {% if gtw.code != 'ClientBalance' and cart.currency.code in gtw.accepted_currencies %}
+            {% set available_gateways = available_gateways|merge([gtw]) %}
+        {% endif %}
+    {% endfor %}
+
+    {# Custom gateway ordering #}
+    {% set gateway_order    = ['Khalti', 'Esewa', 'QRPayment', 'BankTransfer'] %}
+    {% set ordered_gateways = [] %}
+    {% for code in gateway_order %}
+        {% for gtw in available_gateways %}
+            {% if gtw.code == code or (code == 'Esewa' and 'esewa' in gtw.title|lower) %}
+                {% set ordered_gateways = ordered_gateways|merge([gtw]) %}
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+    {% for gtw in available_gateways %}
+        {% set found = false %}
+        {% for og in ordered_gateways %}{% if og.id == gtw.id %}{% set found = true %}{% endif %}{% endfor %}
+        {% if not found %}{% set ordered_gateways = ordered_gateways|merge([gtw]) %}{% endif %}
+    {% endfor %}
+
+    {# ── Two-column grid ── #}
+    <div class="order-two-col">
+
+        {# ── Left column: Order items card ── #}
+        <div class="space-y-4 min-w-0">
+
+        {# ── Your Order card ── #}
+        <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+            <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                <h2 class="text-sm font-bold text-white uppercase tracking-wider">Your Order</h2>
+                <a href="{{ '/order'|url }}"
+                   class="flex items-center gap-1 text-xs font-medium hover:underline underline-offset-2"
+                   style="color:var(--color-primary);">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add more
+                </a>
+            </div>
+            <div class="divide-y divide-white/[0.05]">
+                {% for item in cart.items %}
+                <div class="flex items-center justify-between px-6 py-3.5 gap-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                             style="background:rgba(var(--color-primary-rgb),.10);">
+                            <svg class="w-4 h-4" style="color:var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-white truncate">{{ item.title }}</p>
+                            {% if item.period %}
+                            <p class="text-xs text-gray-400 mt-0.5">{{ item.period | period_title }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <div class="text-right">
+                            {% if item.discount_price %}
+                            <p class="text-xs text-gray-400 line-through">{{ item.total | money_convert }}</p>
+                            <p class="text-sm font-bold text-green-400">{{ (item.total - item.discount_price) | money_convert }}</p>
+                            {% else %}
+                            <p class="text-sm font-bold text-white">{{ item.total | money_convert }}</p>
+                            {% endif %}
+                            {% if item.setup_price > 0 %}
+                            <p class="text-xs text-gray-400">+ {{ item.setup_price | money_convert }} setup</p>
+                            {% endif %}
+                        </div>
+                        <button type="button" @click="removeItem({{ item.id }})"
+                                title="Remove {{ item.title }}"
+                                aria-label="Remove {{ item.title }} from cart"
+                                class="w-7 h-7 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 transition-all flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="px-6 py-3 border-t border-white/[0.06] flex items-center justify-between" style="background:rgba(255,255,255,0.02);">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Subtotal</span>
+                <span class="text-sm font-bold text-white">{{ cart.subtotal | money_convert }}</span>
+            </div>
+        </div>
+
+        {# ── Payment Method card ── #}
+        <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+            <div class="px-6 py-4 border-b border-white/[0.06]">
+                <h2 class="text-sm font-bold text-white uppercase tracking-wider">Payment Method</h2>
+            </div>
+            <div class="px-6 py-5 space-y-2">
+
+                {# Render first gateway #}
+                {% if ordered_gateways|length > 0 %}
+                    {% set gtw = ordered_gateways|first %}
+                <label class="relative flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all"
+                       :class="selectedGateway == '{{ gtw.id }}' ? 'border-[color:var(--color-primary)] bg-[color:rgba(var(--color-primary-rgb),.06)]' : 'border-white/[0.10] hover:border-white/[0.20]'">
+                    <input type="radio" name="gateway_id" value="{{ gtw.id }}" x-model="selectedGateway" class="absolute opacity-0 w-0 h-0 pointer-events-none">
+                    <div class="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center flex-shrink-0 transition-all"
+                         :style="selectedGateway == '{{ gtw.id }}' ? 'border-color:var(--color-primary)' : ''">
+                        <div class="w-2 h-2 rounded-full transition-all"
+                             :style="selectedGateway == '{{ gtw.id }}' ? 'background:var(--color-primary);transform:scale(1)' : 'background:var(--color-primary);transform:scale(0)'"></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if gtw.code == 'Khalti' %}
+                        <svg class="w-4 h-4 text-purple-500 flex-shrink-0" viewBox="0 0 240 240" fill="currentColor">
+                            <g transform="translate(0,240) scale(0.1,-0.1)">
+                                <path d="M1755 1961 c-27 -11 -298 -105 -601 -210 -304 -104 -567 -197 -585 -206 -99 -50 -133 -130 -88 -205 46 -74 140 -125 324 -173 l90 -24 125 104 c171 143 382 284 486 323 40 15 28 4 -36 -35 -85 -52 -226 -163 -292 -231 -65 -68 -138 -170 -138 -193 0 -9 24 -29 57 -46 168 -88 282 -269 299 -476 5 -51 11 -78 18 -76 26 9 74 90 105 178 18 52 121 335 228 629 208 572 211 586 165 633 -28 28 -96 31 -157 8z"/>
+                                <path d="M784 841 c-53 -24 -109 -91 -123 -148 -35 -136 73 -273 214 -273 100 0 192 73 215 171 32 134 -75 269 -215 269 -27 0 -68 -9 -91 -19z"/>
+                            </g>
+                        </svg>
+                        {% elseif 'esewa' in gtw.title|lower %}
+                        <svg class="w-4 h-4 text-green-600 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="24" cy="24" r="21.5" fill="none"/>
+                            <path fill="none" d="M32.69 27.75a7.91 7.91 0 0 1-5.1 6.12h0a7.94 7.94 0 0 1-10.16-4.74l-1.76-4.84a7.94 7.94 0 0 1 4.74-10.16h0a7.94 7.94 0 0 1 10.16 4.74l.88 2.42l-14.9 5.42M45.5 24h-8"/>
+                        </svg>
+                        {% elseif gtw.code == 'QRPayment' or 'qr' in gtw.title|lower %}
+                        <svg class="w-4 h-4 text-sky-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm14 3h3m-3 3h3m-6-6h3v3h-3v-3zm3 3h3v3h-3v-3z"/>
+                        </svg>
+                        {% elseif gtw.code == 'BankTransfer' or 'bank' in gtw.title|lower %}
+                        <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 21h18"/><path d="M3 10h18"/><path d="M12 3l9 7H3l9-7z"/><path d="M5 10v8"/><path d="M9 10v8"/><path d="M15 10v8"/><path d="M19 10v8"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        {% endif %}
+                        <span class="text-sm font-medium text-white">{{ gtw.title }}</span>
+                    </div>
+                </label>
+                {% endif %}
+
+                {# Apply Balance #}
+                {% if enough_balance %}
+                <label class="relative flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all"
+                       :class="selectedGateway == 'balance' ? 'border-green-500/50 bg-green-500/[0.06]' : 'border-white/[0.10] hover:border-white/[0.20]'">
+                    <input type="radio" name="gateway_id" value="balance" x-model="selectedGateway" class="hidden">
+                    <div class="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center flex-shrink-0 transition-all"
+                         :style="selectedGateway == 'balance' ? 'border-color:#22c55e' : ''">
+                        <div class="w-2 h-2 rounded-full bg-green-500 transition-all"
+                             :style="selectedGateway == 'balance' ? 'transform:scale(1)' : 'transform:scale(0)'"></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        <span class="text-sm font-medium text-white">Apply Balance</span>
+                        <span class="text-xs text-green-400 font-medium">({{ client_balance | money(cart.currency.code) }} available)</span>
+                    </div>
+                </label>
+                {% endif %}
+
+                {# Remaining gateways #}
+                {% for gtw in ordered_gateways %}
+                    {% if not loop.first %}
+                <label class="relative flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all"
+                       :class="selectedGateway == '{{ gtw.id }}' ? 'border-[color:var(--color-primary)] bg-[color:rgba(var(--color-primary-rgb),.06)]' : 'border-white/[0.10] hover:border-white/[0.20]'">
+                    <input type="radio" name="gateway_id" value="{{ gtw.id }}" x-model="selectedGateway" class="absolute opacity-0 w-0 h-0 pointer-events-none">
+                    <div class="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center flex-shrink-0 transition-all"
+                         :style="selectedGateway == '{{ gtw.id }}' ? 'border-color:var(--color-primary)' : ''">
+                        <div class="w-2 h-2 rounded-full transition-all"
+                             :style="selectedGateway == '{{ gtw.id }}' ? 'background:var(--color-primary);transform:scale(1)' : 'background:var(--color-primary);transform:scale(0)'"></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if gtw.code == 'Khalti' %}
+                        <svg class="w-4 h-4 text-purple-500 flex-shrink-0" viewBox="0 0 240 240" fill="currentColor">
+                            <g transform="translate(0,240) scale(0.1,-0.1)">
+                                <path d="M1755 1961 c-27 -11 -298 -105 -601 -210 -304 -104 -567 -197 -585 -206 -99 -50 -133 -130 -88 -205 46 -74 140 -125 324 -173 l90 -24 125 104 c171 143 382 284 486 323 40 15 28 4 -36 -35 -85 -52 -226 -163 -292 -231 -65 -68 -138 -170 -138 -193 0 -9 24 -29 57 -46 168 -88 282 -269 299 -476 5 -51 11 -78 18 -76 26 9 74 90 105 178 18 52 121 335 228 629 208 572 211 586 165 633 -28 28 -96 31 -157 8z"/>
+                                <path d="M784 841 c-53 -24 -109 -91 -123 -148 -35 -136 73 -273 214 -273 100 0 192 73 215 171 32 134 -75 269 -215 269 -27 0 -68 -9 -91 -19z"/>
+                            </g>
+                        </svg>
+                        {% elseif 'esewa' in gtw.title|lower %}
+                        <svg class="w-4 h-4 text-green-600 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="24" cy="24" r="21.5" fill="none"/>
+                            <path fill="none" d="M32.69 27.75a7.91 7.91 0 0 1-5.1 6.12h0a7.94 7.94 0 0 1-10.16-4.74l-1.76-4.84a7.94 7.94 0 0 1 4.74-10.16h0a7.94 7.94 0 0 1 10.16 4.74l.88 2.42l-14.9 5.42M45.5 24h-8"/>
+                        </svg>
+                        {% elseif gtw.code == 'QRPayment' or 'qr' in gtw.title|lower %}
+                        <svg class="w-4 h-4 text-sky-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm14 3h3m-3 3h3m-6-6h3v3h-3v-3zm3 3h3v3h-3v-3z"/>
+                        </svg>
+                        {% elseif gtw.code == 'BankTransfer' or 'bank' in gtw.title|lower %}
+                        <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 21h18"/><path d="M3 10h18"/><path d="M12 3l9 7H3l9-7z"/><path d="M5 10v8"/><path d="M9 10v8"/><path d="M15 10v8"/><path d="M19 10v8"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        {% endif %}
+                        <span class="text-sm font-medium text-white">{{ gtw.title }}</span>
+                    </div>
+                </label>
+                    {% endif %}
+                {% endfor %}
+
+                {% if not enough_balance and ordered_gateways|length == 0 %}
+                <p class="text-sm text-gray-400 py-2">No payment gateways available for {{ cart.currency.code }}. Please contact support.</p>
+                {% endif %}
+
+            </div>
+
+            {# reCAPTCHA #}
+            {% if _rc.enabled and _rc.publickey and _rc.pages.checkout %}
+            <div class="px-6 pb-4">
+                {% if _rc.version == 3 %}
+                <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
+                {% else %}
+                <div id="checkout-recaptcha">
+                    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+                    <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}"></div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+        </div>
+
+        </div>{# end left column #}
+
+        {# ── Right column: sticky Order Summary sidebar ── #}
+        <div class="co-sidebar-outer">
+            <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+
+                {# Header #}
+                <div class="px-6 py-5 border-b border-white/[0.06]">
+                    <h2 class="text-lg font-bold text-white">Order Summary</h2>
+                </div>
+
+                {# Totals breakdown #}
+                <div class="px-5 py-4 space-y-3 border-b border-white/[0.06]">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400 font-medium">Subtotal</span>
+                        <span class="font-semibold text-white">{{ cart.subtotal | money_convert }}</span>
+                    </div>
+                    {% if cart.discount > 0 %}
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-green-400 font-medium">Discount</span>
+                        <span class="font-semibold text-green-400">− {{ cart.discount | money_convert }}</span>
+                    </div>
+                    {% endif %}
+                    {% if tax_rate > 0 and tax_amount > 0 %}
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400 font-medium">VAT ({{ tax_rate }}%)</span>
+                        <span class="font-semibold text-white">{{ tax_amount | money_convert }}</span>
+                    </div>
+                    {% endif %}
+                    {% if period_totals | length > 1 %}
+                    <div class="pt-1 space-y-1.5">
+                        <p class="text-xs font-bold uppercase tracking-wider text-gray-500">By period</p>
+                        {% for period_label, period_amount in period_totals %}
+                        <div class="flex items-center justify-between text-sm pl-1">
+                            <span class="text-gray-400">{{ period_label }}</span>
+                            <span class="font-semibold text-white">{{ period_amount | money_convert }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# Total + CTA #}
+                <div class="px-5 py-5">
+                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Total Due Today</p>
+                    <p class="text-3xl font-extrabold text-white mb-5">{{ checkout_total | money_convert }}</p>
+                    {% if tax_amount == 0 %}
+                    <p class="text-xs text-gray-500 mb-5">Tax (if applicable) will be shown on your invoice.</p>
+                    {% endif %}
+
+                    <button @click="checkout()" :disabled="loading || !selectedGateway"
+                            class="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-white text-sm font-bold transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                            style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 18px rgba(var(--color-primary-rgb),.30);">
+                        <template x-if="!loading">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                            </svg>
+                        </template>
+                        <template x-if="loading">
+                            <svg class="w-4 h-4 animate-spin" aria-hidden="true" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                        </template>
+                        <span x-text="loading ? 'Processing…' : 'Complete Order'"></span>
+                    </button>
+
+                    <p class="text-center text-xs text-gray-500 mt-3">
+                        By continuing you agree to our
+                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}"
+                           target="_blank" class="underline hover:text-gray-300">Terms</a>.
+                    </p>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    {% else %}
+    {# Empty cart #}
+    <div class="flex flex-col items-center justify-center py-24 text-center">
+        <div class="w-20 h-20 rounded-2xl border border-white/[0.08] flex items-center justify-center mb-6" style="background:rgba(255,255,255,0.03);">
+            <svg class="w-10 h-10 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+        </div>
+        <h2 class="text-xl font-bold text-white mb-2">Your cart is empty</h2>
+        <p class="text-gray-500 text-sm mb-8">Browse our plans and add something to get started.</p>
+        <a href="{{ '/order'|url }}"
+           class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-all"
+           style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.25);">
+            Browse Plans
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}{# end if client #}
+{% endblock %}
+
+{% block js %}{% endblock %}

@@ -1,0 +1,300 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Credits & Balance{% endblock %}
+{% block page_header %}Credits & Balance{% endblock %}
+
+{% block content %}
+{% set balance = client.client_balance_get_total %}
+{% set currentPage = request.page|default(1) %}
+{% set transactions = client.invoice_get_list({'per_page': 10, 'page': currentPage}) %}
+{% set unpaid = client.invoice_get_list({'status': 'unpaid', 'per_page': 200}) %}
+{% set paid = client.invoice_get_list({'status': 'paid', 'per_page': 200}) %}
+{% set client_profile = client.profile_get %}
+{% set currency_code = client_profile.currency|default(guest.cart_get_currency.code) %}
+
+{% set unpaid_total = 0 %}
+{% for inv in unpaid.list %}{% set unpaid_total = unpaid_total + inv.total %}{% endfor %}
+
+{% set paid_total = 0 %}
+{% for inv in paid.list %}{% set paid_total = paid_total + inv.total %}{% endfor %}
+
+<div class="max-w-7xl space-y-6">
+
+    {# ── Page header ── #}
+    <div class="flex items-end justify-between">
+        <div>
+            <h1 class="text-[30px] leading-[38px] tracking-[-0.02em] font-bold text-slate-900 dark:text-white">Credits &amp; Balance</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your account funds and view transaction history.</p>
+        </div>
+    </div>
+
+    {# ── 3 stat cards ── #}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {# Current Balance – brand color card #}
+        <div class="relative overflow-hidden rounded-xl p-8 shadow-xl text-white"
+             style="background: var(--color-primary);">
+            <div class="relative z-10">
+                <span class="text-white/70 text-xs font-semibold uppercase tracking-wider">Current Balance</span>
+                <h2 class="text-4xl font-bold mt-2 text-white">{{ balance|money(currency_code) }}</h2>
+                <div class="mt-8 flex items-center gap-4">
+                    <div class="bg-white/10 p-3 rounded-lg backdrop-blur-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                    </div>
+                    <p class="text-white/80 text-xs max-w-[160px]">Securely add funds to your wallet for instant renewals.</p>
+                </div>
+            </div>
+            <div class="absolute -right-8 -bottom-8 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+            <div class="absolute right-0 top-0 w-32 h-32 bg-white/20 rounded-full blur-2xl"></div>
+        </div>
+
+        {# Unpaid Invoices #}
+        <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-xl p-6 flex flex-col justify-between shadow-sm">
+            <div class="flex justify-between items-start">
+                <div class="p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                {% if unpaid.list|length > 0 %}
+                <span class="text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded">{{ unpaid.list|length }} Unpaid</span>
+                {% endif %}
+            </div>
+            <div class="mt-4">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Unpaid Invoices</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ unpaid_total|money(currency_code) }}</p>
+            </div>
+        </div>
+
+        {# Total Expenditure #}
+        <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-xl p-6 flex flex-col justify-between shadow-sm">
+            <div class="flex justify-between items-start">
+                <div class="p-2 rounded-lg" style="background: rgba(var(--color-primary-rgb,99,102,241),0.08); color: var(--color-primary);">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+                <span class="text-xs font-bold px-2 py-1 rounded"
+                      style="color: var(--color-primary); background: rgba(var(--color-primary-rgb,99,102,241),0.08);">
+                    {{ paid.list|length }} Paid
+                </span>
+            </div>
+            <div class="mt-4">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Expenditure</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ paid_total|money(currency_code) }}</p>
+            </div>
+        </div>
+
+    </div>
+
+    {# ── Top Up Account ── #}
+    <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-xl shadow-sm overflow-hidden">
+        <div class="px-8 py-5 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-3">
+            <svg class="w-5 h-5 flex-shrink-0" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            <h2 class="text-[18px] leading-7 font-semibold text-slate-900 dark:text-white">Top Up Account</h2>
+        </div>
+        <div class="p-8">
+            <div class="max-w-3xl">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Choose a quick amount or enter a custom value to add funds to your credit balance.</p>
+
+                <form id="funds-form">
+                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+
+                    {# Quick amounts #}
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
+                        {% for amount in [500, 1000, 2000, 5000, 10000] %}
+                        <button type="button" data-quick-amount="{{ amount }}"
+                                class="quick-amount-btn py-3 px-4 border border-slate-200 dark:border-white/[0.10] rounded-xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)] transition-all active:scale-95">
+                            {{ amount|money(currency_code) }}
+                        </button>
+                        {% endfor %}
+                    </div>
+
+                    {# Custom amount + submit #}
+                    <div class="flex flex-col md:flex-row gap-4 items-end">
+                        <div class="flex-1 w-full">
+                            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 ml-1">Custom Amount</label>
+                            <div class="flex items-center border border-slate-200 dark:border-white/[0.10] rounded-xl bg-white dark:bg-white/[0.03] transition-all" onfocusin="this.style.borderColor='var(--color-primary)'" onfocusout="this.style.borderColor=''">
+                                <span class="px-4 py-3 text-slate-400 font-semibold text-sm select-none whitespace-nowrap flex-shrink-0">{{ currency_code }}</span>
+                                <input type="number" name="amount" min="1" step="0.01" required placeholder="0.00"
+                                       class="flex-1 min-w-0 pl-1 pr-4 py-3 border-0 bg-transparent text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-0">
+                            </div>
+                        </div>
+                        <div class="w-full md:w-auto">
+                            <button type="submit"
+                                    class="w-full px-10 py-3 text-white font-bold rounded-xl hover:opacity-95 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg"
+                                    style="background: var(--color-primary); box-shadow: 0 4px 14px rgba(var(--color-primary-rgb,99,102,241), 0.25);">
+                                Add Funds
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex items-center gap-6 text-xs text-slate-400 dark:text-slate-500">
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            Secure Transaction
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Instant Credit
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Recent Transactions ── #}
+    <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-xl shadow-sm overflow-hidden">
+        <div class="px-8 py-5 border-b border-slate-100 dark:border-white/[0.06] flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 flex-shrink-0" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h2 class="text-[18px] leading-7 font-semibold text-slate-900 dark:text-white">Recent Transactions</h2>
+            </div>
+            <a href="{{ 'invoice'|url }}" class="text-sm font-semibold hover:underline transition-all" style="color: var(--color-primary);">View All Activity</a>
+        </div>
+
+        {% if transactions.list %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/[0.05]">
+                        <th class="px-8 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th class="px-8 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        <th class="px-8 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Amount</th>
+                        <th class="px-8 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Status</th>
+                        <th class="px-8 py-4"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                    {% for invoice in transactions.list %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors group">
+                        <td class="px-8 py-5">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+                                    {{ invoice.status == 'paid' ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-slate-100 dark:bg-white/[0.06]' }}">
+                                    <svg class="w-4 h-4 {{ invoice.status == 'paid' ? 'text-emerald-500' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </div>
+                                <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                    Invoice #{{ invoice.serie }}{{ invoice.nr }}
+                                </span>
+                            </div>
+                        </td>
+                        <td class="px-8 py-5 text-sm text-slate-500 dark:text-slate-400">{{ invoice.created_at|date("d M Y, g:i A") }}</td>
+                        <td class="px-8 py-5 text-right text-sm font-bold text-slate-700 dark:text-slate-200">{{ invoice.total|money(invoice.currency) }}</td>
+                        <td class="px-8 py-5">
+                            <div class="flex justify-center">
+                                {% if invoice.status == 'paid' %}
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full uppercase tracking-wider border border-emerald-100 dark:border-emerald-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Paid
+                                </span>
+                                {% elseif invoice.status == 'unpaid' %}
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-[10px] font-bold rounded-full uppercase tracking-wider border border-red-100 dark:border-red-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Unpaid
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                                    {{ invoice.status|capitalize }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-8 py-5 text-right">
+                            <a href="{{ 'invoice'|url }}/{{ invoice.hash }}"
+                               class="p-2 rounded-lg text-slate-400 hover:text-[color:var(--color-primary)] transition-all opacity-0 group-hover:opacity-100 inline-flex items-center justify-center">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination footer #}
+        {% set totalStart = (currentPage - 1) * 10 + 1 %}
+        {% set totalEnd = currentPage * 10 < transactions.total ? currentPage * 10 : transactions.total %}
+        <div class="px-8 py-4 bg-slate-50 dark:bg-white/[0.02] border-t border-slate-100 dark:border-white/[0.05] flex items-center justify-between">
+            <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Showing {{ totalStart }} to {{ totalEnd }} of {{ transactions.total }} transactions
+            </span>
+            <div class="flex gap-2">
+                {% if currentPage > 1 %}
+                <a href="?page={{ currentPage - 1 }}"
+                   class="px-3 py-1.5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.10] rounded text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-all">Previous</a>
+                {% else %}
+                <span class="px-3 py-1.5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded text-xs font-bold text-slate-400 cursor-not-allowed">Previous</span>
+                {% endif %}
+                {% if currentPage < transactions.pages %}
+                <a href="?page={{ currentPage + 1 }}"
+                   class="px-3 py-1.5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.10] rounded text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-all">Next</a>
+                {% else %}
+                <span class="px-3 py-1.5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded text-xs font-bold text-slate-400 cursor-not-allowed">Next</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% else %}
+        <div class="py-16 text-center">
+            <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center mx-auto mb-3">
+                <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <p class="text-sm text-slate-500 dark:text-slate-400">No transactions yet</p>
+        </div>
+        {% endif %}
+
+    </div>
+
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('funds-form');
+    if (!form) return;
+
+    var amountInput = form.querySelector('[name=amount]');
+
+    // Quick amount buttons — set value + highlight active
+    form.querySelectorAll('.quick-amount-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (amountInput) amountInput.value = btn.getAttribute('data-quick-amount');
+            form.querySelectorAll('.quick-amount-btn').forEach(function (b) {
+                b.style.borderColor = '';
+                b.style.color = '';
+                b.style.background = '';
+            });
+            btn.style.borderColor = 'var(--color-primary)';
+            btn.style.color = 'var(--color-primary)';
+            btn.style.background = 'rgba(var(--color-primary-rgb,99,102,241),0.06)';
+        });
+    });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var data = {};
+        new FormData(form).forEach(function (v, k) { data[k] = v; });
+        API.client.post('invoice/funds_invoice', data,
+            function (hash) {
+                window.location = '{{ "invoice"|url }}/' + hash;
+            },
+            function (res) {
+                if (typeof merovpsNotif === 'function') merovpsNotif((res && res.message) || 'Failed to create invoice.', 'error');
+            }
+        );
+    });
+});
+</script>
+{% endblock %}

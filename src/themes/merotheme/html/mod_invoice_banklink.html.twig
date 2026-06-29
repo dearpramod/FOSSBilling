@@ -1,0 +1,115 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}{{ 'Processing Payment'|trans }}{% endblock %}
+{% block page_header %}{{ 'Processing Payment'|trans }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    {# Back link #}
+    {% if invoice.hash is defined %}
+    <a href="{{ '/invoice'|url }}/{{ invoice.hash }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to invoice
+    </a>
+    {% endif %}
+
+    {# Payment processing card #}
+    <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+
+        {# Header #}
+        <div class="px-6 py-5 border-b border-white/[0.06]">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-semibold text-white">{{ 'Processing Payment'|trans }}</h1>
+                    <p class="text-sm text-gray-400 mt-0.5">{{ 'Please wait while we connect to the payment gateway.'|trans }}</p>
+                </div>
+            </div>
+        </div>
+
+        {# Invoice summary #}
+        {% if invoice is defined %}
+        <div class="px-6 py-4 border-b border-white/[0.05] flex items-center justify-between">
+            <div class="text-sm text-gray-400">
+                Invoice <span class="text-white font-medium">#{{ invoice.serie }}{{ invoice.nr }}</span>
+            </div>
+            <div class="text-base font-semibold text-white">{{ invoice.total | money(invoice.currency) }}</div>
+        </div>
+        {% endif %}
+
+        {# Payment gateway content #}
+        <div class="px-6 py-8" id="payment-content">
+
+            {% if payment.type == 'html' %}
+                {# Loading spinner (hidden once gateway content loads) #}
+                <div id="payment-loader" class="flex flex-col items-center gap-4 mb-6">
+                    <div class="w-10 h-10 rounded-full border-2 border-indigo-500/30 border-t-indigo-400 animate-spin"></div>
+                    <p class="text-sm text-gray-400">{{ 'Connecting to payment gateway...'|trans }}</p>
+                </div>
+
+                <div id="gateway-html" class="payment-gateway-embed">
+                    {{ payment.result|raw }}
+                </div>
+
+                <script>
+                    // Hide loader once gateway content is rendered
+                    document.addEventListener('DOMContentLoaded', function() {
+                        var loader = document.getElementById('payment-loader');
+                        if (loader) loader.style.display = 'none';
+                    });
+                </script>
+            {% endif %}
+
+            {% if payment.type == 'form' %}
+                <div class="flex flex-col items-center gap-4">
+                    <div class="w-10 h-10 rounded-full border-2 border-indigo-500/30 border-t-indigo-400 animate-spin"></div>
+                    <p class="text-sm text-gray-400">{{ 'Redirecting to payment gateway...'|trans }}</p>
+                </div>
+
+                <form name="payment_form" id="payment-form" action="{{ payment.service_url }}" method="post" class="hidden">
+                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                    {% for key, value in payment.result %}
+                    <input type="hidden" name="{{ key }}" value="{{ value }}" />
+                    {% endfor %}
+                    <button type="submit"
+                            id="payment-fallback-btn"
+                            class="mt-6 w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
+                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); display:none;">
+                        {{ 'Click here if you are not redirected automatically'|trans }}
+                    </button>
+                </form>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(function() {
+                            document.getElementById('payment-form').submit();
+                        }, 1000);
+                        // Show fallback button after 5 seconds
+                        setTimeout(function() {
+                            var btn = document.getElementById('payment-fallback-btn');
+                            if (btn) {
+                                btn.style.display = 'block';
+                                document.getElementById('payment-form').classList.remove('hidden');
+                            }
+                        }, 5000);
+                    });
+                </script>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Security notice #}
+    <p class="text-center text-xs text-gray-600">
+        <svg class="w-3 h-3 inline-block mr-1 -mt-0.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        {{ 'Your payment is processed securely. We do not store your payment details.'|trans }}
+    </p>
+
+</div>
+{% endblock %}

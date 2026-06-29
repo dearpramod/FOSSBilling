@@ -1,0 +1,345 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}My Services{% endblock %}
+{% block page_header %}My Services{% endblock %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{# Resolve filters from request #}
+{% set status_tab   = request.tab|default('active') %}
+{% set search_query = request.search|default('') %}
+{% set invoice_type = request.invoice_type|default('') %}
+{% set category_id  = request.category_id|default('') %}
+
+{# Build API params #}
+{% set api_params = {'per_page': 50, 'hide_addons': 1} %}
+{% if status_tab == 'active' %}
+    {% set api_params = api_params|merge({'status': 'active'}) %}
+{% elseif status_tab == 'cancelled' %}
+    {% set api_params = api_params|merge({'status': 'canceled'}) %}
+{% endif %}
+{% if search_query %}
+    {% set api_params = api_params|merge({'title': search_query}) %}
+{% endif %}
+{% if invoice_type %}
+    {% set api_params = api_params|merge({'invoice_option': invoice_type}) %}
+{% endif %}
+{% if category_id %}
+    {% set api_params = api_params|merge({'product_category_id': category_id}) %}
+{% endif %}
+
+{% set orders     = client.order_get_list(api_params) %}
+{% set all_orders = client.order_get_list({'per_page': 200, 'hide_addons': 1}) %}
+{% set categories = guest.product_category_get_list({'per_page': 50}) %}
+
+{# Count active and cancelled from full list #}
+{% set count_active    = 0 %}
+{% set count_cancelled = 0 %}
+{% for o in all_orders.list %}
+    {% if o.status == 'active' %}{% set count_active = count_active + 1 %}{% endif %}
+    {% if o.status == 'canceled' %}{% set count_cancelled = count_cancelled + 1 %}{% endif %}
+{% endfor %}
+
+{% block content %}
+
+<div class="space-y-6">
+
+    {# ===== TABS + STATUS FILTERS ROW ===== #}
+    <div class="border-b border-slate-200">
+        {# Top row: tabs left, status pills right #}
+        <div class="flex items-end justify-between gap-2">
+            {# Product type tabs — scrollable on mobile #}
+            <div class="flex items-center gap-0 -mb-px overflow-x-auto scrollbar-none flex-1">
+                <a href="{{ '/order/service'|url }}?tab={{ status_tab }}"
+                   class="px-3 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap
+                          {{ (not invoice_type and not category_id) ? 'border-[color:var(--color-primary)] text-[color:var(--color-primary)]' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
+                    All
+                </a>
+                <a href="{{ '/order/service'|url }}?invoice_type=recurring&tab={{ status_tab }}"
+                   class="px-3 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap
+                          {{ invoice_type == 'recurring' ? 'border-[color:var(--color-primary)] text-[color:var(--color-primary)]' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
+                    Subscriptions
+                </a>
+                <a href="{{ '/order/service'|url }}?invoice_type=prepaid&tab={{ status_tab }}"
+                   class="px-3 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap
+                          {{ invoice_type == 'prepaid' ? 'border-[color:var(--color-primary)] text-[color:var(--color-primary)]' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
+                    One-time
+                </a>
+            </div>
+            {# Status filter pills — always visible, compact #}
+            <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0 mb-2">
+                {% for tab_id, tab_label in {'active': 'Active', 'cancelled': 'Cancelled', 'all': 'All'} %}
+                <a href="{{ '/order/service'|url }}?tab={{ tab_id }}{% if invoice_type %}&invoice_type={{ invoice_type }}{% endif %}{% if category_id %}&category_id={{ category_id }}{% endif %}{% if search_query %}&search={{ search_query|url_encode }}{% endif %}"
+                   class="px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap
+                          {{ status_tab == tab_id ? 'bg-white shadow-sm text-[color:var(--color-primary)]' : 'text-slate-500 hover:text-slate-700' }}">
+                    {{ tab_label }}
+                    {% if tab_id == 'active' and count_active %}
+                        ({{ count_active }})
+                    {% elseif tab_id == 'cancelled' and count_cancelled %}
+                        ({{ count_cancelled }})
+                    {% elseif tab_id == 'all' %}
+                        ({{ all_orders.total }})
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# ===== ACTION BAR ===== #}
+    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+        <div class="w-full sm:flex-1" style="position:relative;">
+            <svg style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);width:1rem;height:1rem;color:#94a3b8;pointer-events:none;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+            </svg>
+            <input type="text" id="order-search" value="{{ search_query }}" placeholder="Quick search by name..."
+                   style="width:100%;padding:0.5rem 1rem 0.5rem 2.5rem;border-radius:0.5rem;border:1px solid #e2e8f0;background:#f8fafc;font-size:0.875rem;color:#1e293b;outline:none;"
+                   onfocus="this.style.borderColor='rgba(var(--color-primary-rgb),0.4)';this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),0.1)'"
+                   onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow='none'">
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0 self-stretch sm:self-auto">
+            <div style="position:relative;">
+                <select id="order-sort"
+                        style="padding:0.5rem 2.25rem 0.5rem 0.75rem;border-radius:0.5rem;border:1px solid #e2e8f0;background:#f8fafc;font-size:0.875rem;color:#475569;-webkit-appearance:none;-moz-appearance:none;appearance:none;outline:none;cursor:pointer;">
+                    <option>Sort by: Newest</option>
+                    <option>Sort by: Name</option>
+                    <option>Sort by: Price</option>
+                </select>
+                <svg style="position:absolute;right:0.625rem;top:50%;transform:translateY(-50%);width:0.875rem;height:0.875rem;color:#64748b;pointer-events:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <a href="{{ '/order'|url }}"
+               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all flex-shrink-0"
+               style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New
+            </a>
+        </div>
+    </div>
+
+    {# ===== CATEGORY PILLS ===== #}
+    {% if categories.list %}
+    {%- set _type_order = {'hosting': 0, 'server': 1, 'custom': 2, 'domain': 3, 'downloadable': 4, 'license': 5, 'membership': 6} -%}
+    {%- set _sorted_cats = categories.list|sort((a, b) => (_type_order[a.type]|default(99)) <=> (_type_order[b.type]|default(99))) -%}
+    {%- set _dot_map = {'hosting': 'bg-indigo-400', 'server': 'bg-amber-400', 'custom': 'bg-purple-400', 'domain': 'bg-violet-400', 'downloadable': 'bg-emerald-400', 'license': 'bg-blue-400', 'membership': 'bg-rose-400'} -%}
+    <div class="flex items-center gap-2 overflow-x-auto scrollbar-none pb-0.5">
+        <a href="{{ '/order/service'|url }}?tab={{ status_tab }}{% if invoice_type %}&invoice_type={{ invoice_type }}{% endif %}"
+           class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all
+                  {{ not category_id ? 'bg-[rgba(var(--color-primary-rgb),0.08)] border-[rgba(var(--color-primary-rgb),0.2)] text-[color:var(--color-primary)]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300' }}">
+            All
+        </a>
+        {% for cat in _sorted_cats %}
+        <a href="{{ '/order/service'|url }}?category_id={{ cat.id }}&tab={{ status_tab }}{% if invoice_type %}&invoice_type={{ invoice_type }}{% endif %}"
+           class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all
+                  {{ category_id == cat.id ~ '' ? 'bg-[rgba(var(--color-primary-rgb),0.08)] border-[rgba(var(--color-primary-rgb),0.2)] text-[color:var(--color-primary)]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300' }}">
+            <span class="w-1.5 h-1.5 rounded-full {{ _dot_map[cat.type]|default('bg-gray-400') }}"></span>
+            {{ cat.title }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ===== ACTIVE FILTER PILLS ===== #}
+    {% if search_query %}
+    <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-100 border border-slate-200 text-slate-600">
+            Search: <strong class="text-slate-800">{{ search_query }}</strong>
+            <a href="{{ '/order/service'|url }}?tab={{ status_tab }}{% if invoice_type %}&invoice_type={{ invoice_type }}{% endif %}" class="ml-1 text-slate-400 hover:text-slate-700 font-bold">×</a>
+        </span>
+    </div>
+    {% endif %}
+
+    {# ===== GRID OR EMPTY STATE ===== #}
+    {% if orders.list %}
+    <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">
+            Products &amp; Services
+            <span class="ml-1 font-normal normal-case">({{ orders.total }} found)</span>
+        </p>
+
+        {%- set _svc_type_order = {'servicehosting': 0, 'serviceserver': 1, 'servicecustom': 2, 'servicedomain': 3, 'servicedownloadable': 4, 'servicelicense': 5, 'servicemembership': 6} -%}
+        {%- set _sorted_orders = orders.list|sort((a, b) => (_svc_type_order[a.service_type]|default(99)) <=> (_svc_type_order[b.service_type]|default(99))) -%}
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for order in _sorted_orders %}
+            {# Renewal info #}
+            {% set renewal_text = '' %}
+            {% if order.expires_at %}
+                {% set days_left = ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round(0, 'floor') %}
+                {% if days_left < 0 %}{% set renewal_text = 'expired' %}
+                {% elseif days_left == 0 %}{% set renewal_text = 'expires today' %}
+                {% elseif days_left == 1 %}{% set renewal_text = 'renews tomorrow' %}
+                {% elseif days_left <= 7 %}{% set renewal_text = 'renews in ' ~ days_left ~ ' days' %}
+                {% elseif days_left <= 31 %}{% set renewal_text = 'renews in a month' %}
+                {% elseif days_left <= 365 %}{% set renewal_text = 'renews ' ~ order.expires_at|date('M j') %}
+                {% else %}{% set renewal_text = 'renews ' ~ order.expires_at|date('M j, Y') %}
+                {% endif %}
+            {% endif %}
+
+            {# Status badge + icon styles #}
+            {% if order.status == 'active' %}
+                {% set badge_class = 'bg-emerald-50 text-emerald-700 border-emerald-100' %}
+                {% set dot_class   = 'bg-emerald-500' %}
+                {% set icon_bg     = 'bg-[rgba(var(--color-primary-rgb),0.08)]' %}
+                {% set icon_fg     = 'text-[color:var(--color-primary)]' %}
+            {% elseif order.status == 'pending_setup' %}
+                {% set badge_class = 'bg-amber-50 text-amber-700 border-amber-100' %}
+                {% set dot_class   = 'bg-amber-500' %}
+                {% set icon_bg     = 'bg-amber-50' %}
+                {% set icon_fg     = 'text-amber-600' %}
+            {% elseif order.status in ['suspended', 'failed_setup', 'failed_renew'] %}
+                {% set badge_class = 'bg-red-50 text-red-700 border-red-100' %}
+                {% set dot_class   = 'bg-red-500' %}
+                {% set icon_bg     = 'bg-red-50' %}
+                {% set icon_fg     = 'text-red-500' %}
+            {% elseif order.status == 'canceled' %}
+                {% set badge_class = 'bg-slate-100 text-slate-500 border-slate-200' %}
+                {% set dot_class   = 'bg-slate-400' %}
+                {% set icon_bg     = 'bg-slate-100' %}
+                {% set icon_fg     = 'text-slate-400' %}
+            {% else %}
+                {% set badge_class = 'bg-slate-100 text-slate-500 border-slate-200' %}
+                {% set dot_class   = 'bg-slate-400' %}
+                {% set icon_bg     = 'bg-slate-100' %}
+                {% set icon_fg     = 'text-slate-400' %}
+            {% endif %}
+
+            <div class="svc-card bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:border-[rgba(var(--color-primary-rgb),0.3)] transition-all flex flex-col gap-4 p-5">
+
+                {# Header: icon + title + badge #}
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center {{ icon_bg }}">
+                            <svg class="w-6 h-6 {{ icon_fg }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 10h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">{{ order.service_type|replace({'service': ''})|title }}</p>
+                            <p class="text-sm font-semibold text-slate-800 leading-snug line-clamp-2">{{ order.title }}</p>
+                            <span class="inline-block mt-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">Ref: #{{ order.id }}</span>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 {{ badge_class }}">
+                        <span class="w-1.5 h-1.5 rounded-full {{ dot_class }}"></span>
+                        {{ mf.status_name(order.status) }}
+                    </span>
+                </div>
+
+                {# Details #}
+                <div class="space-y-2 pt-3 border-t border-slate-100 text-sm flex-1">
+                    {% if order.total %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500">Price</span>
+                        <span class="font-semibold text-slate-800">
+                            {{ order.total | money(order.currency) }}{% if order.period %}<span class="text-slate-400 font-normal"> / {{ order.period | period_title | lower }}</span>{% endif %}
+                        </span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500">Purchased</span>
+                        <span class="text-slate-600">{{ order.created_at | timeago }} ago
+                            {% if renewal_text and order.status == 'active' %}<span class="text-slate-400">({{ renewal_text }})</span>{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                {# CTA #}
+                <a href="{{ '/order/service/manage'|url }}/{{ order.id }}"
+                   class="svc-card-cta flex items-center justify-center gap-1.5 py-2.5 rounded-lg border text-sm font-semibold transition-all
+                          border-[rgba(var(--color-primary-rgb),0.25)] text-[color:var(--color-primary)] hover:bg-[rgba(var(--color-primary-rgb),0.06)]">
+                    Manage {{ order.service_type|replace({'service': ''})|lower }}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+            {% endfor %}
+
+            {# Add new service promo card #}
+            <div class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-3 min-h-[200px]">
+                <div class="w-12 h-12 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-sm">
+                    <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-slate-700">Add a new service</h4>
+                    <p class="text-xs text-slate-500 mt-1 max-w-[180px] mx-auto">Launch a new website or move an existing one today.</p>
+                </div>
+                <a href="{{ '/order'|url }}" class="text-sm font-semibold text-[color:var(--color-primary)] hover:underline transition-all">Browse marketplace</a>
+            </div>
+        </div>
+    </div>
+
+    {# Pagination #}
+    {% if orders.pages > 1 %}
+    <div class="flex items-center justify-center gap-2 pt-2">
+        {% for p in 1..orders.pages %}
+            <a href="?tab={{ status_tab }}&page={{ p }}{% if invoice_type %}&invoice_type={{ invoice_type }}{% endif %}{% if search_query %}&search={{ search_query|url_encode }}{% endif %}"
+               class="w-9 h-9 flex items-center justify-center rounded-lg text-sm transition-all
+                      {{ p == (request.page|default(1)) ? 'bg-[rgba(var(--color-primary-rgb),0.1)] text-[color:var(--color-primary)] border border-[rgba(var(--color-primary-rgb),0.3)]' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200' }}">
+                {{ p }}
+            </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    {# Empty state #}
+    <div class="rounded-2xl border-2 border-dashed border-slate-200 py-24 text-center bg-slate-50">
+        <div class="w-16 h-16 rounded-2xl bg-[rgba(var(--color-primary-rgb),0.08)] border border-[rgba(var(--color-primary-rgb),0.15)] flex items-center justify-center mx-auto mb-5">
+            <svg class="w-8 h-8 text-[color:var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 10h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
+            </svg>
+        </div>
+        <h3 class="text-base font-semibold text-slate-800 mb-2">No services found</h3>
+        <p class="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
+            {% if search_query %}
+                No services match "{{ search_query }}". Try a different search.
+            {% elseif status_tab == 'active' %}
+                You have no active services. Browse our plans to get started.
+            {% else %}
+                Nothing here yet.
+            {% endif %}
+        </p>
+        <a href="{{ '/order'|url }}"
+           class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-semibold transition-all shadow-lg shadow-[rgba(var(--color-primary-rgb),0.2)]"
+           style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Browse Plans
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var searchInput = document.getElementById('order-search');
+    if (!searchInput) return;
+    var timer;
+    searchInput.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+            var url = new URL(window.location.href);
+            var val = searchInput.value.trim();
+            if (val) {
+                url.searchParams.set('search', val);
+            } else {
+                url.searchParams.delete('search');
+            }
+            window.location = url.toString();
+        }, 500);
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,284 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}{{ article.title }} — Knowledge Base{% endblock %}
+{% block page_header %}{% endblock %}
+{% block breadcrumb %}{% endblock %}
+
+{% block content %}
+{% set section_articles = guest.support_kb_article_get_list({ 'kb_article_category_id': article.category.id, 'per_page': 10 }) %}
+
+<div class="space-y-6">
+
+    {# ── Breadcrumbs ── #}
+    <nav class="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 flex-wrap">
+        <a href="{{ 'support/kb'|url }}" class="hover:text-[color:var(--color-primary)] transition-colors">Knowledge Base</a>
+        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <a href="{{ ('support/kb')|url }}/{{ article.category.slug }}" class="hover:text-[color:var(--color-primary)] transition-colors">{{ article.category.title }}</a>
+        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-slate-600 dark:text-slate-300 font-medium truncate max-w-[240px]">{{ article.title }}</span>
+    </nav>
+
+    {# ── Two-column layout ── #}
+    <div class="flex flex-col md:flex-row gap-6 items-start">
+
+        {# ── Article column ── #}
+        <div class="flex-1 min-w-0">
+            <article class="bg-white dark:bg-white/[0.04] rounded-2xl border border-slate-200 dark:border-white/[0.07] shadow-sm overflow-hidden">
+
+                {# Article header #}
+                <header class="px-8 pt-8 pb-7 border-b border-slate-100 dark:border-white/[0.06]">
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mb-5 tracking-tight leading-snug">
+                        {{ article.title }}
+                    </h1>
+                    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
+                        {% if article.updated_at %}
+                        <span class="flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            Updated {{ article.updated_at|date('M j, Y') }}
+                        </span>
+                        {% endif %}
+                        <span class="flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                            {{ article.views }} view{{ article.views != 1 ? 's' : '' }}
+                        </span>
+                        <a href="{{ ('support/kb')|url }}/{{ article.category.slug }}"
+                           class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
+                            <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 dark:bg-indigo-500"></span>
+                            {{ article.category.title }}
+                        </a>
+                    </div>
+                </header>
+
+                {# Article body #}
+                <div class="px-8 py-8">
+                    <div class="prose-kb">
+                        {{ article.content|markdown }}
+                    </div>
+                </div>
+
+                {# Was this helpful? #}
+                <footer class="px-8 py-8 border-t border-slate-100 dark:border-white/[0.06] flex flex-col items-center text-center">
+                    <h4 class="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">Was this article helpful?</h4>
+                    <div class="flex gap-3">
+                        <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 dark:hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all font-medium text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+                            </svg>
+                            Yes, helpful
+                        </button>
+                        <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 hover:border-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 dark:hover:border-rose-500/40 hover:text-rose-700 dark:hover:text-rose-400 transition-all font-medium text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/>
+                            </svg>
+                            Not really
+                        </button>
+                    </div>
+                    <p class="mt-4 text-xs text-slate-400 dark:text-slate-500">
+                        Still have questions?
+                        <a href="{{ 'support'|url }}" class="font-medium hover:underline" style="color: var(--color-primary);">Open a support ticket</a>
+                    </p>
+                </footer>
+
+            </article>
+
+            {# ── Back navigation ── #}
+            <div class="mt-4 flex items-center justify-between">
+                <a href="{{ ('support/kb')|url }}/{{ article.category.slug }}"
+                   class="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-[color:var(--color-primary)] dark:hover:text-[color:var(--color-primary)] transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Back to {{ article.category.title }}
+                </a>
+                <a href="{{ 'support/kb'|url }}"
+                   class="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-[color:var(--color-primary)] dark:hover:text-[color:var(--color-primary)] transition-colors">
+                    All topics
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+
+        {# ── Right sidebar ── #}
+        <aside class="w-full md:w-64 lg:w-72 shrink-0 space-y-5">
+
+            {# In this section #}
+            {% if section_articles.list is not empty %}
+            <div class="bg-white dark:bg-white/[0.04] rounded-2xl border border-slate-200 dark:border-white/[0.07] shadow-sm p-6">
+                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">In this section</h4>
+                <ul class="space-y-0.5">
+                    {% for a in section_articles.list %}
+                    <li>
+                        <a href="{{ ('support/kb')|url }}/{{ a.category.slug }}/{{ a.slug }}"
+                           class="flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-sm transition-colors {% if a.id == article.id %}font-semibold text-[color:var(--color-primary)] bg-indigo-50 dark:bg-indigo-500/10{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-[color:var(--color-primary)]{% endif %}">
+                            {% if a.id == article.id %}
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                            </svg>
+                            {% else %}
+                            <span class="w-3.5 h-3.5 flex-shrink-0"></span>
+                            {% endif %}
+                            <span class="leading-snug">{{ a.title }}</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {# Contact Support CTA #}
+            <div class="rounded-2xl p-6 relative overflow-hidden" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary, var(--color-primary)) 100%);">
+                <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(circle at top right, rgba(255,255,255,0.12) 0%, transparent 60%);"></div>
+                <div class="relative">
+                    <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                    </div>
+                    <h4 class="text-sm font-bold text-white mb-1" style="text-shadow: 0 1px 6px rgba(0,0,0,0.2);">Still need a hand?</h4>
+                    <p class="text-xs text-white/80 mb-4 leading-relaxed">Our support engineers are ready to help 24/7.</p>
+                    <a href="{{ 'support'|url }}"
+                       class="inline-flex items-center gap-2 w-full justify-center px-4 py-2.5 bg-white/15 hover:bg-white/25 border border-white/40 rounded-xl text-white text-sm font-semibold transition-all">
+                        Open a Support Ticket
+                    </a>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+{{ parent() }}
+<style>
+/* ── Knowledge Base prose styles ── */
+.prose-kb {
+    color: #374151;
+    font-size: 0.9375rem;
+    line-height: 1.8;
+    max-width: none;
+}
+.prose-kb h1,
+.prose-kb h2,
+.prose-kb h3,
+.prose-kb h4,
+.prose-kb h5,
+.prose-kb h6 {
+    color: #0f172a;
+    font-weight: 700;
+    margin-top: 1.75em;
+    margin-bottom: 0.6em;
+    line-height: 1.35;
+}
+.prose-kb h1 { font-size: 1.5rem; }
+.prose-kb h2 { font-size: 1.2rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.4em; }
+.prose-kb h3 { font-size: 1.05rem; }
+.prose-kb p { margin-top: 0; margin-bottom: 1em; }
+.prose-kb a { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
+.prose-kb a:hover { color: #4338ca; }
+.prose-kb strong { color: #0f172a; font-weight: 600; }
+.prose-kb em { color: #374151; }
+.prose-kb ul,
+.prose-kb ol { padding-left: 1.5em; margin-bottom: 1em; }
+.prose-kb ul { list-style: disc; }
+.prose-kb ol { list-style: decimal; }
+.prose-kb li { margin-bottom: 0.35em; }
+.prose-kb blockquote {
+    border-left: 3px solid rgba(var(--color-primary-rgb, 99,102,241), 0.5);
+    background: rgba(var(--color-primary-rgb, 99,102,241), 0.04);
+    border-radius: 0 0.5rem 0.5rem 0;
+    padding: 0.75em 1em;
+    margin: 1.25em 0;
+    color: #6b7280;
+    font-style: italic;
+}
+.prose-kb code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.82em;
+    background: rgba(var(--color-primary-rgb, 99,102,241), 0.07);
+    border: 1px solid rgba(var(--color-primary-rgb, 99,102,241), 0.15);
+    color: #4f46e5;
+    padding: 0.15em 0.45em;
+    border-radius: 4px;
+}
+.prose-kb pre {
+    background: #1e293b;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 0.75rem;
+    padding: 1.25em 1.5em;
+    overflow-x: auto;
+    margin: 1.25em 0;
+}
+.prose-kb pre code {
+    background: none;
+    border: none;
+    color: #e2e8f0;
+    padding: 0;
+    font-size: 0.85em;
+}
+.prose-kb table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.25em 0;
+    font-size: 0.875em;
+}
+.prose-kb th {
+    text-align: left;
+    font-weight: 600;
+    color: #0f172a;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.5em 0.75em;
+}
+.prose-kb td {
+    border-bottom: 1px solid #f1f5f9;
+    padding: 0.5em 0.75em;
+    color: #374151;
+}
+.prose-kb tr:last-child td { border-bottom: none; }
+.prose-kb img {
+    max-width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    margin: 1em 0;
+}
+.prose-kb hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 2em 0;
+}
+
+/* ── Dark mode overrides ── */
+[data-theme="dark"] .prose-kb { color: #cbd5e1; }
+[data-theme="dark"] .prose-kb h1,
+[data-theme="dark"] .prose-kb h2,
+[data-theme="dark"] .prose-kb h3,
+[data-theme="dark"] .prose-kb h4 { color: #f1f5f9; }
+[data-theme="dark"] .prose-kb h2 { border-bottom-color: rgba(255,255,255,0.07); }
+[data-theme="dark"] .prose-kb a { color: #818cf8; }
+[data-theme="dark"] .prose-kb a:hover { color: #a5b4fc; }
+[data-theme="dark"] .prose-kb strong { color: #f1f5f9; }
+[data-theme="dark"] .prose-kb em { color: #cbd5e1; }
+[data-theme="dark"] .prose-kb code {
+    background: rgba(var(--color-primary-rgb, 99,102,241), 0.15);
+    border-color: rgba(var(--color-primary-rgb, 99,102,241), 0.25);
+    color: #a5b4fc;
+}
+[data-theme="dark"] .prose-kb pre {
+    background: rgba(0,0,0,0.35);
+    border-color: rgba(255,255,255,0.07);
+}
+[data-theme="dark"] .prose-kb pre code { color: #e2e8f0; }
+[data-theme="dark"] .prose-kb blockquote { color: #94a3b8; border-left-color: rgba(var(--color-primary-rgb, 99,102,241), 0.5); }
+[data-theme="dark"] .prose-kb th { color: #e2e8f0; border-bottom-color: rgba(255,255,255,0.1); }
+[data-theme="dark"] .prose-kb td { color: #cbd5e1; border-bottom-color: rgba(255,255,255,0.05); }
+[data-theme="dark"] .prose-kb img { border-color: rgba(255,255,255,0.07); }
+[data-theme="dark"] .prose-kb hr { border-top-color: rgba(255,255,255,0.07); }
+</style>
+{% endblock %}

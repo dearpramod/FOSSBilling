@@ -1,0 +1,415 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}{{ ticket.subject }} · Ticket #{{ ticket.id }}{% endblock %}
+{% block page_header %}{% endblock %}
+{% block breadcrumb %}{% endblock %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% block content %}
+<div class="space-y-6">
+
+    {# ── Breadcrumbs ── #}
+    <nav class="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm">
+        <a href="{{ '/'|url }}" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Home</a>
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <a href="{{ '/support'|url }}" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Support</a>
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-slate-900 dark:text-white font-medium">Ticket #{{ ticket.id }}</span>
+    </nav>
+
+    {# ── Ticket Header ── #}
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-4 flex-wrap">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ ticket.subject }}</h2>
+            {{ mf.status_badge(ticket.status) }}
+        </div>
+        <div class="relative" x-data="{ manageOpen: false }" @click.outside="manageOpen = false">
+            <button @click="manageOpen = !manageOpen"
+                    class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                Manage Ticket
+                <svg class="w-4 h-4 transition-transform duration-200" :class="manageOpen ? 'rotate-180' : ''"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="manageOpen" x-transition style="display:none;"
+                 class="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl shadow-xl overflow-hidden z-50">
+                {% if ticket.status != 'closed' %}
+                <button type="button" id="ticket-close-btn-menu"
+                        class="w-full text-left px-4 py-3 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Close Ticket
+                </button>
+                {% endif %}
+                <a href="{{ '/support'|url }}"
+                   class="block px-4 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    ← Back to Tickets
+                </a>
+                {% if ticket.rel_type == 'order' and ticket.rel_id %}
+                <a href="{{ 'order/service/manage'|url }}/{{ ticket.rel_id }}"
+                   class="block px-4 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    View Related Service
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── 12-column content grid ── #}
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        {# ── LEFT: Message thread + Reply form ── #}
+        <div class="lg:col-span-8 space-y-5">
+
+            {# Message thread #}
+            <div class="space-y-0">
+                {% for msg in ticket.messages|reverse %}
+                    {% set is_staff = msg.admin_id %}
+                    {% set loop_last = loop.last %}
+                    {% set name_parts = msg.author.name|default('?')|split(' ') %}
+                    {% set first_letter = name_parts[0]|slice(0,1)|upper %}
+
+                    <div class="flex items-start gap-3 {% if not loop_last %}pb-5{% endif %}">
+                        {# Avatar + vertical thread line #}
+                        <div class="flex flex-col items-center flex-shrink-0">
+                            <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold select-none
+                                        {% if is_staff %}bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300
+                                        {% else %}bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300{% endif %}">
+                                {{ first_letter }}
+                            </div>
+                            {# Thread connector line — hidden on last message #}
+                            {% if not loop_last %}
+                            <div class="w-px flex-1 mt-1 bg-slate-200 dark:bg-slate-700/60 min-h-[1.5rem]"></div>
+                            {% endif %}
+                        </div>
+
+                        {# Message body #}
+                        <div class="flex-1 min-w-0">
+                            {# Name + timestamp row #}
+                            <div class="flex items-baseline justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-semibold text-slate-900 dark:text-white">{{ msg.author.name }}</span>
+                                    {% if is_staff %}
+                                    <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">Staff</span>
+                                    {% endif %}
+                                </div>
+                                <span class="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0 ml-4">{{ msg.created_at|timeago }} ago</span>
+                            </div>
+
+                            {# Message content box — bordered card matching screenshot #}
+                            <div class="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 shadow-sm
+                                        {% if is_staff %}border-l-2 border-l-indigo-400 dark:border-l-indigo-500{% endif %}">
+                                {% if not is_staff %}
+                                <button type="button" title="Options"
+                                        class="absolute top-3 right-3 p-1 rounded text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                    </svg>
+                                </button>
+                                {% endif %}
+                                <div class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed {% if not is_staff %}pr-6{% endif %}">
+                                    {{ msg.content|markdown|raw }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No messages yet.</div>
+                {% endfor %}
+            </div>
+
+            {# Reply form (open) or closed notice #}
+            {% if ticket.status != 'closed' %}
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl shadow-sm overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background: rgba(var(--color-primary-rgb),0.10);">
+                        <svg class="w-3.5 h-3.5" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-semibold text-slate-900 dark:text-white">Write a Reply</span>
+                </div>
+                <form id="ticket-reply-form" class="p-5 space-y-4">
+                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+                    <input type="hidden" name="id" value="{{ ticket.id }}">
+                    <textarea name="content" required rows="6"
+                              placeholder="Write your reply here..."
+                              class="editor-textarea w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:focus:border-indigo-500 resize-none transition-all"></textarea>
+                    <div class="flex items-center justify-between">
+                        <button type="button"
+                                class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                            </svg>
+                            Attach files
+                        </button>
+                        <button type="submit" id="reply-submit-btn"
+                                class="btn-primary-gradient inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold shadow-lg transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100">
+                            <svg id="reply-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <svg id="reply-send-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                            </svg>
+                            <span id="reply-btn-text">Post reply</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 flex items-center justify-between">
+                <p class="text-sm text-slate-500 dark:text-slate-400">This ticket is closed.</p>
+                <a href="{{ '/support'|url }}"
+                   class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline transition-colors">
+                    Back to Tickets →
+                </a>
+            </div>
+            {% endif %}
+
+        </div>
+
+        {# ── RIGHT: Sidebar ── #}
+        <div class="lg:col-span-4 space-y-5">
+
+            {# Ticket Details card #}
+            <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-2xl shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700/50">
+                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Ticket Details</h3>
+                </div>
+                <div class="px-5 py-4 space-y-3.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Status</span>
+                        {{ mf.status_badge(ticket.status) }}
+                    </div>
+                    {% if ticket.helpdesk %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Department</span>
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ ticket.helpdesk.name }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Ticket ID</span>
+                        <span class="text-sm font-mono font-medium text-slate-900 dark:text-white">#{{ ticket.id }}</span>
+                    </div>
+                    {% if ticket.priority %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Priority</span>
+                        <span class="text-sm font-medium text-slate-900 dark:text-white capitalize">{{ ticket.priority }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Created</span>
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ ticket.created_at|timeago }} ago</span>
+                    </div>
+                    {% if ticket.updated_at %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Last Updated</span>
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ ticket.updated_at|timeago }} ago</span>
+                    </div>
+                    {% endif %}
+                    {% set last_staff = null %}
+                    {% for msg in ticket.messages %}
+                        {% if msg.admin_id %}{% set last_staff = msg.author %}{% endif %}
+                    {% endfor %}
+                    {% if last_staff %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Assigned To</span>
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ last_staff.name }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if ticket.status != 'closed' %}
+                <div class="px-5 py-4 bg-slate-50 dark:bg-slate-700/30 border-t border-slate-100 dark:border-slate-700/50">
+                    <button id="ticket-close-btn"
+                            class="w-full flex items-center justify-center gap-2 py-2 text-sm font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        Close Ticket
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            {# Linked Service card #}
+            {% if ticket.rel_type == 'order' and ticket.rel_id %}
+            <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-2xl shadow-sm p-5 space-y-4">
+                <h4 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Linked Service</h4>
+                <a href="{{ 'order/service/manage'|url }}/{{ ticket.rel_id }}"
+                   class="flex items-center gap-3 p-3 border border-slate-100 dark:border-slate-700/50 rounded-xl hover:border-indigo-500/20 dark:hover:border-indigo-500/30 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all">
+                    <div class="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-slate-900 dark:text-white truncate">Order #{{ ticket.rel_id }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">View related service →</p>
+                    </div>
+                </a>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+{# ── Close Ticket confirmation modal ── #}
+<div id="close-ticket-modal"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+     style="display:none;" aria-modal="true" role="dialog">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 space-y-4">
+        <div class="flex items-center justify-center w-12 h-12 rounded-full bg-red-50 dark:bg-red-500/10 mx-auto">
+            <svg class="w-6 h-6 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <h3 class="text-lg font-bold text-center text-slate-900 dark:text-white">Close this ticket?</h3>
+        <p class="text-sm text-center text-slate-500 dark:text-slate-400">Once closed, you won't be able to reply until the ticket is reopened by support.</p>
+        <div class="flex gap-3 pt-1">
+            <button id="ctm-cancel"
+                    class="flex-1 py-2.5 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+            </button>
+            <button id="ctm-confirm"
+                    class="flex-1 py-2.5 bg-red-500 hover:bg-red-600 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Yes, close ticket
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+{{ 'editor/ckeditor.css' | public_asset_url | stylesheet_tag }}
+{{ 'editor/ckeditor.js' | public_asset_url | script_tag }}
+<style>
+.ck.ck-editor { border-radius: 0.75rem !important; overflow: hidden; }
+.ck.ck-editor__top .ck-sticky-panel .ck-toolbar { border-radius: 0 !important; border-left: none !important; border-right: none !important; border-top: none !important; background: var(--tw-bg-opacity,1) !important; padding: 4px 8px !important; }
+.ck.ck-editor__main .ck-editor__editable { border-radius: 0 0 0.75rem 0.75rem !important; border-left: none !important; border-right: none !important; border-bottom: none !important; min-height: 140px; font-size: 0.875rem; }
+.ck.ck-editor__main .ck-editor__editable.ck-focused { box-shadow: none !important; }
+.ck.ck-toolbar { background: #f8fafc !important; border-color: #e2e8f0 !important; }
+.dark .ck.ck-toolbar { background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.08) !important; }
+.dark .ck.ck-editor__main .ck-editor__editable { background: rgba(255,255,255,0.03) !important; color: #f1f5f9 !important; }
+.ck.ck-editor { border: 1px solid #e2e8f0 !important; border-radius: 0.75rem !important; }
+.dark .ck.ck-editor { border-color: rgba(255,255,255,0.08) !important; }
+.ck.ck-button, .ck.ck-button:hover { border-radius: 6px !important; }
+</style>
+<script type="text/javascript">
+    window.editors = window.editors || {};
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll('.editor-textarea').forEach(function (element) {
+            let required = false;
+            CKEditor.default
+                .create(element, { licenseKey: 'GPL' })
+                .then(editor => {
+                    if (element.hasAttribute('required')) {
+                        element.removeAttribute('required');
+                        required = true;
+                    }
+                    window.editors[element.name] = { editor, 'required': required };
+                })
+                .catch(error => { console.error(error) });
+        });
+    });
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form       = document.getElementById('ticket-reply-form');
+    var closeBtns  = document.querySelectorAll('#ticket-close-btn, #ticket-close-btn-menu');
+    var modal      = document.getElementById('close-ticket-modal');
+    var cancelBtn  = document.getElementById('ctm-cancel');
+    var confirmBtn = document.getElementById('ctm-confirm');
+
+    function openModal()  { modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+    function closeModal() { modal.style.display = 'none';  document.body.style.overflow = ''; }
+
+    var submitBtn  = document.getElementById('reply-submit-btn');
+    var spinner     = document.getElementById('reply-spinner');
+    var sendIcon    = document.getElementById('reply-send-icon');
+    var btnText     = document.getElementById('reply-btn-text');
+
+    function setReplyLoading(loading) {
+        if (!submitBtn) return;
+        submitBtn.disabled = loading;
+        spinner.classList.toggle('hidden', !loading);
+        sendIcon.classList.toggle('hidden', loading);
+        btnText.textContent = loading ? 'Posting…' : 'Post reply';
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            setReplyLoading(true);
+            var data = {};
+            new FormData(form).forEach(function (v, k) { data[k] = v; });
+            if (window.editors && window.editors['content']) {
+                data['content'] = window.editors['content'].editor.getData();
+            }
+            API.client.post(
+                'support/ticket_reply', data,
+                function ()    { window.location.reload(); },
+                function (res) {
+                    setReplyLoading(false);
+                    StablePanel.message(res.message + ' (' + res.code + ')', 'error');
+                }
+            );
+        });
+    }
+
+    closeBtns.forEach(function (btn) {
+        btn.addEventListener('click', openModal);
+    });
+
+    if (cancelBtn)  { cancelBtn.addEventListener('click', closeModal); }
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function () {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Closing\u2026';
+            API.client.post(
+                'support/ticket_close',
+                { id: {{ ticket.id }}, CSRFToken: '{{ CSRFToken }}' },
+                function ()    { window.location.reload(); },
+                function (res) {
+                    closeModal();
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Yes, close ticket';
+                    StablePanel.message(res.message + ' (' + res.code + ')', 'error');
+                }
+            );
+        });
+    }
+
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeModal();
+        });
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && modal && modal.style.display !== 'none') closeModal();
+    });
+});
+</script>
+{% endblock %}

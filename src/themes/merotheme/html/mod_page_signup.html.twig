@@ -1,0 +1,609 @@
+{% extends "layout_public.html.twig" %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% set company       = guest.system_company %}
+{% set r             = guest.client_required %}
+{% set custom_fields = guest.client_custom_fields %}
+{% set social        = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
+
+{% block meta_title %}Create Account{% endblock %}
+
+{# Make <main> a flex column so the split panels can fill it exactly #}
+{% block head %}<style>main{display:flex;flex-direction:column;}</style>{% endblock %}
+
+{% block content %}
+<div class="flex flex-1 min-h-screen">
+
+    {# ══════════════════════════════════════════════════════════════
+       LEFT PANEL — "Need help choosing?" support panel
+       ══════════════════════════════════════════════════════════════ #}
+    <div class="hidden lg:flex lg:w-[30%] flex-col items-center justify-center px-10 py-16 relative overflow-hidden"
+         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+
+        {# Orb — top left #}
+        <div class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full pointer-events-none"
+             style="background: radial-gradient(circle, rgba(255,255,255,.15), transparent 60%);"></div>
+        {# Orb — bottom right #}
+        <div class="absolute -bottom-24 -right-24 w-80 h-80 rounded-full pointer-events-none"
+             style="background: radial-gradient(circle, rgba(255,255,255,.10), transparent 60%);"></div>
+        {# Dot-grid texture #}
+        <div class="absolute inset-0 pointer-events-none"
+             style="opacity:.05; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 24px 24px;"></div>
+
+        {# White boxed CTA card #}
+        <div class="relative z-10 w-full max-w-xs rounded-2xl px-8 py-10 flex flex-col items-center text-center"
+             style="background: rgba(255,255,255,.97); box-shadow: 0 20px 60px rgba(0,0,0,.18);">
+
+            {# Headset / support icon #}
+            <div class="mb-6 p-4 rounded-2xl" style="background: rgba(var(--color-primary-rgb),.10);">
+                <svg class="w-10 h-10" style="color: var(--color-primary);" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" aria-hidden="true" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3 5.25C3 4.008 4.008 3 5.25 3h2.25a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-.75.75H6a.75.75 0 0 0-.75.75v.75a6.75 6.75 0 0 0 6.75 6.75h.75a.75.75 0 0 0 .75-.75v-1.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v2.25A2.25 2.25 0 0 1 15.75 18h-.75a9 9 0 0 1-9-9v-.75A2.25 2.25 0 0 1 8.25 6H9V5.25Z" />
+                </svg>
+            </div>
+
+            <h2 class="text-xl font-extrabold mb-3 text-gray-900">
+                Need help choosing?
+            </h2>
+            <p class="text-sm text-gray-500 leading-relaxed mb-7">
+                Our team is available 24/7 to help you pick the right plan.
+            </p>
+
+            <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
+               class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90"
+               style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.30);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+                </svg>
+                Contact Support
+            </a>
+
+        </div>
+
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════
+       RIGHT PANEL — signup form
+       ══════════════════════════════════════════════════════════════ #}
+    <div class="w-full lg:w-[70%] flex items-start justify-center px-6 sm:px-14 py-12 overflow-y-auto login-right-panel">
+        <div class="w-full max-w-2xl">
+
+            {# Mobile logo #}
+            <div class="lg:hidden mb-8 flex justify-center">
+                {% if company.logo_url %}
+                    <img src="{{ company.logo_url }}" alt="{{ company.name }}" class="h-9 w-auto">
+                {% else %}
+                    <span class="text-xl font-bold" style="color: var(--color-primary);">{{ company.name }}</span>
+                {% endif %}
+            </div>
+
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-1">Create Account</h1>
+            <p class="text-sm text-gray-400 mb-6">
+                Already have an account?
+                <a href="{{ 'login'|url }}"
+                   class="font-semibold hover:underline underline-offset-2 transition-colors"
+                   style="color: var(--color-primary);">Sign in</a>
+            </p>
+
+            {# OAuth error banner #}
+            {% if request.oauth_error %}
+            <div class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm" role="alert"
+                 style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);color:#f87171;">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                <span>
+                    {% if request.oauth_error == 'account_exists' %}
+                        This account is already connected to an existing account with us. Please choose a different account.
+                    {% else %}
+                        Google sign-in failed. Please try again or fill in the form below.
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+
+            {# ── Google SSO ─────────────────────────────────────────── #}
+            {% if social.google_enabled %}
+            <div class="mb-6">
+                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Use social account (optional)</p>
+                <div id="google-gsi-container" class="flex justify-center min-h-[44px]">
+                    <a id="google-fallback-btn"
+                       href="{{ ('sociallogin/google?context=register')|url }}"
+                       class="w-full py-3 px-4 rounded-xl border bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all"
+                       style="display:flex;align-items:center;justify-content:center;gap:0.625rem;border-color:#e0e0e0;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+                        <svg style="width:1.125rem;height:1.125rem;flex-shrink:0;" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        </svg>
+                        Continue with Google
+                    </a>
+                </div>
+                <div class="relative flex items-center mt-5">
+                    <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
+                    <span class="mx-3 text-xs font-medium text-gray-400 flex-shrink">or fill the form below</span>
+                    <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
+                </div>
+            </div>
+            {% endif %}
+
+            <form method="POST" id="signup-form" novalidate class="space-y-6">
+
+                {# ─── Personal Information ───────────────────────────── #}
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest mb-4 pb-3 border-b"
+                        style="color: var(--color-primary); border-color: rgba(var(--color-primary-rgb),.15);">
+                        Personal Information
+                    </h3>
+                    <div class="space-y-4">
+
+                        {# First Name + Last Name #}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="first_name" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    First Name <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="first_name" type="text" name="first_name"
+                                       value="{{ request.first_name }}" required autofocus
+                                       autocomplete="given-name" maxlength="100" placeholder="First name"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            <div>
+                                <label for="last_name" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Last Name{% if 'last_name' in r %} <span style="color: var(--color-primary);">*</span>{% endif %}
+                                </label>
+                                <input id="last_name" type="text" name="last_name"
+                                       value="{{ request.last_name }}"
+                                       {% if 'last_name' in r %}required{% endif %}
+                                       autocomplete="family-name" maxlength="100" placeholder="Last name"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                        </div>
+
+                        {# Email Address + Phone Number #}
+                        <div class="grid grid-cols-1 {% if 'phone' in r %}sm:grid-cols-2{% endif %} gap-4">
+                            <div>
+                                <label for="email" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Email Address <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="email" type="email" name="email"
+                                       value="{{ request.email }}" required
+                                       placeholder="you@example.com" autocomplete="email"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% if 'phone' in r %}
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Phone Number <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <div class="flex gap-2">
+                                    <div class="flex-shrink-0 w-20">
+                                        <input id="phone_cc" type="text" name="phone_cc"
+                                               value="{{ request.phone_cc }}" placeholder="+1"
+                                               maxlength="5" inputmode="numeric" autocomplete="tel-country-code"
+                                               class="w-full px-3 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none text-center"
+                                               onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                               onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                    </div>
+                                    <div class="flex-1">
+                                        <input id="phone" type="tel" name="phone"
+                                               value="{{ request.phone }}" required
+                                               placeholder="Phone number" inputmode="tel" maxlength="30" autocomplete="tel-national"
+                                               class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                               onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                               onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {% if 'gender' in r %}
+                        <div>
+                            <label for="gender" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Gender <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <select id="gender" name="gender" required
+                                    class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                                    onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                    onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                <option value="">Select...</option>
+                                <option value="male"      {% if request.gender == 'male'      %}selected{% endif %}>Male</option>
+                                <option value="female"    {% if request.gender == 'female'    %}selected{% endif %}>Female</option>
+                                <option value="nonbinary" {% if request.gender == 'nonbinary' %}selected{% endif %}>Non-binary</option>
+                                <option value="other"     {% if request.gender == 'other'     %}selected{% endif %}>Other / Prefer not to say</option>
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        {% if 'birthday' in r %}
+                        <div>
+                            <label for="birthday" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Date of Birth <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <input id="birthday" type="date" name="birthday"
+                                   value="{{ request.birthday }}" required autocomplete="bday"
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                                   onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                   onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+
+                {# ─── Billing Address ────────────────────────────────── #}
+                {% if 'company' in r or 'address_1' in r or 'address_2' in r or 'city' in r or 'state' in r or 'postcode' in r or 'country' in r %}
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest mb-4 pb-3 border-b"
+                        style="color: var(--color-primary); border-color: rgba(var(--color-primary-rgb),.15);">
+                        Billing Address
+                    </h3>
+                    <div class="space-y-4">
+
+                        {% if 'company' in r %}
+                        <div>
+                            <label for="company" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Company Name <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <input id="company" type="text" name="company"
+                                   value="{{ request.company }}" required autocomplete="organization"
+                                   placeholder="Your company name"
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                   onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                   onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        </div>
+                        {% endif %}
+
+                        {# Street Address 1 + 2 #}
+                        {% if 'address_1' in r or 'address_2' in r %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {% if 'address_1' in r %}
+                            <div class="{% if 'address_2' not in r %}sm:col-span-2{% endif %}">
+                                <label for="address_1" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Street Address <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="address_1" type="text" name="address_1"
+                                       value="{{ request.address_1 }}" required
+                                       placeholder="Street address" autocomplete="address-line1"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                            {% if 'address_2' in r %}
+                            <div class="{% if 'address_1' not in r %}sm:col-span-2{% endif %}">
+                                <label for="address_2" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Street Address 2 <span class="text-gray-400 font-normal">(Optional)</span>
+                                </label>
+                                <input id="address_2" type="text" name="address_2"
+                                       value="{{ request.address_2 }}"
+                                       placeholder="Apartment, suite, unit" autocomplete="address-line2"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {# City + Country #}
+                        {% if 'city' in r or 'country' in r %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {% if 'city' in r %}
+                            <div class="{% if 'country' not in r %}sm:col-span-2{% endif %}">
+                                <label for="city" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    City <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="city" type="text" name="city"
+                                       value="{{ request.city }}" required
+                                       autocomplete="address-level2" maxlength="100" placeholder="City name"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                            {% if 'country' in r %}
+                            <div class="{% if 'city' not in r %}sm:col-span-2{% endif %}">
+                                <label for="country" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Country <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <select id="country" name="country" required autocomplete="country"
+                                        class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                                        onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                        onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                    <option value="">Select country...</option>
+                                    {% for val, label in guest.system_countries %}
+                                        <option value="{{ val }}" {% if request.country == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {# State + Postcode #}
+                        {% if 'state' in r or 'postcode' in r %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {% if 'state' in r %}
+                            <div class="{% if 'postcode' not in r %}sm:col-span-2{% endif %}">
+                                <label for="state" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    State / Province <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="state" type="text" name="state"
+                                       value="{{ request.state }}" required
+                                       autocomplete="address-level1" maxlength="100" placeholder="State / Province"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                            {% if 'postcode' in r %}
+                            <div class="{% if 'state' not in r %}sm:col-span-2{% endif %}">
+                                <label for="postcode" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Postcode / ZIP <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="postcode" type="text" name="postcode"
+                                       value="{{ request.postcode }}" required
+                                       autocomplete="postal-code" maxlength="20" placeholder="Postcode / ZIP"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+                {% endif %}
+
+                {# Custom fields #}
+                {% for field_name, field in custom_fields %}
+                    {% if field.active %}
+                    <div>
+                        <label for="{{ field_name }}" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            {{ field.title is not empty ? field.title : field_name|capitalize }}
+                            {% if field.required %}<span style="color: var(--color-primary);">*</span>{% endif %}
+                        </label>
+                        <input id="{{ field_name }}" type="text" name="{{ field_name }}"
+                               value="{{ attribute(request, field_name) }}"
+                               {% if field.required %}required{% endif %}
+                               class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                               onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                               onblur="this.style.boxShadow='';this.style.borderColor='';">
+                    </div>
+                    {% endif %}
+                {% endfor %}
+
+                {# Billing Currency #}
+                <div>
+                    <label for="currency" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Billing Currency <span style="color: var(--color-primary);">*</span>
+                    </label>
+                    {% set avail_currencies = guest.currency_get_pairs %}
+                    {% set default_currency = guest.currency_get %}
+                    <select id="currency" name="currency" required
+                            class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                            onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                            onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        {% for code, title in avail_currencies %}
+                            <option value="{{ code }}" {% if request.currency == code %}selected{% elseif not request.currency and default_currency.code == code %}selected{% endif %}>{{ code }} — {{ title }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-gray-400 mt-1.5">All invoices and balances will use this currency. Cannot be changed later.</p>
+                </div>
+
+                {# ─── Security / Password ────────────────────────────── #}
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest mb-4 pb-3 border-b"
+                        style="color: var(--color-primary); border-color: rgba(var(--color-primary-rgb),.15);">
+                        Security
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="password" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Password <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <input id="password" type="password" name="password" required
+                                   autocomplete="new-password" placeholder="Min 8 characters"
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                   onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                   onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        </div>
+                        <div>
+                            <label for="password_confirm" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Confirm Password <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <input id="password_confirm" type="password" name="password_confirm" required
+                                   autocomplete="new-password" placeholder="Repeat password"
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                   onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                   onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        </div>
+                    </div>
+                </div>
+
+                {# TOS #}
+                {% if settings.tos %}
+                <div class="flex items-start gap-3">
+                    <input type="checkbox" id="tos" name="agree_tos" value="1" required
+                           class="mt-0.5 w-4 h-4 rounded border-gray-300 cursor-pointer"
+                           style="accent-color: var(--color-primary);">
+                    <label for="tos" class="text-sm text-gray-500 leading-relaxed cursor-pointer">
+                        I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank"
+                           class="font-semibold hover:underline underline-offset-2 transition-colors"
+                           style="color: var(--color-primary);">Terms of Service</a>
+                    </label>
+                </div>
+                {% endif %}
+
+                {# reCAPTCHA #}
+                {% if guest.extension_is_on({'mod': 'spamchecker'}) %}
+                    {% set _rc = guest.spamchecker_recaptcha %}
+                    {% if _rc.enabled and _rc.publickey and _rc.pages.register %}
+                    {% if _rc.version == 3 %}
+                    {# Enterprise: invisible; token injected into hidden field before submit #}
+                    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
+                    <input type="hidden" name="g-recaptcha-response" id="g-rc-signup">
+                    <script>
+                    (function(){
+                        document.addEventListener('DOMContentLoaded', function(){
+                            var form = document.getElementById('g-rc-signup').closest('form');
+                            if (!form) return;
+                            form.addEventListener('submit', function(e){
+                                e.preventDefault();
+                                grecaptcha.enterprise.ready(function(){
+                                    grecaptcha.enterprise.execute('{{ _rc.publickey }}', {action: 'REGISTER'}).then(function(token){
+                                        document.getElementById('g-rc-signup').value = token;
+                                        form.submit();
+                                    });
+                                });
+                            });
+                        });
+                    }());
+                    </script>
+                    {% else %}
+                    <div class="mb-4" style="overflow:hidden;">
+                        <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+                        <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}" style="transform-origin:top left;"></div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                {% endif %}
+
+                {# Submit #}
+                <button type="submit"
+                        class="w-full h-12 px-4 rounded-xl text-base font-bold flex items-center justify-center transition-all hover:opacity-90 active:scale-[.99]"
+                        style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.38); letter-spacing:.01em;">
+                    Create Account
+                </button>
+
+            </form>
+
+            {# Trust badge #}
+            <div class="mt-8 pt-6 border-t flex items-center justify-center gap-2" style="border-color:#f0f0f0;">
+                <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                <span class="text-[11px] text-gray-400 font-medium">Protected by 256-bit SSL encryption</span>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('signup-form');
+    if (!form) return;
+
+    var bday = form.querySelector('[name="birthday"]');
+    if (bday) {
+        bday.max = new Date().toISOString().split('T')[0];
+        bday.min = '1900-01-01';
+    }
+
+    var rules = {
+        first_name: { pattern: /^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF '\-.]{1,100}$/, msg: 'First name should contain only letters, spaces, hyphens, and apostrophes.' },
+        last_name:  { pattern: /^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF '\-.]{1,100}$/, msg: 'Last name should contain only letters, spaces, hyphens, and apostrophes.' },
+        email:      { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, msg: 'Please enter a valid email address.' },
+        company:    { pattern: /^[^@<>\x00-\x1F]{1,150}$/, msg: 'Company name cannot contain @ or special characters.' },
+        phone_cc:   { pattern: /^\+?\d{1,4}$/, msg: 'Enter a valid country code (e.g. +1 or +977).' },
+        phone:      { pattern: /^\+?[\d\s\-.()\/]{5,30}$/, msg: 'Enter a valid phone number.' },
+        city:       { pattern: /^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF '\-.]{2,100}$/, msg: 'City should contain only letters, spaces, hyphens, and apostrophes.' },
+        state:      { pattern: /^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF '\-.]{2,100}$/, msg: 'State/Province should contain only letters, spaces, hyphens, and apostrophes.' },
+        postcode:   { pattern: /^[A-Za-z0-9 \-]{2,20}$/, msg: 'Enter a valid postcode or ZIP code.' },
+        password:   { minLen: 8, msg: 'Password must be at least 8 characters.' }
+    };
+
+    function setError(el, msg) {
+        clearError(el);
+        el.classList.add('border-red-500/60', 'ring-1', 'ring-red-500/40');
+        el.classList.remove('border-gray-200');
+        var err = document.createElement('p');
+        err.className = 'field-error text-xs text-red-400 mt-1';
+        err.textContent = msg;
+        el.parentNode.appendChild(err);
+    }
+
+    function clearError(el) {
+        el.classList.remove('border-red-500/60', 'ring-1', 'ring-red-500/40');
+        el.classList.add('border-gray-200');
+        var prev = el.parentNode.querySelector('.field-error');
+        if (prev) prev.remove();
+    }
+
+    form.addEventListener('input', function (e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') clearError(e.target);
+    });
+    form.addEventListener('change', function (e) {
+        if (e.target.tagName === 'SELECT' || e.target.type === 'checkbox') clearError(e.target);
+    });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var firstInvalid = null, valid = true;
+
+        form.querySelectorAll('[required]').forEach(function (el) {
+            if (el.type === 'checkbox') {
+                if (!el.checked) { setError(el, 'You must agree to the Terms of Service.'); valid = false; if (!firstInvalid) firstInvalid = el; }
+            } else if (el.value.trim() === '') {
+                setError(el, 'This field is required.'); valid = false; if (!firstInvalid) firstInvalid = el;
+            }
+        });
+
+        Object.keys(rules).forEach(function (name) {
+            var el = form.querySelector('[name="' + name + '"]');
+            if (!el || el.value.trim() === '') return;
+            var rule = rules[name], val = el.value.trim();
+            if (rule.minLen && val.length < rule.minLen) {
+                setError(el, rule.msg); valid = false; if (!firstInvalid) firstInvalid = el;
+            } else if (rule.pattern && !rule.pattern.test(val)) {
+                setError(el, rule.msg); valid = false; if (!firstInvalid) firstInvalid = el;
+            }
+        });
+
+        var pw = form.querySelector('[name="password"]'), pwc = form.querySelector('[name="password_confirm"]');
+        if (pw && pwc && pw.value && pwc.value && pw.value !== pwc.value) {
+            setError(pwc, 'Passwords do not match.'); valid = false; if (!firstInvalid) firstInvalid = pwc;
+        }
+
+        if (!valid) {
+            if (firstInvalid) { firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' }); firstInvalid.focus(); }
+            return;
+        }
+
+        var btn = form.querySelector('[type="submit"]');
+        if (btn) { btn.disabled = true; btn.textContent = 'Creating account...'; }
+
+        var formData = Object.fromEntries(new FormData(form));
+        formData.auto_login = 1;
+        API.guest.post('client/create', formData,
+            function () { window.location = '{{ 'dashboard'|url }}'; },
+            function (res) {
+                if (btn) { btn.disabled = false; btn.textContent = 'Create Account'; }
+                StablePanel.message(res.message || 'Registration failed. Please try again.', 'error');
+            }
+        );
+    });
+});
+</script>
+{% endblock %}

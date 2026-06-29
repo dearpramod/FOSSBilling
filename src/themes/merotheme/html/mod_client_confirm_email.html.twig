@@ -1,0 +1,62 @@
+{% extends "layout_public.html.twig" %}
+
+{% set company = guest.system_company %}
+
+{% block meta_title %}Email Confirmation{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-md text-center">
+
+        {% if expired|default(false) %}
+
+            <!-- Invalid / expired link -->
+            <div class="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                </svg>
+            </div>
+
+            <h1 class="text-2xl font-bold text-white mb-2">Link expired or invalid</h1>
+            <p class="text-gray-400 text-sm mb-8 max-w-sm mx-auto">
+                This email confirmation link has expired or has already been used. If your email still needs to be confirmed, please log in and request a new link.
+            </p>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a href="{{ 'client/login'|url }}"
+                   class="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/25"
+                   style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                    </svg>
+                    Sign in to your account
+                </a>
+                {% if guest.extension_is_on({'mod': 'support'}) %}
+                <a href="{{ 'support/contact'|url }}"
+                   class="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-sm font-medium hover:bg-white/10 transition-all">
+                    Contact support
+                </a>
+                {% endif %}
+            </div>
+
+        {% else %}
+
+            <!-- Success -->
+            <div class="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-white mb-2">Email confirmed!</h1>
+            <p class="text-gray-400 text-sm mb-8">Your email address has been successfully verified.</p>
+            <a href="{{ 'dashboard'|url }}"
+               class="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-white text-sm font-semibold"
+               style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                Go to dashboard
+            </a>
+
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

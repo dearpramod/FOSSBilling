@@ -1,0 +1,490 @@
+{% extends "layout_public.html.twig" %}
+
+{% set company      = guest.system_company %}
+{% set social       = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
+{% set news_enabled = guest.extension_is_on({'type': 'mod', 'id': 'news'}) %}
+{% set news         = news_enabled ? guest.news_get_list({'per_page': 5}) : {} %}
+{% set posts        = (news.list is defined and news.list|length > 0) ? news.list : [] %}
+
+{% block meta_title %}Sign In{% endblock %}
+
+{# Make <main> a flex column so the split panels can fill it exactly #}
+{% block head %}<style>main{display:flex;flex-direction:column;}</style>{% endblock %}
+
+{% block content %}
+<div class="flex flex-1 min-h-[820px]">
+
+    {# ══════════════════════════════════════════════════════════════
+       LEFT PANEL — full-width brand panel, white text, news slider
+       ══════════════════════════════════════════════════════════════ #}
+    <div class="hidden lg:flex lg:w-2/5 relative overflow-hidden flex-col login-left-panel"
+         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+
+        {# Orb — top left #}
+        <div class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full pointer-events-none"
+             style="background: radial-gradient(circle, rgba(255,255,255,.15), transparent 60%);"></div>
+        {# Orb — bottom right #}
+        <div class="absolute -bottom-24 -right-24 w-80 h-80 rounded-full pointer-events-none"
+             style="background: radial-gradient(circle, rgba(255,255,255,.10), transparent 60%);"></div>
+        {# Dot-grid texture #}
+        <div class="absolute inset-0 pointer-events-none"
+             style="opacity:.05; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 24px 24px;"></div>
+
+        <div class="relative z-10 flex flex-col h-full px-14 py-14">
+
+            {% if posts|length > 0 %}
+            {# ── News carousel — flex-1 + justify-center centres content in remaining height ── #}
+            <div class="flex-1 flex flex-col justify-center"
+                 x-data="{ cur: 0, tot: {{ posts|length }} }"
+                 x-init="tot > 1 && setInterval(function(){ cur = (cur + 1) % tot; }, 6000);">
+
+                {# "What's new" animated pill #}
+                <div class="inline-flex items-center gap-2.5 mb-8 self-start">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-50"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+                    </span>
+                    <span class="text-[11px] font-bold uppercase tracking-[.18em] text-white/70">What&rsquo;s new</span>
+                </div>
+
+                {# Slides — position:absolute inside fixed-height container.
+                   Container height is ALWAYS constant → zero layout shift.
+                   All slides coexist in the DOM; only opacity/transform/filter change. #}
+                <div style="position:relative;height:340px;overflow:hidden;">
+                {% for post in posts %}
+                {# Cinematic transition: fade + upward slide + scale-up + blur-out #}
+                <div style="position:absolute;inset:0;transition:opacity .65s cubic-bezier(.4,0,.2,1),transform .65s cubic-bezier(.4,0,.2,1),filter .65s cubic-bezier(.4,0,.2,1);{% if not loop.first %}opacity:0;transform:translateY(20px) scale(.97);filter:blur(6px);pointer-events:none;{% else %}opacity:1;transform:translateY(0) scale(1);filter:blur(0px);{% endif %}"
+                     :style="{ opacity: cur === {{ loop.index0 }} ? 1 : 0,
+                               transform: cur === {{ loop.index0 }} ? 'translateY(0) scale(1)' : 'translateY(20px) scale(.97)',
+                               filter: cur === {{ loop.index0 }} ? 'blur(0px)' : 'blur(6px)',
+                               pointerEvents: cur === {{ loop.index0 }} ? 'auto' : 'none' }">
+                    <p class="text-xs font-semibold text-white/55 mb-3 tracking-[.10em] uppercase">
+                        {{ post.created_at|date('M d, Y') }}
+                    </p>
+                    <h2 class="text-[2rem] font-extrabold text-white leading-[1.2] mb-5" style="letter-spacing:-.02em;">
+                        {{ post.title }}
+                    </h2>
+                    {% if post.content %}
+                    <p class="text-[0.95rem] text-white/70 leading-[1.8] font-normal" style="max-width:36ch;">
+                        {{ post.content|striptags|slice(0, 180) }}{% if post.content|striptags|length > 180 %}&hellip;{% endif %}
+                    </p>
+                    {% endif %}
+                    <a href="{{ ('news/' ~ post.slug)|url }}"
+                       class="inline-flex items-center gap-2 mt-6 text-sm font-bold text-white hover:text-white/80 transition-colors group">
+                        Read article
+                        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        </svg>
+                    </a>
+                </div>
+                {% endfor %}
+                </div>{# /slides #}
+
+                {# Dot-only nav — active dot expands to pill #}
+                {% if posts|length > 1 %}
+                <div class="flex items-center gap-2.5 mt-8">
+                    {% for i in 0..(posts|length - 1) %}
+                    <button @click="cur = {{ i }}"
+                            :style="cur === {{ i }}
+                                ? 'width:22px;height:8px;background:rgba(255,255,255,1);border-radius:9999px;'
+                                : 'width:8px;height:8px;background:rgba(255,255,255,0.38);border-radius:9999px;'"
+                            style="transition:all .35s cubic-bezier(.4,0,.2,1);padding:0;border:0;cursor:pointer;flex-shrink:0;"
+                            aria-label="Slide {{ i + 1 }}"></button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% else %}
+            {# ── Fallback feature list when no news ── #}
+            <div class="flex-1 flex flex-col justify-center py-10">
+                <div class="inline-flex items-center gap-2.5 mb-8 self-start">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-50"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+                    </span>
+                    <span class="text-[11px] font-bold uppercase tracking-[.18em] text-white/70">Client Portal</span>
+                </div>
+                <h2 class="text-[2rem] font-extrabold text-white leading-tight mb-3" style="letter-spacing:-.02em;">
+                    Everything you need,<br>in one place.
+                </h2>
+                <p class="text-[0.95rem] text-white/65 leading-[1.8] max-w-xs mb-10">
+                    Manage your services, billing, and support — all from one dashboard.
+                </p>
+                <ul class="space-y-5">
+                    <li class="flex items-center gap-3.5 text-sm font-semibold text-white/90">
+                        <span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        Manage VPS &amp; hosting services
+                    </li>
+                    <li class="flex items-center gap-3.5 text-sm font-semibold text-white/90">
+                        <span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        View invoices &amp; billing history
+                    </li>
+                    <li class="flex items-center gap-3.5 text-sm font-semibold text-white/90">
+                        <span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        Open &amp; track support tickets
+                    </li>
+                    <li class="flex items-center gap-3.5 text-sm font-semibold text-white/90">
+                        <span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        Register &amp; manage domains
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+
+
+
+        </div>
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════
+       RIGHT PANEL — clean white login form
+       ══════════════════════════════════════════════════════════════ #}
+    <div class="w-full lg:w-3/5 flex items-center justify-center px-8 sm:px-16 py-14 login-right-panel">
+        <div class="w-full max-w-[400px]">
+
+            {# Mobile-only logo #}
+            <div class="flex justify-start mb-10 lg:hidden">
+                {% if settings.logo_url %}
+                    <img src="{{ settings.logo_url }}" alt="{{ company.name }}" class="h-9 w-auto">
+                {% else %}
+                    <span class="text-gray-900 font-extrabold text-2xl">{{ company.name }}</span>
+                {% endif %}
+            </div>
+
+            {# Heading #}
+            <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight mb-2">Login</h1>
+            <p class="text-sm text-gray-400 mb-8">
+                {% if settings.login_show_register != '0' %}
+                New to {{ company.name }}?
+                <a href="{{ 'signup'|url }}"
+                   class="font-semibold hover:underline underline-offset-2 transition-colors"
+                   style="color: var(--color-primary);">Create an account</a>
+                to get started
+                {% else %}
+                Sign in to access your client portal.
+                {% endif %}
+            </p>
+
+            <script>
+            function loginFormData() {
+                var _apiUrl     = '{{ 'api/guest/client/login'|url|e('js') }}';
+                var _redirectUrl = '{{ (redirect_uri|default('/'))|url|e('js') }}';
+                {% if guest.extension_is_on({'mod': 'spamchecker'}) %}
+                    {% set _rc2 = guest.spamchecker_recaptcha %}
+                    {% if _rc2.enabled and _rc2.publickey and _rc2.pages.login and _rc2.version == 3 %}
+                var _rcKey = '{{ _rc2.publickey|e('js') }}';
+                    {% else %}
+                var _rcKey = null;
+                    {% endif %}
+                {% else %}
+                var _rcKey = null;
+                {% endif %}
+                return {
+                    submitting: false,
+                    errorMsg: '',
+                    async doLogin() {
+                        this.submitting = true;
+                        this.errorMsg = '';
+                        var fd = new FormData(this.$el);
+                        // Append CSRF token from meta tag
+                        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                        if (csrfMeta) fd.append('CSRFToken', csrfMeta.getAttribute('content'));
+                        // Fetch reCAPTCHA Enterprise token if configured
+                        if (_rcKey && typeof grecaptcha !== 'undefined') {
+                            try {
+                                var token = await new Promise(function(resolve, reject) {
+                                    grecaptcha.enterprise.ready(function() {
+                                        grecaptcha.enterprise.execute(_rcKey, {action: 'LOGIN'}).then(resolve).catch(reject);
+                                    });
+                                });
+                                var rcField = document.getElementById('g-rc-login');
+                                if (rcField) rcField.value = token;
+                            } catch (rcErr) { /* proceed without token */ }
+                        }
+                        try {
+                            var resp = await fetch(_apiUrl, {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                                credentials: 'include',
+                                body: new URLSearchParams(fd).toString()
+                            });
+                            var data = await resp.json();
+                            if (data.result) {
+                                window.location.href = _redirectUrl;
+                            } else {
+                                this.errorMsg = (data.error && data.error.message)
+                                    ? data.error.message
+                                    : 'Login failed. Please check your credentials.';
+                                this.submitting = false;
+                            }
+                        } catch (netErr) {
+                            this.errorMsg = 'A network error occurred. Please try again.';
+                            this.submitting = false;
+                        }
+                    }
+                };
+            }
+            </script>
+
+            <form id="login-form" class="space-y-5" x-data="loginFormData()" @submit.prevent="doLogin()">
+
+                {# Email #}
+                <div>
+                    <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
+                        Email Address&nbsp;<span style="color: var(--color-primary);">*</span>
+                    </label>
+                    <input id="email" type="email" name="email"
+                           value="{{ request.email }}"
+                           required autofocus
+                           autocomplete="email"
+                           placeholder="you@example.com"
+                           class="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                           onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                           onblur="this.style.boxShadow='';this.style.borderColor='';">
+                </div>
+
+                {# Password + show/hide #}
+                <div x-data="{ showPwd: false }">
+                    <label for="password" class="block text-sm font-semibold text-gray-700 mb-2">
+                        Password&nbsp;<span style="color: var(--color-primary);">*</span>
+                    </label>
+                    <div class="relative">
+                        <input id="password" :type="showPwd ? 'text' : 'password'" name="password"
+                               required
+                               autocomplete="current-password"
+                               placeholder="Enter your password"
+                               class="w-full px-4 pr-11 py-3.5 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                               onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                               onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        <button type="button"
+                                @click="showPwd = !showPwd"
+                                :aria-label="showPwd ? 'Hide password' : 'Show password'"
+                                class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-0.5">
+                            <svg x-show="!showPwd" style="width:1.1rem;height:1.1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                            <svg x-show="showPwd" style="display:none;width:1.1rem;height:1.1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                            </svg>
+                        </button>
+                    </div>
+                    {% if settings.login_show_reset != '0' %}
+                    <a href="{{ 'password-reset'|url }}"
+                       class="inline-block mt-2 text-sm font-semibold hover:underline underline-offset-2 transition-colors"
+                       style="color: var(--color-primary);">Forgot password?</a>
+                    {% endif %}
+                </div>
+
+                {# Remember me #}
+                <div class="flex items-center gap-2.5">
+                    <input id="remember" type="checkbox" name="remember" value="1"
+                           class="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                           style="accent-color: var(--color-primary);">
+                    <label for="remember" class="text-sm text-gray-500 cursor-pointer select-none">Keep me signed in</label>
+                </div>
+
+                {# reCAPTCHA — publickey presence is the reliable indicator captcha is configured #}
+                {% if guest.extension_is_on({'mod': 'spamchecker'}) %}
+                    {% set _rc = guest.spamchecker_recaptcha %}
+                    {% if _rc.enabled and _rc.publickey and _rc.pages.login %}
+                    {% if _rc.version == 3 %}
+                    {# Enterprise: invisible; token injected into hidden field before submit #}
+                    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
+                    <input type="hidden" name="g-recaptcha-response" id="g-rc-login">
+                    {# Token is now fetched inside the Alpine doLogin() handler — no extra submit interceptor needed #}
+                    {% else %}
+                    <div class="mb-4" style="overflow:hidden;">
+                        <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+                        <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}" style="transform-origin:top left;"></div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                {% endif %}
+
+                {# Inline error message — shown only when login fails #}
+                <div x-show="errorMsg"
+                     x-text="errorMsg"
+                     class="px-4 py-3 rounded-xl text-sm font-medium"
+                     style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;"></div>
+
+                {# Submit #}
+                <button type="submit"
+                        :disabled="submitting"
+                        class="w-full h-12 px-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[.99]"
+                        style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.38); letter-spacing:.01em;">
+                    <span x-show="!submitting">Login</span>
+                    <template x-if="submitting">
+                        <span class="flex items-center gap-2">
+                            <svg class="animate-spin w-4 h-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            Logging in&hellip;
+                        </span>
+                    </template>
+                </button>
+
+            </form>
+
+            {% if social.google_enabled %}
+            <div class="mt-6">
+                <div class="relative flex items-center">
+                    <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
+                    <span class="mx-3 text-xs font-medium text-gray-400 flex-shrink">or</span>
+                    <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
+                </div>
+                <div id="google-gsi-container" class="mt-4 flex justify-center min-h-[44px]">
+                    <a id="google-fallback-btn"
+                       href="{{ 'sociallogin/google'|url }}"
+                       class="w-full py-3 px-4 rounded-xl border bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all"
+                       style="display:flex;align-items:center;justify-content:center;gap:0.625rem;border-color:#e0e0e0;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+                        <svg style="width:1.125rem;height:1.125rem;flex-shrink:0;" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        </svg>
+                        Continue with Google
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Trust badge #}
+            <div class="mt-8 pt-6 border-t flex items-center justify-center gap-2" style="border-color:#f0f0f0;">
+                <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                <span class="text-[11px] text-gray-400 font-medium">Protected by 256-bit SSL encryption</span>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+{% block js %}
+{% if social.google_enabled and social.google_client_id %}
+<script>
+(function () {
+    'use strict';
+
+    var clientId = '{{ social.google_client_id|e('js') }}';
+    var apiUrl   = '{{ (constant('SYSTEM_URL') ~ 'api/guest/sociallogin/handle_credential')|e('js') }}';
+    var loginUrl = '{{ 'login'|url|e('js') }}';
+
+    function handleCredential(credentialResponse) {
+        fetch(apiUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'credential=' + encodeURIComponent(credentialResponse.credential) + '&context=login'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data && data.result && data.result.action === 'redirect' && data.result.url) {
+                window.location.replace(data.result.url);
+            } else {
+                var msg = (data && data.error && data.error.message)
+                    ? data.error.message
+                    : 'Google sign-in failed. Please try again.';
+                if (typeof StablePanel !== 'undefined') {
+                    StablePanel.message(msg, 'error');
+                } else {
+                    window.location.replace(loginUrl + '?oauth_error=1');
+                }
+            }
+        })
+        .catch(function () {
+            window.location.replace(loginUrl + '?oauth_error=1');
+        });
+    }
+
+    // Dynamically load the GSI library.
+    // On success: hide the fallback anchor and render the personalized button.
+    // On failure or timeout: the fallback anchor remains visible.
+    var fallback  = document.getElementById('google-fallback-btn');
+    var container = document.getElementById('google-gsi-container');
+    var loaded    = false;
+
+    var script    = document.createElement('script');
+    script.src    = 'https://accounts.google.com/gsi/client';
+    script.async  = true;
+    script.defer  = true;
+
+    script.onload = function () {
+        loaded = true;
+        var width = Math.min(400, container ? container.offsetWidth : 400);
+
+        google.accounts.id.initialize({
+            client_id:             clientId,
+            callback:              handleCredential,
+            ux_mode:               'popup',
+            cancel_on_tap_outside: true,
+            // One Tap context — shown only on sign-in page.
+            context:               'signin',
+        });
+
+        // Replace the fallback anchor with Google's branded personalized button.
+        if (fallback) { fallback.style.display = 'none'; }
+
+        google.accounts.id.renderButton(container, {
+            theme:          'outline',
+            size:           'large',
+            width:          width,
+            text:           'signin_with',
+            shape:          'rectangular',
+            logo_alignment: 'left',
+        });
+
+        // Show the One Tap floating overlay — the WHMCS-style popup.
+        // Google will display it only when the browser has an active Google
+        // session; if not, prompt() silently does nothing.
+        google.accounts.id.prompt(function (notification) {
+            if (notification.isNotDisplayed()) {
+                // One Tap was suppressed (e.g. user previously dismissed it,
+                // browser blocks third-party cookies, no Google session).
+                // The button below is still available — no action needed.
+            }
+        });
+    };
+
+    // If GSI hasn't loaded within 5 s, leave the fallback visible.
+    setTimeout(function () {
+        if (!loaded && fallback) { fallback.style.display = ''; }
+    }, 5000);
+
+    document.head.appendChild(script);
+}());
+</script>
+{% endif %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('login-form');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        API.guest.post('client/login',
+            new FormData(form).serializeObject(),
+            function () {
+                window.location = '{{ redirect_uri|default('dashboard')|url }}';
+            },
+            function (res) {
+                StablePanel.message(res.message, 'error');
+            }
+        );
+    });
+});
+</script>
+{% endblock %}

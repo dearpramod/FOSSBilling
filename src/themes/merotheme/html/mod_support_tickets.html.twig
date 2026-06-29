@@ -1,0 +1,434 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+{% set _rc_t = guest.extension_is_on({'mod': 'spamchecker'}) ? guest.spamchecker_recaptcha : {} %}
+
+{% block meta_title %}Support Tickets{% endblock %}
+{% block page_header %}Support{% endblock %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% block content %}
+{% set current_page = request.page|default(1)|number_format(0,'','') %}
+{% set current_tab  = request.tab|default('active') in ['active','closed','all'] ? request.tab|default('active') : 'active' %}
+{% set per_page = 6 %}
+{# Build query params based on tab #}
+{% if current_tab == 'active' %}
+    {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page, 'status': 'open'}) %}
+{% elseif current_tab == 'closed' %}
+    {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page, 'status': 'closed'}) %}
+{% else %}
+    {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page}) %}
+{% endif %}
+{% set total_pages = (tickets.total / per_page)|round(0, 'ceil') %}
+{% set closed_count = client.support_ticket_get_list({'per_page': 1, 'status': 'closed'}).total|default(0) %}
+{% set open_count   = client.support_ticket_get_list({'per_page': 1, 'status': 'open'}).total|default(0) %}
+
+<div class="space-y-6" x-data="{ showNewTicket: false, searchQ: '', sortBy: 'updated' }">
+
+    {# ── Top bar: title + button ── #}
+    <div class="flex items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Support</h1>
+        <button @click="showNewTicket = !showNewTicket"
+                class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg transition-all active:scale-95 btn-primary-gradient">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+            Open support ticket
+        </button>
+    </div>
+
+    {# ── Stats cards ── #}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: rgba(var(--color-primary-rgb),0.10);">
+                <svg class="w-5 h-5" style="color:var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Tickets</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ tickets.total|default(0) }}</p>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-50 dark:bg-amber-500/10">
+                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Awaiting Response</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ open_count }}</p>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm p-5 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-500/10">
+                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Closed Tickets</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ closed_count }}</p>
+            </div>
+        </div>
+    </div>
+
+    {# ── Info notice ── #}
+    <div class="bg-indigo-50/60 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-2xl px-5 py-4 flex items-start gap-3">
+        <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-sm text-indigo-900 dark:text-indigo-200 leading-relaxed">
+            For email support, use the <strong>Open support ticket</strong> button above.
+            For instant help, use the <strong>Live Chat</strong> at the bottom of this page.
+        </p>
+    </div>
+
+    {# New ticket form #}
+    <div x-show="showNewTicket" x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+         class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(var(--color-primary-rgb),0.10);">
+                    <svg class="w-4 h-4" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-gray-200">Open a New Ticket</h3>
+            </div>
+            <button @click="showNewTicket = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <form class="p-5 space-y-4" id="new-ticket-form">
+            <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-medium text-slate-500 dark:text-gray-400">Subject <span class="text-red-400">*</span></label>
+                    <input type="text" name="subject" required
+                           placeholder="Describe your issue briefly"
+                           class="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                </div>
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-medium text-slate-500 dark:text-gray-400">Priority</label>
+                    <select name="priority"
+                            class="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+            </div>
+            {% set help_desks = client.support_helpdesk_get_pairs %}
+            {% if help_desks|length > 1 %}
+            <div class="space-y-1.5">
+                <label class="block text-xs font-medium text-slate-500 dark:text-gray-400">Department</label>
+                <select name="support_helpdesk_id"
+                        class="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    {% for id, name in help_desks %}
+                        <option value="{{ id }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% elseif help_desks|length == 1 %}
+                <input type="hidden" name="support_helpdesk_id" value="{{ help_desks|keys|first }}">
+            {% endif %}
+            <div class="space-y-1.5">
+                <label class="block text-xs font-medium text-slate-500 dark:text-gray-400">Message <span class="text-red-400">*</span></label>
+                <textarea name="content" rows="5"
+                          placeholder="Describe your issue in detail..."
+                          class="editor-new-ticket w-full px-3.5 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none transition-all"></textarea>
+            </div>
+            <div class="flex items-center gap-3">
+                {% if _rc_t.enabled and _rc_t.publickey and _rc_t.pages.ticket %}
+                {% if _rc_t.version == 3 %}
+                <input type="hidden" name="g-recaptcha-response" id="g-rc-ticket">
+                <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc_t.publickey }}" async defer></script>
+                {% else %}
+                <div class="w-full mb-2">
+                    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+                    <div class="g-recaptcha" data-sitekey="{{ _rc_t.publickey }}" style="transform-origin:top left;"></div>
+                </div>
+                {% endif %}
+                {% endif %}
+                <button type="submit"
+                        class="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all btn-primary-gradient">
+                    Submit Ticket
+                </button>
+                <button type="button" @click="showNewTicket = false"
+                        class="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white text-sm border border-slate-200 dark:border-white/10 transition-all">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {# ── Search + Filter row ── #}
+    <div class="flex items-center gap-3" x-data="{ sortOpen: false }">
+        <div class="relative flex-1">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="text" x-model="searchQ" placeholder="Search tickets…"
+                   class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all">
+        </div>
+        <div class="relative">
+            <button @click="sortOpen = !sortOpen" @keydown.escape.window="sortOpen = false"
+                    class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">
+                <span x-text="sortBy === 'updated' ? 'Last updated' : 'Date created'"></span>
+                <svg class="w-3.5 h-3.5 transition-transform" :class="sortOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="sortOpen" x-transition @click.outside="sortOpen = false" x-cloak
+                 class="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl shadow-lg overflow-hidden z-20">
+                <button @click="sortBy = 'updated'; sortOpen = false"
+                        class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                        :class="sortBy === 'updated' ? 'text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'">
+                    Last updated
+                    <svg x-show="sortBy === 'updated'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </button>
+                <button @click="sortBy = 'created'; sortOpen = false"
+                        class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                        :class="sortBy === 'created' ? 'text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'">
+                    Date created
+                    <svg x-show="sortBy === 'created'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Tabs + Ticket list ── #}
+    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm overflow-hidden">
+        {# Tabs — server-side: each tab links to ?tab=X&page=1 #}
+        <div class="flex border-b border-slate-100 dark:border-slate-700/50">
+            <a href="?tab=active"
+               class="flex-1 py-4 text-sm text-center transition-all {% if current_tab == 'active' %}border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold{% else %}text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-semibold{% endif %}">
+                Active
+                {% if open_count > 0 %}<span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold
+                    {% if current_tab == 'active' %}bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300{% else %}bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400{% endif %}">{{ open_count }}</span>{% endif %}
+            </a>
+            <a href="?tab=closed"
+               class="flex-1 py-4 text-sm text-center transition-all {% if current_tab == 'closed' %}border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold{% else %}text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-semibold{% endif %}">
+                Closed
+                {% if closed_count > 0 %}<span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold
+                    {% if current_tab == 'closed' %}bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300{% else %}bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400{% endif %}">{{ closed_count }}</span>{% endif %}
+            </a>
+            <a href="?tab=all"
+               class="flex-1 py-4 text-sm text-center transition-all {% if current_tab == 'all' %}border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold{% else %}text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-semibold{% endif %}">
+                All
+            </a>
+        </div>
+
+        {# ── Ticket list ── #}
+        {% if tickets.list %}
+        <div class="divide-y divide-slate-100 dark:divide-slate-700/50">
+            {% for ticket in tickets.list %}
+            {% set isClosed = (ticket.status == 'closed') %}
+            <a href="{{ 'support/ticket'|url }}/{{ ticket.id }}"
+               x-show="!searchQ || '{{ ticket.subject|lower|e('js') }}'.includes(searchQ.toLowerCase())"
+               class="flex items-center justify-between p-5 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group cursor-pointer">
+                <div class="flex items-center gap-5 min-w-0">
+                    {# Circular avatar #}
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                         style="background: rgba(var(--color-primary-rgb),0.10); color: var(--color-primary);">
+                        {{ ticket.subject|default('?')|first|upper }}
+                    </div>
+                    {# Subject + status badge #}
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2.5 flex-wrap mb-0.5">
+                            <span class="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate transition-colors">{{ ticket.subject|default('No Subject') }}</span>
+                            {{ mf.status_badge(ticket.status) }}
+                        </div>
+                    </div>
+                </div>
+                {# Right: ID + time #}
+                <div class="flex-shrink-0 text-right ml-4">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">#{{ ticket.id }}</p>
+                    <p class="text-xs text-slate-500 font-medium">{{ ticket.updated_at|timeago }} ago</p>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="py-16 text-center">
+            <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/[0.07] flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-slate-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </div>
+            <p class="text-slate-500 text-sm mb-3">No tickets yet</p>
+            <button @click="showNewTicket = true" class="text-sm text-indigo-500 hover:text-indigo-400 transition-colors">
+                Open your first ticket →
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Pagination ── #}
+    {% if tickets.total > 0 %}
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <p class="text-xs text-slate-500 dark:text-slate-400 order-2 sm:order-1">
+            Page {{ current_page }} of {{ total_pages > 0 ? total_pages : 1 }}
+            &nbsp;·&nbsp;
+            {{ tickets.total }} ticket{{ tickets.total != 1 ? 's' : '' }}
+        </p>
+        <div class="flex items-center gap-1 order-1 sm:order-2">
+            {% if total_pages > 1 %}
+            {# Prev #}
+            {% if current_page > 1 %}
+            <a href="?tab={{ current_tab }}&page={{ current_page - 1 }}"
+               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Prev
+            </a>
+            {% else %}
+            <span class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 dark:text-slate-600 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 cursor-not-allowed">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Prev
+            </span>
+            {% endif %}
+
+            {# Page numbers — show at most 5 around current #}
+            {% set p_start = max(1, current_page - 2) %}
+            {% set p_end   = min(total_pages, current_page + 2) %}
+
+            {% if p_start > 1 %}
+            <a href="?tab={{ current_tab }}&page=1"
+               class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">1</a>
+            {% if p_start > 2 %}<span class="px-1 text-slate-400 text-sm select-none">…</span>{% endif %}
+            {% endif %}
+
+            {% for p in p_start..p_end %}
+            {% if p == current_page %}
+            <span class="px-3 py-1.5 rounded-lg text-sm font-semibold text-white"
+                  style="background: var(--color-primary);">{{ p }}</span>
+            {% else %}
+            <a href="?tab={{ current_tab }}&page={{ p }}"
+               class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">{{ p }}</a>
+            {% endif %}
+            {% endfor %}
+
+            {% if p_end < total_pages %}
+            {% if p_end < total_pages - 1 %}<span class="px-1 text-slate-400 text-sm select-none">…</span>{% endif %}
+            <a href="?tab={{ current_tab }}&page={{ total_pages }}"
+               class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">{{ total_pages }}</a>
+            {% endif %}
+
+            {# Next #}
+            {% if current_page < total_pages %}
+            <a href="?tab={{ current_tab }}&page={{ current_page + 1 }}"
+               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                Next
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            {% else %}
+            <span class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 dark:text-slate-600 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 cursor-not-allowed">
+                Next
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+            {% endif %}
+            {% endif %}{# end total_pages > 1 #}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block js %}
+{{ 'editor/ckeditor.css' | public_asset_url | stylesheet_tag }}
+{{ 'editor/ckeditor.js' | public_asset_url | script_tag }}
+<style>
+.ck.ck-editor { border-radius: 0.75rem !important; overflow: hidden; }
+.ck.ck-editor__top .ck-sticky-panel .ck-toolbar { border-radius: 0 !important; border-left: none !important; border-right: none !important; border-top: none !important; padding: 4px 8px !important; }
+.ck.ck-editor__main .ck-editor__editable { border-radius: 0 0 0.75rem 0.75rem !important; border-left: none !important; border-right: none !important; border-bottom: none !important; min-height: 120px; font-size: 0.875rem; }
+.ck.ck-editor__main .ck-editor__editable.ck-focused { box-shadow: none !important; }
+.ck.ck-toolbar { background: #f8fafc !important; border-color: #e2e8f0 !important; }
+.dark .ck.ck-toolbar { background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.08) !important; }
+.dark .ck.ck-editor__main .ck-editor__editable { background: rgba(255,255,255,0.03) !important; color: #f1f5f9 !important; }
+.ck.ck-editor { border: 1px solid #e2e8f0 !important; }
+.dark .ck.ck-editor { border-color: rgba(255,255,255,0.08) !important; }
+.ck.ck-button, .ck.ck-button:hover { border-radius: 6px !important; }
+</style>
+<script type="text/javascript">
+    window.newTicketEditors = window.newTicketEditors || {};
+
+    function initNewTicketEditor() {
+        if (window.newTicketEditors['content']) return; // already initialized
+        var textarea = document.querySelector('.editor-new-ticket');
+        if (!textarea) return;
+        CKEditor.default
+            .create(textarea, { licenseKey: 'GPL' })
+            .then(function (editor) { window.newTicketEditors[textarea.name] = editor; })
+            .catch(function (error) { console.error(error); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Lazily initialize CKEditor when the new-ticket panel becomes visible.
+        // The panel starts hidden (Alpine x-show=false sets display:none), so we
+        // watch for the style attribute change that Alpine makes when it shows it.
+        var container = document.querySelector('[x-show="showNewTicket"]');
+        if (container) {
+            var observer = new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        if (container.style.display !== 'none') {
+                            initNewTicketEditor();
+                        }
+                    }
+                });
+            });
+            observer.observe(container, { attributes: true, attributeFilter: ['style'] });
+        }
+    });
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('new-ticket-form');
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            function doPost() {
+                var data = {};
+                new FormData(form).forEach(function (v, k) { data[k] = v; });
+                if (window.newTicketEditors && window.newTicketEditors['content']) {
+                    data['content'] = window.newTicketEditors['content'].getData();
+                }
+                if (!data['content'] || !data['content'].trim()) {
+                    StablePanel.message('Please enter a message before submitting.', 'error');
+                    return;
+                }
+                API.client.post('support/ticket_create',
+                    data,
+                    function (res) { window.location = "{{ 'support/ticket'|url }}" + '/' + res; },
+                    function (res) { StablePanel.message(res.message + ' (' + res.code + ')', 'error'); }
+                );
+            }
+            {% if _rc_t.enabled and _rc_t.publickey and _rc_t.pages.ticket %}
+            {% if _rc_t.version == 3 %}
+            grecaptcha.enterprise.ready(function () {
+                grecaptcha.enterprise.execute('{{ _rc_t.publickey }}', { action: 'SUBMIT_TICKET' }).then(function (token) {
+                    var field = form.querySelector('[name="g-recaptcha-response"]');
+                    if (field) field.value = token;
+                    doPost();
+                });
+            });
+            {% else %}
+            doPost();
+            {% endif %}
+            {% else %}
+            doPost();
+            {% endif %}
+        });
+    }
+});
+</script>
+{% endblock %}
