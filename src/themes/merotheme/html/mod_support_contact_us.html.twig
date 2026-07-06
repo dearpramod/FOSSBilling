@@ -1,5 +1,5 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_public.html.twig" %}
-{% set _rc_c = guest.extension_is_on({'mod': 'spamchecker'}) ? guest.spamchecker_recaptcha : {} %}
+{% set _rc_c = guest.extension_is_on({'mod': 'antispam'}) ? guest.antispam_recaptcha : {} %}
 
 {% block meta_title %}Contact Us{% endblock %}
 {% block meta_description %}Get in touch with our team. We're here to help 24/7.{% endblock %}
@@ -95,10 +95,17 @@
                     <!-- Anti-spam hidden field (removed via JS) -->
                     <input type="hidden" name="anti-spam" value="1" id="anti-spam" required/>
 
-                    {% if _rc_c.enabled and _rc_c.publickey and _rc_c.pages.contact %}
-                    {% if _rc_c.version == 3 %}
-                    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc_c.publickey }}" async defer></script>
-                    {% else %}
+                    {% if _rc_c.enabled %}
+                    {% set _cp = _rc_c.captcha_provider|default('recaptcha_v2') %}
+                    {% if _cp == 'turnstile' and _rc_c.turnstile_site_key %}
+                    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                    <div class="cf-turnstile mb-2" data-sitekey="{{ _rc_c.turnstile_site_key }}"></div>
+                    {% elseif _cp == 'hcaptcha' and _rc_c.hcaptcha_site_key %}
+                    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+                    <div class="h-captcha mb-2" data-sitekey="{{ _rc_c.hcaptcha_site_key }}"></div>
+                    {% elseif _cp == 'recaptcha_v3' and _rc_c.publickey %}
+                    <script src="https://www.google.com/recaptcha/api.js?render={{ _rc_c.publickey }}" async defer></script>
+                    {% elseif _rc_c.publickey %}
                     <div class="mb-2">
                         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                         <div class="g-recaptcha" data-sitekey="{{ _rc_c.publickey }}" style="transform-origin:top left;"></div>
@@ -261,10 +268,9 @@
                 });
             }
 
-            {% if _rc_c.enabled and _rc_c.publickey and _rc_c.pages.contact %}
-            {% if _rc_c.version == 3 %}
-            grecaptcha.enterprise.ready(function () {
-                grecaptcha.enterprise.execute('{{ _rc_c.publickey }}', { action: 'SUBMIT_TICKET' }).then(function (token) {
+            {% if _rc_c.enabled and _rc_c.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc_c.publickey %}
+            grecaptcha.ready(function () {
+                grecaptcha.execute('{{ _rc_c.publickey }}', { action: 'SUBMIT_TICKET' }).then(function (token) {
                     data['g-recaptcha-response'] = token;
                     doPost();
                 });
@@ -272,9 +278,6 @@
             {% else %}
             var rcResp = (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse) ? grecaptcha.getResponse() : '';
             if (rcResp) data['g-recaptcha-response'] = rcResp;
-            doPost();
-            {% endif %}
-            {% else %}
             doPost();
             {% endif %}
         });

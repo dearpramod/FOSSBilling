@@ -302,7 +302,7 @@
 
 {% block js %}
 {{ 'editor/ckeditor.css' | public_asset_url | stylesheet_tag }}
-{{ 'editor/ckeditor.js' | public_asset_url | script_tag }}
+<script defer src="{{ 'editor/ckeditor.js' | public_asset_url }}"></script>
 <style>
 .ck.ck-editor { border-radius: 0.75rem !important; overflow: hidden; }
 .ck.ck-editor__top .ck-sticky-panel .ck-toolbar { border-radius: 0 !important; border-left: none !important; border-right: none !important; border-top: none !important; background: var(--tw-bg-opacity,1) !important; padding: 4px 8px !important; }
@@ -318,18 +318,18 @@
 <script type="text/javascript">
     window.editors = window.editors || {};
     document.addEventListener("DOMContentLoaded", function () {
-        document.querySelectorAll('.editor-textarea').forEach(function (element) {
-            let required = false;
-            CKEditor.default
-                .create(element, { licenseKey: 'GPL' })
-                .then(editor => {
-                    if (element.hasAttribute('required')) {
-                        element.removeAttribute('required');
-                        required = true;
-                    }
-                    window.editors[element.name] = { editor, 'required': required };
-                })
-                .catch(error => { console.error(error) });
+        // Double-rAF defers past Chrome's native selectionchange that fires during
+        // textarea replacement, avoiding the selectionStart-on-undefined race.
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                document.querySelectorAll('.editor-textarea').forEach(function (element) {
+                    FOSSBilling.editor.create(element)
+                        .then(function(editor) {
+                            window.editors[element.name] = editor;
+                        })
+                        .catch(function(error) { console.error(error); });
+                });
+            });
         });
     });
 </script>
@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var data = {};
             new FormData(form).forEach(function (v, k) { data[k] = v; });
             if (window.editors && window.editors['content']) {
-                data['content'] = window.editors['content'].editor.getData();
+                data['content'] = window.editors['content'].getData();
             }
             API.client.post(
                 'support/ticket_reply', data,

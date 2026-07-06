@@ -64,10 +64,10 @@
     {% set _sTxt   = '#94a3b8' %}
 {% elseif order.status == 'pending_setup' %}
     {% set _sLabel = 'Pending Setup' %}
-    {% set _sDot   = '#818cf8' %}
-    {% set _sBg    = 'rgba(99,102,241,0.12)' %}
-    {% set _sBdr   = 'rgba(99,102,241,0.30)' %}
-    {% set _sTxt   = '#818cf8' %}
+    {% set _sDot   = 'rgb(var(--brand-400))' %}
+    {% set _sBg    = 'rgba(var(--color-primary-rgb),0.12)' %}
+    {% set _sBdr   = 'rgba(var(--color-primary-rgb),0.30)' %}
+    {% set _sTxt   = 'rgb(var(--brand-400))' %}
 {% elseif order.status == 'failed_setup' %}
     {% set _sLabel = 'Setup Failed' %}
     {% set _sDot   = '#f87171' %}

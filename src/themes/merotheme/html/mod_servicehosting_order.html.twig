@@ -30,202 +30,13 @@
     {% endif %}
 {% endfor %}
 
-{# ── Alpine component — must be defined BEFORE x-data element ── #}
-<script>
-if (typeof orderProduct === 'undefined') {
-function orderProduct(productId, defaultPeriod) {
-    return {
-        productId: productId,
-        selectedPeriod: defaultPeriod || null,
-        loading: false,
-        errorMsg: null,
-        addons: {},
-        addonIndex: 0,
-        couponDiscount: 0,
-        couponCode: '',
-        couponLoading: false,
-        couponError: null,
-        couponApplied: false,
-        couponOpen: false,
-        promoType: null,
-        promoValue: 0,
-        promoPeriods: [],
-        periodMonthsMap: { '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 },
-        periodLabelMap: { '1W': 'Every week', '1M': 'Monthly', '3M': 'Quarterly', '6M': 'Every 6 months', '1Y': 'Every year', '2Y': 'Every 2 years', '3Y': 'Every 3 years' },
-        addonPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _pf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _pf %}, {% endif %}'{{ code }}': '{{ prices.price|money_convert }}'{% set _pf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonPricingTypes: { {% for addon in product.addons %}'{{ addon.id }}': '{{ addon.pricing.type }}', {% endfor %} },
-        addonRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _rf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _rf %}, {% endif %}'{{ code }}': {{ prices.price|default(0) }}{% set _rf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonOnceRawPrices: { {% for addon in product.addons %}{% if addon.pricing.type == 'once' %}'{{ addon.id }}': {{ addon.pricing.once.price|default(0) }}, {% endif %}{% endfor %} },
-        productRawPrices: {
-            {% if product.pricing.type == 'recurrent' %}{% for code, prices in product.pricing.recurrent %}{% if prices.enabled %}'{{ code }}': {{ prices.price|default(0) }}, {% endif %}{% endfor %}{% endif %}
-        },
-        productOnceRawPrice: {% if product.pricing.type == 'once' %}{{ product.pricing.once.price|default(0) }}{% else %}0{% endif %},
-        domainRawPrice: 0,
-        currencyRate: {{ (guest.cart_get_currency).conversion_rate|default(1) }},
-        currencyCode: {{ (guest.cart_get_currency).code|default('USD')|json_encode|raw }},
-        currencyPriceFormat: {{ (guest.cart_get_currency).price_format|default(2)|json_encode|raw }},
-        currencyFormat: {{ ((guest.cart_get_currency).symbol|default((guest.cart_get_currency).code|default('')) ~ '__PRICE__')|json_encode|raw }},
-        formatMoney(rawPrice) {
-            const p = parseFloat(rawPrice) * this.currencyRate;
-            const tpl = this.currencyFormat;
-            if (tpl && tpl.includes('__PRICE__')) {
-                const fmt = parseInt(this.currencyPriceFormat);
-                let s;
-                const th = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-                if (fmt === 3) { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], '.'); s = pts.join(','); }
-                else if (fmt === 4) { s = th(Math.round(p).toString(), ','); }
-                else if (fmt === 5) { s = Math.round(p).toString(); }
-                else { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], ','); s = pts.join('.'); }
-                return tpl.replace('__PRICE__', s);
-            }
-            return new Intl.NumberFormat(undefined, {
-                style: 'currency', currency: this.currencyCode, currencyDisplay: 'narrowSymbol',
-            }).format(p);
-        },
-        getPeriodMonthly(p) {
-            const m = this.periodMonthsMap[p] || 1;
-            return m > 0 ? (this.productRawPrices[p] || 0) / m : (this.productRawPrices[p] || 0);
-        },
-        getPeriodSavingsRaw(p) {
-            const base = this.productRawPrices['1M'] || 0;
-            if (!base || !p) return 0;
-            const m = this.periodMonthsMap[p] || 1;
-            if (m <= 1) return 0;
-            return Math.max(0, base * m - (this.productRawPrices[p] || 0));
-        },
-        getPeriodLabel(p) {
-            return this.periodLabelMap[p] || p;
-        },
-        calcTotal(period) {
-            if (!period) return '';
-            let base = 0;
-            if (period === 'once') { base = this.productOnceRawPrice; }
-            else if (period === 'free') { base = 0; }
-            else if (this.productRawPrices[period] !== undefined) { base = this.productRawPrices[period]; }
-            base += this.domainRawPrice;
-            Object.entries(this.addons).forEach(([id, state]) => {
-                if (!state.selected) return;
-                const type = this.addonPricingTypes[id];
-                if (type === 'recurrent') {
-                    const ap = state.period || period;
-                    if (this.addonRawPrices[id]?.[ap] !== undefined) base += this.addonRawPrices[id][ap];
-                } else if (type === 'once' && this.addonOnceRawPrices[id] !== undefined) {
-                    base += this.addonOnceRawPrices[id];
-                }
-            });
-            let discount = 0;
-            if (this.couponApplied && this.promoType && base > 0) {
-                const ok = this.promoPeriods.length === 0 || period === 'once' || this.promoPeriods.includes(period);
-                if (ok) {
-                    if (this.promoType === 'percentage') discount = Math.round(base * this.promoValue / 100 * 100) / 100;
-                    else if (this.promoType === 'absolute') discount = Math.min(this.promoValue, base);
-                }
-            }
-            this.couponDiscount = discount;
-            return this.formatMoney(Math.max(0, base - discount));
-        },
-        getOriginalTotal(period) {
-            if (!period) return '';
-            const base = this.productRawPrices['1M'] || 0;
-            if (!base) return '';
-            const m = this.periodMonthsMap[period] || 1;
-            if (m <= 1) return '';
-            const originalPeriodPrice = base * m;
-            let total = originalPeriodPrice + this.domainRawPrice;
-            return this.formatMoney(total);
-        },
-        prevAddon() { if (this.addonIndex > 0) this.addonIndex--; },
-        nextAddon() { if (this.addonIndex < {{ product.addons|length }} - 1) this.addonIndex++; },
-        init() {
-            this._rootEl = this.$el;
-            if (!this.selectedPeriod) {
-                const el = this._rootEl.querySelector('select[name="period"], input[name="period"]');
-                if (el) this.selectedPeriod = el.value || null;
-            }
-            const ids = Object.keys(this.addonPricingTypes);
-            ids.forEach(id => {
-                const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                const resolve = p => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                if (!this.addons[id]) this.addons[id] = { selected: false, period: resolve(this.selectedPeriod || '') };
-            });
-            this.$watch('selectedPeriod', v => {
-                ids.forEach(id => {
-                    const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                    const resolve = p => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                    if (this.addons[id]) this.addons[id].period = resolve(v || '');
-                });
-            });
-            document.addEventListener('domainPriceUpdated', e => {
-                this.domainRawPrice = parseFloat(e.detail.rawPrice) || 0;
-            });
-        },
-        toggleAddon(addonId) {
-            const key = String(addonId);
-            if (!this.addons[key]) {
-                const ep = this.addonPrices[key] ? Object.keys(this.addonPrices[key]) : [];
-                const p = (this.selectedPeriod && ep.includes(this.selectedPeriod)) ? this.selectedPeriod : (ep[0] || '');
-                this.addons[key] = { selected: false, period: p };
-            }
-            this.addons[key].selected = !this.addons[key].selected;
-        },
-        addToCart(period) {
-            if (!period) return;
-            this.loading = true; this.errorMsg = null;
-            const data = { id: this.productId, multiple: 1 };
-            if (period !== 'once' && period !== 'free') data.period = period;
-            const domainInputs = (this._rootEl || this.$el).querySelectorAll('input[name^="domain["], select[name^="domain["]');
-            if (domainInputs.length > 0) {
-                const domainData = {};
-                domainInputs.forEach(el => {
-                    const m = el.name.match(/^domain\[([^\]]+)\]$/);
-                    if (!m) return;
-                    if (el.type === 'radio') { if (el.checked) domainData[m[1]] = el.value; }
-                    else domainData[m[1]] = el.value;
-                });
-                if (Object.keys(domainData).length > 0) data.domain = domainData;
-            }
-            const addonPayload = {}; let hasAddons = false;
-            Object.entries(this.addons).forEach(([id, state]) => {
-                addonPayload[id] = { selected: state.selected };
-                if (state.selected && this.addonPricingTypes[id] === 'recurrent') {
-                    let ap = state.period;
-                    if (!ap) { const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : []; ap = (period && ep.includes(period)) ? period : (ep[0] || ''); }
-                    if (!ap) { this.loading = false; this.errorMsg = 'Add-on has no valid billing period.'; return; }
-                    addonPayload[id].period = ap;
-                } else if (state.selected && state.period) { addonPayload[id].period = state.period; }
-                hasAddons = true;
-            });
-            if (hasAddons) data.addons = addonPayload;
-            API.guest.post('cart/add_item', data,
-                () => {
-                    document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
-                    if (this.couponCode.trim()) {
-                        API.guest.post('cart/apply_promo', { promocode: this.couponCode.trim() },
-                            () => { window.location.href = '{{ "/order/checkout"|url }}'; },
-                            () => { this.loading = false; this.couponError = 'Invalid coupon code.'; }
-                        );
-                    } else { window.location.href = '{{ "/order/checkout"|url }}'; }
-                },
-                () => { this.loading = false; this.errorMsg = 'Failed to add to cart. Please check your domain and try again.'; }
-            );
-        }
-    };
-}
-}
-</script>
+{# ── Shared Alpine component — must be included BEFORE the x-data element ── #}
+{% include 'partial_order_product_component.html.twig' %}
 
 {# ── Back-link from product category ── #}
 {% set _back_url = '/order'|url %}
 {% set _back_label = 'Plans' %}
-{% for cat in guest.product_category_get_list({'per_page': 100}).list %}
+{% for cat in guest.product_category_get_list({'per_page': 100, 'deep': 0}).list %}
     {% if cat.id == product.product_category_id %}
         {% set _cat_slug = cat.title|lower|replace({' ': '-', '/': '-'})|trim('-') %}
         {% set _back_url = ('/order/' ~ _cat_slug)|url %}
@@ -342,8 +153,8 @@ function orderProduct(productId, defaultPeriod) {
     {# ══ END LEFT ══ #}
 
     {# ══ RIGHT: Sticky order summary (col-span-4) — Stitch-exact ══ #}
-    <div class="col-span-12 lg:col-span-4 space-y-6">
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-24">
+    <div class="col-span-12 lg:col-span-4 space-y-6 self-start">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-6">
             <div class="p-6">
 
                 {# Header #}
@@ -378,11 +189,14 @@ function orderProduct(productId, defaultPeriod) {
                     </div>
                     {% endif %}
 
-                    {# Domain name line #}
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-500">Domain name</span>
-                        <span class="font-bold text-slate-900"
-                              x-text="formatMoney(domainRawPrice)"></span>
+                    {# Domain name line — shows the selected domain and its price once chosen #}
+                    <div class="flex justify-between items-baseline gap-2 text-sm">
+                        <span class="text-slate-500 flex-shrink-0">Domain name</span>
+                        <span class="text-right min-w-0">
+                            <span x-show="domainName" class="block font-semibold text-slate-900 truncate" x-text="domainName"></span>
+                            <span class="font-bold text-slate-900"
+                                  x-text="domainRawPrice > 0 ? formatMoney(domainRawPrice) : (domainName ? 'Free' : '—')"></span>
+                        </span>
                     </div>
 
                     {# Selected add-ons #}
@@ -417,32 +231,38 @@ function orderProduct(productId, defaultPeriod) {
                        {% else %}x-text="calcTotal('free')"{% endif %}></p>
                 </div>
 
-                {# Coupon — Stitch: no border, mb-4, static chevron #}
-                <button type="button" @click="couponOpen = !couponOpen"
-                        class="w-full text-sm font-bold flex justify-between items-center px-2 py-2 mb-4 hover:bg-slate-50 rounded transition-colors"
-                        style="color:var(--color-primary);">
-                    <span class="flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                        </svg>
-                        Have a coupon code?
-                    </span>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div x-show="couponOpen" x-collapse class="px-2 pb-4">
-                    <input type="text" x-model="couponCode"
-                           placeholder="Enter coupon code"
-                           class="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
-                           style="--tw-ring-color:rgba(var(--color-primary-rgb),0.3);">
-                    <div x-show="couponError" class="mt-1.5 text-xs text-red-500" x-text="couponError"></div>
-                    <div x-show="couponApplied && !couponError"
-                         class="mt-1.5 text-xs text-emerald-600 font-medium flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
-                        Coupon applied!
+                {# Coupon — always-visible input + Apply button #}
+                <div class="space-y-2 mb-4">
+                    <div x-show="!couponApplied" class="flex gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                            <input type="text" x-model="couponCode"
+                                   @keydown.enter.prevent="applyCoupon()"
+                                   @input="couponError = null"
+                                   placeholder="Promo code"
+                                   class="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 border border-slate-200 bg-slate-50 transition-all">
+                        </div>
+                        <button type="button" @click="applyCoupon()"
+                                :disabled="!couponCode.trim() || couponLoading"
+                                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                style="background:var(--color-primary);">
+                            <span x-show="!couponLoading">Apply</span>
+                            <span x-show="couponLoading" class="flex items-center">
+                                <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            </span>
+                        </button>
+                    </div>
+                    <p x-show="couponError" x-cloak x-text="couponError" class="text-xs text-red-500"></p>
+                    <div x-show="couponApplied" x-cloak class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <span class="text-xs font-mono font-bold text-emerald-700 uppercase tracking-wide" x-text="couponCode"></span>
+                        </div>
+                        <button type="button"
+                                @click="couponApplied = false; couponDiscount = 0; couponCode = ''; promoType = null; promoValue = 0; promoPeriods = []; couponError = null;"
+                                class="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium ml-3">
+                            Remove
+                        </button>
                     </div>
                 </div>
 
@@ -462,10 +282,10 @@ function orderProduct(productId, defaultPeriod) {
                         class="ord-cta-primary w-full py-4 rounded-lg text-white font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                         style="background:color-mix(in srgb, var(--color-primary) 65%, white); box-shadow:0 4px 16px rgba(var(--color-primary-rgb),0.25);">
                     <span x-show="!loading" class="flex items-center gap-2">
-                        Continue
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
                         </svg>
+                        Continue
                     </span>
                     <span x-show="loading" class="flex items-center gap-2">
                         <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -503,7 +323,6 @@ function orderProduct(productId, defaultPeriod) {
     </div>
     {# ══ END RIGHT ══ #}
 
-</div>
 
 {# ── Mobile sticky checkout bar — visible below lg breakpoint only ── #}
 <div class="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t px-4 py-3 flex items-center justify-between gap-4 mobile-checkout-bar"
@@ -536,5 +355,6 @@ function orderProduct(productId, defaultPeriod) {
             </svg>
         </span>
     </button>
+</div>
 </div>
 {% endblock %}

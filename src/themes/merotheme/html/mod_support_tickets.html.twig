@@ -1,5 +1,5 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
-{% set _rc_t = guest.extension_is_on({'mod': 'spamchecker'}) ? guest.spamchecker_recaptcha : {} %}
+{% set _rc_t = guest.extension_is_on({'mod': 'antispam'}) ? guest.antispam_recaptcha : {} %}
 
 {% block meta_title %}Support Tickets{% endblock %}
 {% block page_header %}Support{% endblock %}
@@ -143,11 +143,17 @@
                           class="editor-new-ticket w-full px-3.5 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none transition-all"></textarea>
             </div>
             <div class="flex items-center gap-3">
-                {% if _rc_t.enabled and _rc_t.publickey and _rc_t.pages.ticket %}
-                {% if _rc_t.version == 3 %}
-                <input type="hidden" name="g-recaptcha-response" id="g-rc-ticket">
-                <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc_t.publickey }}" async defer></script>
-                {% else %}
+                {% if _rc_t.enabled %}
+                {% set _cp_t = _rc_t.captcha_provider|default('recaptcha_v2') %}
+                {% if _cp_t == 'turnstile' and _rc_t.turnstile_site_key %}
+                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                <div class="cf-turnstile mb-2" data-sitekey="{{ _rc_t.turnstile_site_key }}"></div>
+                {% elseif _cp_t == 'hcaptcha' and _rc_t.hcaptcha_site_key %}
+                <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+                <div class="h-captcha mb-2" data-sitekey="{{ _rc_t.hcaptcha_site_key }}"></div>
+                {% elseif _cp_t == 'recaptcha_v3' and _rc_t.publickey %}
+                <script src="https://www.google.com/recaptcha/api.js?render={{ _rc_t.publickey }}" async defer></script>
+                {% elseif _rc_t.publickey %}
                 <div class="w-full mb-2">
                     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                     <div class="g-recaptcha" data-sitekey="{{ _rc_t.publickey }}" style="transform-origin:top left;"></div>
@@ -345,7 +351,7 @@
 
 {% block js %}
 {{ 'editor/ckeditor.css' | public_asset_url | stylesheet_tag }}
-{{ 'editor/ckeditor.js' | public_asset_url | script_tag }}
+<script defer src="{{ 'editor/ckeditor.js' | public_asset_url }}"></script>
 <style>
 .ck.ck-editor { border-radius: 0.75rem !important; overflow: hidden; }
 .ck.ck-editor__top .ck-sticky-panel .ck-toolbar { border-radius: 0 !important; border-left: none !important; border-right: none !important; border-top: none !important; padding: 4px 8px !important; }
@@ -362,13 +368,17 @@
     window.newTicketEditors = window.newTicketEditors || {};
 
     function initNewTicketEditor() {
-        if (window.newTicketEditors['content']) return; // already initialized
+        if (window.newTicketEditors['content']) return;
         var textarea = document.querySelector('.editor-new-ticket');
         if (!textarea) return;
-        CKEditor.default
-            .create(textarea, { licenseKey: 'GPL' })
-            .then(function (editor) { window.newTicketEditors[textarea.name] = editor; })
-            .catch(function (error) { console.error(error); });
+        // Double-rAF defers past Chrome's native selectionchange race on textarea replacement.
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                FOSSBilling.editor.create(textarea)
+                    .then(function(editor) { window.newTicketEditors[textarea.name] = editor; })
+                    .catch(function(error) { console.error(error); });
+            });
+        });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -412,19 +422,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     function (res) { StablePanel.message(res.message + ' (' + res.code + ')', 'error'); }
                 );
             }
-            {% if _rc_t.enabled and _rc_t.publickey and _rc_t.pages.ticket %}
-            {% if _rc_t.version == 3 %}
-            grecaptcha.enterprise.ready(function () {
-                grecaptcha.enterprise.execute('{{ _rc_t.publickey }}', { action: 'SUBMIT_TICKET' }).then(function (token) {
+            {% if _rc_t.enabled and _rc_t.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc_t.publickey %}
+            grecaptcha.ready(function () {
+                grecaptcha.execute('{{ _rc_t.publickey }}', { action: 'SUBMIT_TICKET' }).then(function (token) {
                     var field = form.querySelector('[name="g-recaptcha-response"]');
                     if (field) field.value = token;
                     doPost();
                 });
             });
             {% else %}
-            doPost();
-            {% endif %}
-            {% else %}
+            var rcResp = (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse) ? grecaptcha.getResponse() : '';
+            if (rcResp) {
+                var rcField = form.querySelector('[name="g-recaptcha-response"]');
+                if (rcField) rcField.value = rcResp;
+            }
             doPost();
             {% endif %}
         });

@@ -31,7 +31,9 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         $app->get('/support', 'get_tickets', [], static::class);
         $app->get('/support/ticket/:id', 'get_ticket', [], static::class);
         $app->get('/support/contact-us', 'get_contact_us', [], static::class);
+        $app->get('/support/contact', 'get_contact_us', [], static::class);
         $app->get('/support/contact-us/conversation/:hash', 'get_ticket_redirect', ['hash' => '[a-z0-9]+'], static::class);
+        $app->get('/support/contact/conversation/:hash', 'get_ticket_redirect', ['hash' => '[a-z0-9]+'], static::class);
 
         if ($this->di['mod']('support')->getService()->kbEnabled()) {
             $app->get('/support/kb', 'get_kb_index', [], static::class);

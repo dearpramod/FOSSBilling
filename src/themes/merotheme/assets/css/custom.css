@@ -148,7 +148,7 @@ html[data-theme="light"] .co-label {
 }
 
 html[data-theme="light"] .co-section {
-    color: #4338ca;
+    color: rgb(var(--brand-700));
     border-bottom-color: rgba(var(--color-primary-rgb), .24);
 }
 

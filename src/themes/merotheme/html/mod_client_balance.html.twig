@@ -284,6 +284,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     form.addEventListener('submit', function (e) {
         e.preventDefault();
+        var submitBtn = form.querySelector('[type=submit]');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '0.6'; }
         var data = {};
         new FormData(form).forEach(function (v, k) { data[k] = v; });
         API.client.post('invoice/funds_invoice', data,
@@ -291,7 +293,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.location = '{{ "invoice"|url }}/' + hash;
             },
             function (res) {
-                if (typeof merovpsNotif === 'function') merovpsNotif((res && res.message) || 'Failed to create invoice.', 'error');
+                FOSSBilling.message((res && res.message) || 'Failed to create invoice.', 'error');
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = ''; }
             }
         );
     });

@@ -49,14 +49,51 @@ class Service implements InjectionAwareInterface
             'orders' => $this->getOrdersData($data),
             'recent_orders' => $this->getRecentOrders($data),
             'recent_tickets' => $this->getRecentTickets($data),
+            'balance' => $this->getClientBalance($client),
+            'recent_invoices' => $this->getRecentInvoices($data),
+            'recent_emails' => $this->getRecentEmails($data),
         ];
+    }
+
+    private function getClientBalance(\Model_Client $client): float
+    {
+        $service = $this->di['mod_service']('Client', 'Balance');
+
+        return (float) $service->getClientBalance($client);
+    }
+
+    private function getRecentInvoices(array $data): array
+    {
+        // Single JOIN replaces 16 queries (1 ID fetch + 5 loads + 5×2 item/toArray) with 1.
+        // Dashboard only needs id, serie, nr, hash, status, currency, created_at, total.
+        $sql = 'SELECT i.id, i.serie, i.nr, i.hash, i.status, i.currency, i.created_at,
+                       COALESCE(SUM(ii.price * ii.quantity), 0) AS total
+                FROM invoice i
+                LEFT JOIN invoice_item ii ON ii.invoice_id = i.id
+                WHERE i.client_id = :client_id AND i.approved = 1
+                GROUP BY i.id, i.serie, i.nr, i.hash, i.status, i.currency, i.created_at
+                ORDER BY i.id DESC
+                LIMIT 5';
+
+        return $this->di['db']->getAll($sql, $data);
+    }
+
+    private function getRecentEmails(array $data): array
+    {
+        $sql = 'SELECT id, subject, created_at
+                 FROM activity_client_email
+                 WHERE client_id = :client_id
+                 ORDER BY created_at DESC LIMIT 5';
+
+        return $this->di['db']->getAll($sql, $data);
     }
 
     private function getProfile(\Model_Client $client): array
     {
         $clientService = $this->di['mod_service']('client');
 
-        return $clientService->toApiArray($client, true);
+        // deep=false: balance is already returned as a separate key; avoid fetching it twice
+        return $clientService->toApiArray($client, false);
     }
 
     private function getTicketsData(array $data): array
@@ -138,52 +175,35 @@ class Service implements InjectionAwareInterface
 
     private function getOrdersData(array $data): array
     {
-        $sql = 'SELECT status, COUNT(*) as total
-                 FROM client_order
-                 WHERE client_id = :client_id
-                 AND group_master = 1
-                 GROUP BY status';
-
-        $results = $this->di['db']->getAll($sql, $data);
-
-        $counts = [
-            'total' => 0,
-            'active' => 0,
-            'expiring' => 0,
-        ];
-
-        foreach ($results as $row) {
-            // Sum total orders across all statuses
-            $counts['total'] += (int) $row['total'];
-
-            // Only track counts for expected statuses to avoid dynamic keys
-            if ($row['status'] === 'active') {
-                $counts['active'] = (int) $row['total'];
-            }
-        }
-
         $systemService = $this->di['mod_service']('system');
-        $daysUntilExpiration = $systemService->getParamValue('invoice_issue_days_before_expire', 14);
+        $daysUntilExpiration = (int) $systemService->getParamValue('invoice_issue_days_before_expire', 14);
 
-        $expiringSql = "SELECT COUNT(*) as total
-                        FROM client_order
-                        WHERE client_id = :client_id
-                        AND group_master = 1
-                        AND status = 'active'
+        // Single query replaces two separate round-trips: status counts + expiring count.
+        $sql = "SELECT
+                    COUNT(*) AS total,
+                    SUM(status = 'active') AS active,
+                    SUM(
+                        status = 'active'
                         AND invoice_option = 'issue-invoice'
                         AND period IS NOT NULL
                         AND expires_at IS NOT NULL
                         AND unpaid_invoice_id IS NULL
-                        AND DATEDIFF(expires_at, NOW()) <= :days";
+                        AND DATEDIFF(expires_at, NOW()) <= :days
+                    ) AS expiring
+                FROM client_order
+                WHERE client_id = :client_id
+                AND group_master = 1";
 
-        $expiringResult = $this->di['db']->getCell($expiringSql, [
+        $row = $this->di['db']->getRow($sql, [
             'client_id' => $data['client_id'],
-            'days' => $daysUntilExpiration,
+            'days'      => $daysUntilExpiration,
         ]);
 
-        $counts['expiring'] = (int) $expiringResult;
-
-        return $counts;
+        return [
+            'total'    => (int) ($row['total'] ?? 0),
+            'active'   => (int) ($row['active'] ?? 0),
+            'expiring' => (int) ($row['expiring'] ?? 0),
+        ];
     }
 
     private function getRecentOrders(array $data): array

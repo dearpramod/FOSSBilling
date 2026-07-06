@@ -178,9 +178,9 @@
             function loginFormData() {
                 var _apiUrl     = '{{ 'api/guest/client/login'|url|e('js') }}';
                 var _redirectUrl = '{{ (redirect_uri|default('/'))|url|e('js') }}';
-                {% if guest.extension_is_on({'mod': 'spamchecker'}) %}
-                    {% set _rc2 = guest.spamchecker_recaptcha %}
-                    {% if _rc2.enabled and _rc2.publickey and _rc2.pages.login and _rc2.version == 3 %}
+                {% if guest.extension_is_on({'mod': 'antispam'}) %}
+                    {% set _rc2 = guest.antispam_recaptcha %}
+                    {% if _rc2.enabled and _rc2.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc2.publickey %}
                 var _rcKey = '{{ _rc2.publickey|e('js') }}';
                     {% else %}
                 var _rcKey = null;
@@ -198,12 +198,12 @@
                         // Append CSRF token from meta tag
                         var csrfMeta = document.querySelector('meta[name="csrf-token"]');
                         if (csrfMeta) fd.append('CSRFToken', csrfMeta.getAttribute('content'));
-                        // Fetch reCAPTCHA Enterprise token if configured
+                        // Fetch reCAPTCHA v3 token if configured
                         if (_rcKey && typeof grecaptcha !== 'undefined') {
                             try {
                                 var token = await new Promise(function(resolve, reject) {
-                                    grecaptcha.enterprise.ready(function() {
-                                        grecaptcha.enterprise.execute(_rcKey, {action: 'LOGIN'}).then(resolve).catch(reject);
+                                    grecaptcha.ready(function() {
+                                        grecaptcha.execute(_rcKey, {action: 'LOGIN'}).then(resolve).catch(reject);
                                     });
                                 });
                                 var rcField = document.getElementById('g-rc-login');
@@ -293,16 +293,22 @@
                     <label for="remember" class="text-sm text-gray-500 cursor-pointer select-none">Keep me signed in</label>
                 </div>
 
-                {# reCAPTCHA — publickey presence is the reliable indicator captcha is configured #}
-                {% if guest.extension_is_on({'mod': 'spamchecker'}) %}
-                    {% set _rc = guest.spamchecker_recaptcha %}
-                    {% if _rc.enabled and _rc.publickey and _rc.pages.login %}
-                    {% if _rc.version == 3 %}
-                    {# Enterprise: invisible; token injected into hidden field before submit #}
-                    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
+                {# Captcha (Antispam module) #}
+                {% if guest.extension_is_on({'mod': 'antispam'}) %}
+                    {% set _rc = guest.antispam_recaptcha %}
+                    {% if _rc.enabled %}
+                    {% set _lp = _rc.captcha_provider|default('recaptcha_v2') %}
+                    {% if _lp == 'turnstile' and _rc.turnstile_site_key %}
+                    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                    <div class="cf-turnstile mb-4" data-sitekey="{{ _rc.turnstile_site_key }}"></div>
+                    {% elseif _lp == 'hcaptcha' and _rc.hcaptcha_site_key %}
+                    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+                    <div class="h-captcha mb-4" data-sitekey="{{ _rc.hcaptcha_site_key }}"></div>
+                    {% elseif _lp == 'recaptcha_v3' and _rc.publickey %}
+                    <script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
                     <input type="hidden" name="g-recaptcha-response" id="g-rc-login">
-                    {# Token is now fetched inside the Alpine doLogin() handler — no extra submit interceptor needed #}
-                    {% else %}
+                    {# Token fetched inside Alpine doLogin() handler via _rcKey #}
+                    {% elseif _rc.publickey %}
                     <div class="mb-4" style="overflow:hidden;">
                         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                         <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}" style="transform-origin:top left;"></div>
@@ -381,7 +387,7 @@
     'use strict';
 
     var clientId = '{{ social.google_client_id|e('js') }}';
-    var apiUrl   = '{{ (constant('SYSTEM_URL') ~ 'api/guest/sociallogin/handle_credential')|e('js') }}';
+    var apiUrl   = window.location.origin + '/api/guest/sociallogin/handle_credential';
     var loginUrl = '{{ 'login'|url|e('js') }}';
 
     function handleCredential(credentialResponse) {

@@ -1000,14 +1000,14 @@
     {# ── Non-active order state card (pending_setup / failed / suspended / canceled / fraud) ── #}
     {% if order.status != 'active' %}
     {% set _statusColor = {
-        'pending_setup': {'bg': 'rgba(99,102,241,0.08)',  'border': 'rgba(99,102,241,0.20)',  'icon': '#818cf8', 'label': 'Pending Activation'},
+        'pending_setup': {'bg': 'rgba(var(--color-primary-rgb),0.08)',  'border': 'rgba(var(--color-primary-rgb),0.20)',  'icon': 'rgb(var(--brand-400))', 'label': 'Pending Activation'},
         'failed_setup':  {'bg': 'rgba(239,68,68,0.08)',   'border': 'rgba(239,68,68,0.22)',   'icon': '#f87171', 'label': 'Setup Failed'},
         'failed_renew':  {'bg': 'rgba(239,68,68,0.08)',   'border': 'rgba(239,68,68,0.22)',   'icon': '#f87171', 'label': 'Renewal Failed'},
         'suspended':     {'bg': 'rgba(245,158,11,0.08)',  'border': 'rgba(245,158,11,0.22)',  'icon': '#fbbf24', 'label': 'Suspended'},
         'canceled':      {'bg': 'rgba(100,116,139,0.08)', 'border': 'rgba(100,116,139,0.20)', 'icon': '#94a3b8', 'label': 'Cancelled'},
         'fraud':         {'bg': 'rgba(239,68,68,0.08)',   'border': 'rgba(239,68,68,0.22)',   'icon': '#f87171', 'label': 'Fraud Hold'}
     } %}
-    {% set _sc = _statusColor[order.status] ?? {'bg': 'rgba(99,102,241,0.08)', 'border': 'rgba(99,102,241,0.20)', 'icon': '#818cf8', 'label': order.status|capitalize} %}
+    {% set _sc = _statusColor[order.status] ?? {'bg': 'rgba(var(--color-primary-rgb),0.08)', 'border': 'rgba(var(--color-primary-rgb),0.20)', 'icon': 'rgb(var(--brand-400))', 'label': order.status|capitalize} %}
 
     <div class="rounded-2xl p-6" style="background: {{ _sc.bg }}; border: 1px solid {{ _sc.border }};">
         <div class="flex items-start gap-4">

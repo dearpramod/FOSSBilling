@@ -307,7 +307,7 @@
                                 {% if product.type == 'domain' %}
                                     {% set order_link = '/order/domain-registration'|url %}
                                 {% else %}
-                                    {% set order_link = ('order'|url) ~ '/' ~ product.id %}
+                                    {% set order_link = ('/order/' ~ product.slug)|url %}
                                 {% endif %}
 
                                 {# Parse backend description while preserving author-defined order #}
@@ -658,7 +658,7 @@
 }
 
 .ord-refined .ord-cta-secondary:hover {
-    background: #eef2ff !important;
+    background: rgb(var(--brand-50)) !important;
     color: #1e1b4b !important;
 }
 

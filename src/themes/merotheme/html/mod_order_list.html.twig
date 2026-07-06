@@ -30,7 +30,7 @@
 
 {% set orders     = client.order_get_list(api_params) %}
 {% set all_orders = client.order_get_list({'per_page': 200, 'hide_addons': 1}) %}
-{% set categories = guest.product_category_get_list({'per_page': 50}) %}
+{% set categories = guest.product_category_get_list({'per_page': 50, 'deep': 0}) %}
 
 {# Count active and cancelled from full list #}
 {% set count_active    = 0 %}

@@ -95,7 +95,19 @@ class Guest extends \FOSSBilling\Api\AbstractApi
             throw new \FOSSBilling\InformationException('Domain availability could not be determined. TLD is not active.');
         }
 
-        if (!$this->getService()->isDomainAvailable($tld, $sld)) {
+        // Registrar adapter failures (bad credentials, IP whitelist, upstream outages) must not
+        // leak backend configuration details to guests — log them and return a generic message.
+        try {
+            $available = $this->getService()->isDomainAvailable($tld, $sld);
+        } catch (\FOSSBilling\InformationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            error_log(sprintf('Servicedomain guest check failed for %s%s: %s', $sld, $data['tld'], $e->getMessage()));
+
+            throw new \FOSSBilling\InformationException('Domain availability could not be determined. Please try again later.');
+        }
+
+        if (!$available) {
             throw new \FOSSBilling\InformationException('Domain is not available.');
         }
 
@@ -120,7 +132,18 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         if (!$tld instanceof \Model_Tld) {
             throw new \FOSSBilling\InformationException('TLD is not active.');
         }
-        if (!$this->getService()->canBeTransferred($tld, $data['sld'])) {
+
+        try {
+            $transferable = $this->getService()->canBeTransferred($tld, $data['sld']);
+        } catch (\FOSSBilling\InformationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            error_log(sprintf('Servicedomain guest transfer check failed for %s%s: %s', $data['sld'], $data['tld'], $e->getMessage()));
+
+            throw new \FOSSBilling\InformationException('Transfer eligibility could not be determined. Please try again later.');
+        }
+
+        if (!$transferable) {
             throw new \FOSSBilling\InformationException('Domain cannot be transferred.');
         }
 

@@ -76,9 +76,13 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
             error_log($e->getMessage());
         }
 
+        if (!$error) {
+            $this->di['session']->set('theme_save_success', true);
+        }
+
         $red_url = '/theme/' . $theme;
         if ($error) {
-            $red_url .= '?error=' . $error;
+            $red_url .= '?error=' . urlencode($error);
         }
         $app->redirect($red_url);
     }
@@ -93,6 +97,11 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
         $preset = $service->getCurrentThemePreset($t);
         $settings = $service->getThemeSettings($t, $preset);
         $error = $_GET['error'] ?? null;
+        $success = null;
+        if ($this->di['session']->get('theme_save_success')) {
+            $this->di['session']->delete('theme_save_success');
+            $success = __trans('Theme settings saved successfully.');
+        }
 
         try {
             $html = $service->renderThemeSettingsPageHtml($t, $settings);
@@ -113,6 +122,7 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
         $data = [
             'info' => $info,
             'error' => $error,
+            'success' => $success,
             'theme_code' => $t->getName(),
             'settings_html' => new \Twig\Markup($html, 'UTF-8'),
             'uploaded' => $t->getUploadedAssets(),

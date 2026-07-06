@@ -540,7 +540,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
         $status = $data['status'] ?? null;
         $search = $data['search'] ?? null;
-        $cat = $data['kb_article_category_id'] ?? $data['cat'] ?? null;
+        $raw = $data['kb_article_category_id'] ?? $data['cat'] ?? null;
+        $cat = isset($raw) ? (string) $raw : null;
 
         $pager = $this->getService()->kbSearchArticles($status, $search, $cat, PaginationOptions::fromArray($data));
 

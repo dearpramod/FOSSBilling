@@ -1,162 +1,131 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
-{% set active_menu = 'emails' %}
 
-{% block meta_title %}{{ 'Emails'|trans }}{% endblock %}
-{% block breadcrumb %}
-    <li class="active breadcrumb-item" aria-current="page">{{ 'Emails'|trans }}</li>{% endblock %}
+{% block meta_title %}Email History{% endblock %}
 
-{% set emails = client.email_get_list({"per_page":10, "page":request.page}) %}
+{% set currentPage = request.page|default(1) %}
+{% set emails = client.email_get_list({"per_page": 20, "page": currentPage}) %}
 
-{% block body_class %}email-index{% endblock %}
 {% block content %}
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card mb-4">
-                <div class="card-header py-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h1 class="mb-1">{{ 'Emails'|trans }}</h1>
-                            <span class="small text-muted">{{ "Here you can find all the emails we've sent you."|trans }}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    {% if emails.list is empty %}
-                    <div class="m-2 alert alert-info"
-                         id="information-block">{{ 'There are no emails to display'|trans }}</div>
-                    {% else %}
-                    <div class="d-flex">
-                        <div class="nav nav-tabs flex-column col-md-4 border-0">
-                            <div class="list-group email-list" id="list-tab" role="tablist">
-                                {% for i, email in emails.list %}
-                                    <a class="list-group-item list-group-item-action mt-0{% if loop.first %} active{% endif %}"
-                                       href="#mail-{{ loop.index }}" data-bs-toggle="list" role="tab">
-                                        <div class="flex-column py-1">
-                                            <p class="m-0" style="font-size: 80%;">{{ email.subject|truncate }}</p>
-                                            <span class="text-muted small" style="font-size: 80%;">{{ email.created_at|format_datetime }}</span>
-                                        </div>
-                                    </a>
-                                {% endfor %}
-                            </div>
-                        </div>
 
-                        <div class="col-md-8 tab-content m-0 border-start">
-                            {% for i, email in emails.list %}
-                                <div class="tab-pane fade{% if loop.first %} show active{% endif %}"
-                                     id="mail-{{ loop.index }}" role="tabpanel">
-                                    <div class="card-body">
-                                        <h6 class="mb-0">{{ email.subject }}</h6>
-                                        <div class="card-header px-0">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div class="d-flex flex-column gap-1">
-                                                    <span class="d-block"><span class="text-muted me-2">{{ 'From'|trans }}</span>{{ email.sender }}</span>
-                                                    <span class="d-block"><span class="text-muted me-2">{{ 'To'|trans }}</span>{{ email.recipients }}</span>
-                                                </div>
-                                                <div class="d-flex flex-column gap-2">
-                                                    <div class="btn-group d-flex" role="group" aria-label="{{ 'Mail Action'|trans }}">
-                                                        <a class="btn btn-sm btn-outline-secondary border-end-0" href='{{ "email/#{email.id}"|url }}' data-bs-toggle="tooltip" data-bs-title="{{ 'View'|trans }}">
-                                                            <svg class="icon"><use href="#eye" /></svg>
-                                                        </a>
-                                                        <a class="btn btn-sm btn-outline-secondary email-resend" href="#" data-id="{{ email.id }}" data-bs-toggle="tooltip" data-bs-title="{{ 'Resend'|trans }}">
-                                                            <svg class="icon"><use href="#arrows-exchange" /></svg>
-                                                        </a>
-                                                        <a class="btn btn-sm btn-outline-danger border-start-0" data-bs-toggle="tooltip" data-bs-title="{{ 'Delete'|trans }}"
-                                                           {{ fb_api_link({href: 'email/delete'|api_url(query: {id: email.id}), modal: {type: 'confirm', title: 'Are you sure?'|trans}, redirect: 'email'|url}) }}>
-                                                            <svg class="icon"><use href="#trash" /></svg>
-                                                        </a>
-                                                    </div>
-                                                    <small class="text-muted">{{ email.created_at|format_date }}</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="card-body">
-                                            {# Workaround: email styling can effect the style of this page, so instead we use JS to insert the email contents into an iframe. A default height is set in case of errors #}
-                                            <iframe class="ratio ratio-1x1 email" id="email-content-{{ i }}" src="about:blank" sandbox="allow-same-origin allow-popups" style="height: 30em"></iframe>
-                                            <script>
-                                                (function () {
-                                                    const frame = document.getElementById("email-content-{{ i }}");
-                                                    frame.srcdoc = '{{ email.content_html|e('js') }}';
-                                                })();
-                                            </script>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
+{# Page header #}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Email History</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Review all transactional communications sent to your account.</p>
+    </div>
+</div>
+
+{# Email list card #}
+<div class="bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.08] shadow-sm overflow-hidden">
+
+    {% if emails.list is empty %}
+        <div class="px-6 py-20 text-center">
+            <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20">
+                <svg class="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <p class="text-slate-600 dark:text-slate-400 font-medium">No emails yet</p>
+            <p class="text-slate-400 dark:text-slate-500 text-sm mt-1">Emails sent to your account will appear here.</p>
+        </div>
+
+    {% else %}
+
+        {# Table header #}
+        <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.02]">
+            <div class="col-span-6 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Subject</div>
+            <div class="col-span-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sender</div>
+            <div class="col-span-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date Sent</div>
+            <div class="col-span-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Action</div>
+        </div>
+
+        {# Email rows #}
+        <div class="divide-y divide-slate-100 dark:divide-white/[0.04]">
+            {% for email in emails.list %}
+            <div class="grid grid-cols-12 gap-3 items-center px-6 py-4 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors group">
+
+                {# Subject + preview #}
+                <div class="col-span-10 md:col-span-6 min-w-0">
+                    <div class="flex items-start gap-3">
+                        <div class="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center">
+                            <svg class="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ email.subject|default('(No Subject)') }}</p>
+                            <p class="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5 md:hidden">{{ email.sender }} · {{ email.created_at|date("M j, Y") }}</p>
                         </div>
                     </div>
                 </div>
-                    {% if emails.pages >= 2 %}
-                        <div class="card-footer">
-                            {{ include('partial_pagination.html.twig', { 'list': emails, 'url': 'email' }) }}
-                        </div>
+
+                {# Sender — hidden on mobile #}
+                <div class="col-span-3 hidden md:flex items-center gap-2 min-w-0">
+                    <div class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                         style="background: var(--color-primary);">
+                        {{ email.sender|first|upper }}
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 truncate">{{ email.sender }}</p>
+                </div>
+
+                {# Date — hidden on mobile #}
+                <div class="col-span-2 hidden md:block">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ email.created_at|date("M j, Y") }}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ email.created_at|date("g:i A") }}</p>
+                </div>
+
+                {# Action #}
+                <div class="col-span-2 md:col-span-1 flex justify-end">
+                    <a href="{{ 'email'|link }}/{{ email.id }}"
+                       class="text-xs font-semibold transition-colors whitespace-nowrap"
+                       style="color: var(--color-primary);">
+                        View Email
+                    </a>
+                </div>
+
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Pagination #}
+        {% if emails.pages >= 2 %}
+        {% set totalStart = (currentPage - 1) * 20 + 1 %}
+        {% set totalEnd = currentPage * 20 < emails.total ? currentPage * 20 : emails.total %}
+        <div class="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-white/[0.02]">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Showing {{ totalStart }}–{{ totalEnd }} of {{ emails.total }} emails
+            </p>
+            <div class="flex items-center gap-1">
+                {% if currentPage > 1 %}
+                    <a href="?page={{ currentPage - 1 }}"
+                       class="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.08] transition-colors">← Previous</a>
+                {% else %}
+                    <span class="px-3 py-1.5 text-sm text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04] rounded-lg cursor-not-allowed">← Previous</span>
+                {% endif %}
+
+                {% for p in 1..emails.pages %}
+                    {% if p == currentPage %}
+                        <span class="w-8 h-8 flex items-center justify-center rounded-lg text-sm text-white font-semibold"
+                              style="background: var(--color-primary);">{{ p }}</span>
+                    {% elseif p == 1 or p == emails.pages or (p >= currentPage - 1 and p <= currentPage + 1) %}
+                        <a href="?page={{ p }}"
+                           class="w-8 h-8 flex items-center justify-center rounded-lg text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-white/[0.08] transition-colors">{{ p }}</a>
+                    {% elseif p == currentPage - 2 or p == currentPage + 2 %}
+                        <span class="w-8 h-8 flex items-center justify-center text-sm text-slate-400">…</span>
                     {% endif %}
+                {% endfor %}
+
+                {% if currentPage < emails.pages %}
+                    <a href="?page={{ currentPage + 1 }}"
+                       class="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.08] transition-colors">Next →</a>
+                {% else %}
+                    <span class="px-3 py-1.5 text-sm text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04] rounded-lg cursor-not-allowed">Next →</span>
                 {% endif %}
             </div>
         </div>
-    </div>
-{% endblock %}
+        {% endif %}
 
-{% block js %}
-    {% autoescape "js" %}
-        <script>
-            document.addEventListener("DOMContentLoaded", () => {
-                const resendEmailBtn = document.querySelectorAll('.email-resend');
+    {% endif %}
+</div>
 
-                resendEmailBtn.forEach((resendBtn) => {
-                    resendBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        toggleLoader();
-                        FOSSBilling.api.client.post('email/resend', { id: resendBtn.dataset.id },
-                            () => {
-                                flashMessage({
-                                    message: 'Email resent',
-                                    reload: '{{ 'email'|url }}'
-                                });
-                            },
-                            (res) => {
-                                FOSSBilling.message(`${res.message} (${res.code})`, 'error');
-                                toggleLoader();
-                            }
-                        )
-                    });
-                });
-
-                const toggleLoader = () => {
-                    let loader = document.querySelector('.wait');
-                    if (loader.style.display === 'none') {
-                        loader.style.display = 'block';
-                    } else {
-                        loader.style.display = 'none';
-                    }
-                }
-
-                {# Resizing the email iframes proved to be temperamental. The below code does it automatically using events. We can't do it all at once as the hidden tabs end up with a height of 0 #}
-                function setEmailHeights(){
-                    const emails = document.querySelectorAll('.email');
-                    emails.forEach(email => {
-                        var body = email.contentDocument.body;
-                        var html = email.contentDocument.documentElement;
-                        if(body){
-                            var height = Math.max(body.scrollHeight, body.offsetHeight);
-                        } else if (html) {
-                            var height = Math.max(html.clientHeight, html.scrollHeight, html.offsetHeight);
-                        } else {
-                            return;
-                        }
-                        email.height = height;
-                    });
-                };
-
-                window.addEventListener("DOMContentLoaded", setEmailHeights());
-
-                var tabElms = document.querySelectorAll('a[data-bs-toggle="list"]');
-
-                tabElms.forEach(element => {
-                    element.addEventListener('shown.bs.tab', function() {
-                        setEmailHeights()
-                    });
-                });
-            });
-        </script>
-    {% endautoescape %}
 {% endblock %}

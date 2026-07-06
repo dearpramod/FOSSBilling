@@ -77,6 +77,25 @@ class Client extends \FOSSBilling\Api\AbstractApi
         return $this->getService()->generateLoginUrl($s);
     }
 
+    /**
+     * Returns disk quota and bandwidth allocation for a hosting order.
+     * Values are in MB as stored in the hosting plan (not live usage from the server).
+     *
+     * @param array $data Must contain 'order_id'.
+     *
+     * @return array{disk: float, bandwidth: float}
+     */
+    public function get_hosting_stats(array $data): array
+    {
+        [$order, $s] = $this->_getService($data);
+        $hp = $this->getDi()['db']->load('ServiceHostingHp', $s->service_hosting_hp_id);
+
+        return [
+            'disk'      => $hp instanceof \Model_ServiceHostingHp ? (float) $hp->quota     : null,
+            'bandwidth' => $hp instanceof \Model_ServiceHostingHp ? (float) $hp->bandwidth  : null,
+        ];
+    }
+
     public function _getService($data): array
     {
         if (!isset($data['order_id'])) {

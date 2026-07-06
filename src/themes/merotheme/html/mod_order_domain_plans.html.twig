@@ -21,7 +21,7 @@
 {% else %}
   {% set clientCurrencyCode = '' %}
 {% endif %}
-{% set _rc = guest.extension_is_on({'mod': 'spamchecker'}) ? guest.spamchecker_recaptcha : {} %}
+{% set _rc = guest.extension_is_on({'mod': 'antispam'}) ? guest.antispam_recaptcha : {} %}
 {% set social = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
 
 {% block content %}
@@ -173,7 +173,6 @@
 
         <!-- Search bar -->
         <form id="frmDomainChecker" role="search" autocomplete="off" @submit.prevent="search()">
-          <input type="hidden" name="a" value="checkDomain">
           <div class="domain-search-bar flex items-center p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl shadow-primary/5 border border-slate-200 dark:border-slate-700 transition-all search-glow">
             <svg class="w-5 h-5 ml-2 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
@@ -348,7 +347,7 @@
 
         <template x-for="(s, idx) in suggestions" :key="s.domain">
           <div class="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_120px_100px_auto] items-center px-4 py-3.5 border-b border-slate-100 dark:border-white/[0.04] last:border-0 transition-colors"
-               :class="!s.checking && s.available ? 'hover:bg-slate-50 dark:hover:bg-white/[0.03]' : 'opacity-60'">
+               :class="!s.checking && s.available === false ? 'opacity-60' : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'">
 
             {# Domain name #}
             <span class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="s.domain"></span>
@@ -365,15 +364,19 @@
                   Searching…
                 </span>
               </template>
+              {# Not checked yet — availability is on demand #}
+              <template x-if="!s.checking && s.available === null">
+                <span class="text-xs text-gray-500">Not checked</span>
+              </template>
               {# Available #}
-              <template x-if="!s.checking && s.available">
+              <template x-if="!s.checking && s.available === true">
                 <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
                   <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                   Available
                 </span>
               </template>
               {# Unavailable #}
-              <template x-if="!s.checking && !s.available">
+              <template x-if="!s.checking && s.available === false">
                 <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-400">
                   <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
                   Unavailable
@@ -393,15 +396,24 @@
             <div class="flex items-center gap-2 justify-end sm:justify-center sm:w-24 flex-shrink-0">
               {# Mobile: inline status dot #}
               <span class="sm:hidden w-2 h-2 rounded-full flex-shrink-0"
-                    :class="s.checking ? 'bg-gray-600 animate-pulse' : s.available ? 'bg-emerald-400' : 'bg-red-400'"></span>
-              <button @click="!s.checking && s.available && startWizard(s)"
-                      :disabled="s.checking || !s.available"
-                      class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      :class="!s.checking && s.available
-                        ? 'bg-primary text-white hover:opacity-90 cursor-pointer'
-                        : 'text-slate-400 dark:text-gray-600 border border-slate-200 dark:border-white/[0.06] bg-transparent cursor-not-allowed'">
-                Register
-              </button>
+                    :class="s.checking ? 'bg-gray-600 animate-pulse' : (s.available === null ? 'bg-slate-300 dark:bg-gray-600' : (s.available ? 'bg-emerald-400' : 'bg-red-400'))"></span>
+              {# Unchecked → explicit availability check on demand #}
+              <template x-if="!s.checking && s.available === null">
+                <button @click="checkSuggestion(idx)"
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-primary/40 text-primary hover:bg-primary hover:text-white cursor-pointer">
+                  Check
+                </button>
+              </template>
+              <template x-if="s.checking || s.available !== null">
+                <button @click="!s.checking && s.available && startWizard(s)"
+                        :disabled="s.checking || !s.available"
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        :class="!s.checking && s.available
+                          ? 'bg-primary text-white hover:opacity-90 cursor-pointer'
+                          : 'text-slate-400 dark:text-gray-600 border border-slate-200 dark:border-white/[0.06] bg-transparent cursor-not-allowed'">
+                  Register
+                </button>
+              </template>
             </div>
 
           </div>
@@ -1483,7 +1495,7 @@
           </div>
           <div x-show="promoDiscount > 0" x-cloak class="mt-1.5 flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-            <span class="text-xs text-emerald-400" x-text="'Discount: −' + CURR_PREFIX + promoDiscount.toFixed(2) + CURR_SUFFIX"></span>
+            <span class="text-xs text-emerald-400" x-text="'Discount: −' + '{{ currPrefix|escape('js') }}' + promoDiscount.toFixed(2) + '{{ currSuffix|escape('js') }}'"></span>
           </div>
         </div>
         <p x-show="promoError" class="mt-1.5 text-xs text-red-400" x-text="promoError"></p>
@@ -1740,8 +1752,8 @@
 {% endblock %}
 
 {% block js %}
-{% if _rc.enabled and _rc.publickey and _rc.pages.domain and _rc.version == 3 %}
-<script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
+{% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+<script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
 {% endif %}
 <script>
 (function () {
@@ -1991,12 +2003,12 @@
         this.suggestionsLoadingMore = false;
 
         // Step 1: Check primary domain only — show result immediately
-        {% if _rc.enabled and _rc.publickey and _rc.pages.domain and _rc.version == 3 %}
-        // reCAPTCHA Enterprise: get a token for the primary domain availability check
+        {% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+        // reCAPTCHA v3: get a token for the primary domain availability check
         const primaryRcToken = await new Promise(function(resolve) {
-          if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
-            grecaptcha.enterprise.ready(function() {
-              grecaptcha.enterprise.execute('{{ _rc.publickey }}', { action: 'DOMAIN_SEARCH' })
+          if (typeof grecaptcha !== 'undefined') {
+            grecaptcha.ready(function() {
+              grecaptcha.execute('{{ _rc.publickey }}', { action: 'DOMAIN_SEARCH' })
                 .then(resolve).catch(function() { resolve(''); });
             });
           } else { resolve(''); }
@@ -2065,57 +2077,50 @@
         });
       },
 
-      async _startSuggestionsLoad(sld, excludeTld) {
+      _startSuggestionsLoad(sld, excludeTld) {
+        // Huraga-aligned: suggestions show configured pricing only — availability is
+        // checked on demand (per-row Check button), not auto-fired. This keeps registrar
+        // API usage and the per-IP rate-limit budget at one lookup per explicit action.
         if (!sld || sld.length < 2) return;
         const altTlds = TLD_DATA.filter(t => t.allow_register && t.tld !== excludeTld);
         if (altTlds.length === 0) return;
 
         const firstBatch = altTlds.slice(0, 3);
-        this.suggestionQueue    = altTlds.slice(3, 6);
-        this.suggestionsLoading = true;
+        this.suggestionQueue = altTlds.slice(3, 6);
 
-        // Pre-populate all rows immediately with price data + checking state
         this.suggestions = firstBatch.map(t => {
           const meta = tldMeta(t.tld);
           return {
             tld: t.tld, sld, domain: sld + t.tld,
-            checking: true, available: false,
+            checking: false, available: null,
             price: meta.price, renewPrice: meta.renewPrice,
             minYears: meta.minYears, registerYears: Math.max(1, meta.minYears),
           };
         });
-
-        // Check one by one sequentially — update each row in-place
-        for (let i = 0; i < firstBatch.length; i++) {
-          const r = await this._checkOneTld(firstBatch[i].tld, sld, false);
-          this.suggestions.splice(i, 1, { ...r, checking: false });
-        }
-        this.suggestionsLoading = false;
       },
 
-      async showMoreSuggestions() {
-        if (!this.suggestionQueue.length || this.suggestionsLoadingMore) return;
-        const batch = this.suggestionQueue.splice(0, 3);
-        this.suggestionsLoadingMore = true;
-        const startIdx = this.suggestions.length;
+      async checkSuggestion(idx) {
+        const s = this.suggestions[idx];
+        if (!s || s.checking || s.available !== null) return;
+        this.suggestions.splice(idx, 1, { ...s, checking: true });
+        const r = await this._checkOneTld(s.tld, s.sld, false);
+        this.suggestions.splice(idx, 1, { ...r, checking: false });
+      },
 
-        // Pre-append all rows immediately
+      showMoreSuggestions() {
+        if (!this.suggestionQueue.length) return;
+        const batch = this.suggestionQueue.splice(0, 3);
+
+        // Append rows with pricing only — availability stays on-demand per row
         batch.forEach(t => {
           const meta = tldMeta(t.tld);
           this.suggestions.push({
             tld: t.tld, sld: this.parsedSld, domain: this.parsedSld + t.tld,
-            checking: true, available: false,
+            checking: false, available: null,
             price: meta.price, renewPrice: meta.renewPrice,
             minYears: meta.minYears, registerYears: Math.max(1, meta.minYears),
           });
         });
-
-        // Check one by one sequentially
-        for (let i = 0; i < batch.length; i++) {
-          const r = await this._checkOneTld(batch[i].tld, this.parsedSld, false);
-          this.suggestions.splice(startIdx + i, 1, { ...r, checking: false });
-        }
-        this.suggestionsLoadingMore = false;
       },
 
       startWizard(r) {

@@ -688,24 +688,34 @@ class Service implements InjectionAwareInterface
         $pr = $this->getCategoryProducts($model);
 
         $type = null; // identified by first product in category
-        foreach ($pr as $p) {
-            $pa = $this->toApiArray($p, false, $identity);
-            if (reset($pr) == $p) {
-                $type = $this->getProductType($p);
+        if (!$deep) {
+            // Shallow mode: skip per-product API arrays (pricing lookups) — resolve only the
+            // category type from the first product. Used by nav menus and back-links.
+            $first = reset($pr);
+            if ($first !== false) {
+                $type = $this->getProductType($first);
             }
-            $products[] = $pa;
-            $startingPrice = $pa['price_starting_from'] ?? 0;
+        } else {
+            foreach ($pr as $p) {
+                $pa = $this->toApiArray($p, false, $identity);
+                if (reset($pr) == $p) {
+                    $type = $this->getProductType($p);
+                }
+                $products[] = $pa;
+                $startingPrice = $pa['price_starting_from'] ?? 0;
 
-            if ($min_price == 0) {
-                $min_price = $startingPrice;
-            } elseif ($startingPrice < $min_price) {
-                $min_price = $startingPrice;
+                if ($min_price == 0) {
+                    $min_price = $startingPrice;
+                } elseif ($startingPrice < $min_price) {
+                    $min_price = $startingPrice;
+                }
             }
         }
 
         return [
             'id' => $model->getId(),
             'title' => $model->getTitle(),
+            'slug' => $this->slugifyCategoryTitle($model->getTitle() ?? ''),
             'description' => $model->getDescription(),
             'icon_url' => $model->getIconUrl(),
             'created_at' => $this->formatDateTimeValue($model->getCreatedAt()),
@@ -714,6 +724,14 @@ class Service implements InjectionAwareInterface
             'type' => $type,
             'products' => $products,
         ];
+    }
+
+    private function slugifyCategoryTitle(string $title): string
+    {
+        $slug = mb_strtolower($title);
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+
+        return trim($slug, '-');
     }
 
     /**
@@ -734,10 +752,12 @@ class Service implements InjectionAwareInterface
 
     public function getPaginatedProductCategories(array $data, $identity = null): array
     {
+        $deep = (bool) ($data['deep'] ?? true);
+
         return $this->paginateMappedQuery(
             $this->getProductCategorySearchQueryBuilder($data),
             PaginationOptions::fromArray($data),
-            fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, true, $identity),
+            fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, $deep, $identity),
         );
     }
 
@@ -2090,7 +2110,7 @@ class Service implements InjectionAwareInterface
         $offset = ($pagination->page - 1) * $pagination->perPage;
         $qb->setFirstResult($offset)
             ->setMaxResults($pagination->perPage);
-        $paginator = new DoctrinePaginator($qb, true);
+        $paginator = new DoctrinePaginator($qb, false);
         $total = count($paginator);
 
         $list = [];

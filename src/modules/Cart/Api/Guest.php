@@ -93,6 +93,37 @@ class Guest extends \FOSSBilling\Api\AbstractApi
      *
      * @return bool
      */
+    /**
+     * Validate a promo code and return its discount details without applying it to the cart.
+     * Used for preview on product order pages before the item is added.
+     *
+     * @return array{type: string, value: float, periods: array<string>}
+     */
+    #[RequiredParams(['promocode' => 'Promo code was not passed'])]
+    public function validate_promo($data)
+    {
+        $promo = $this->getService()->findActivePromoByCode($data['promocode']);
+        if (!$promo instanceof Promo) {
+            throw new \FOSSBilling\InformationException('The promo code has expired or does not exist');
+        }
+
+        if (!$this->getService()->isPromoAvailableForClientGroup($promo)) {
+            throw new \FOSSBilling\InformationException('Promo code cannot be applied to your account');
+        }
+
+        if (!$this->getService()->promoCanBeApplied($promo)) {
+            throw new \FOSSBilling\InformationException('The promo code has expired or does not exist');
+        }
+
+        $periodsJson = $promo->getPeriods();
+
+        return [
+            'type'    => $promo->getType(),
+            'value'   => (float) ($promo->getValue() ?? 0),
+            'periods' => $periodsJson ? (json_decode($periodsJson, true) ?? []) : [],
+        ];
+    }
+
     #[RequiredParams(['promocode' => 'Promo code was not passed'])]
     public function apply_promo($data)
     {

@@ -92,7 +92,7 @@ class SentryHelper
      */
     public static function registerSentry(): void
     {
-        $sentryDSN = '--replace--this--during--release--process--';
+        $sentryDSN = 'https://1735e8299adb8d9099e47eefcf0b8f42@o4506063756328960.ingest.sentry.io/4506063757901824';
 
         $httpClient = new class implements HttpClientInterface {
             public function sendRequest(Request $request, Options $options): Response

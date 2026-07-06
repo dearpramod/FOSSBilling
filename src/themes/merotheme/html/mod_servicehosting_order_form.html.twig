@@ -15,98 +15,113 @@
 {% set currency = guest.cart_get_currency %}
 
 {% if default_action %}
-<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="domain-config-card">
-  <div class="p-6">
 
-    {# ── Header row: globe+title left, period selector top-right (stacks on mobile) ── #}
-    <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+{# ══ Card 1 — Billing period (own card, recurrent products only) ══ #}
+{% if _opf_enabled is defined and _opf_enabled|length > 0 %}
+<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6" id="period-card">
 
-      {# Left: globe icon + title + subtitle #}
-      <div class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-             style="background:rgba(var(--color-primary-rgb),0.06); color:var(--color-primary);">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
-                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+  {# ── Plan header row — icon + title + type (Stitch style) ── #}
+  <div class="flex items-start justify-between mb-6">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center flex-shrink-0">
+        <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="font-bold text-lg text-slate-900 leading-tight">{{ product.title }}</h3>
+        <p class="text-sm text-slate-500 mt-0.5">{{ product.type == 'hosting' ? 'Hosting plan' : 'Subscription' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+
+    {# Left: label + period select #}
+    <div>
+      <label class="block text-sm font-medium text-slate-500 mb-2">Period</label>
+      {% if _opf_enabled|length > 1 %}
+      <div class="relative inline-block">
+        <select x-model="selectedPeriod" name="period"
+                class="pl-4 pr-10 py-2.5 border-2 rounded-xl bg-white text-slate-900 text-sm font-semibold appearance-none focus:outline-none cursor-pointer"
+                style="border-color:var(--color-primary);">
+          {% for pk in _opf_enabled %}
+          <option value="{{ pk }}">{{ _opf_pk_labels[pk] }}</option>
+          {% endfor %}
+        </select>
+        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
         </div>
-        <div>
-          <h3 class="text-lg font-bold text-slate-900">Secure your domain</h3>
-          <p class="text-sm text-slate-500">Get your domain right away and publish your website faster</p>
-        </div>
       </div>
-
-      {# Right: period selector + price (only for recurrent products with enabled periods) #}
-      {% if _opf_enabled is defined and _opf_enabled|length > 0 %}
-      <div class="shrink-0 text-right">
-        {% if _opf_enabled|length > 1 %}
-        <label class="block text-xs font-medium text-slate-500 mb-1">Billing Period</label>
-        <div class="relative inline-block mb-2">
-          <select x-model="selectedPeriod" name="period"
-                  class="pl-3 pr-8 py-2 border rounded-lg bg-white text-slate-900 text-sm font-medium appearance-none focus:outline-none"
-                  style="border-color:rgba(var(--color-primary-rgb),0.3);">
-            {% for pk in _opf_enabled %}
-            <option value="{{ pk }}">{{ _opf_pk_labels[pk] }}</option>
-            {% endfor %}
-          </select>
-          <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none"
-               style="color:var(--color-primary);">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
-          </div>
-        </div>
-        {% else %}
-        <input type="hidden" name="period" :value="selectedPeriod">
-        {% endif %}
-
-        {# Savings badge #}
-        <template x-if="getPeriodSavingsRaw(selectedPeriod) > 0">
-          <div>
-            <span class="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded mb-1"
-                  x-text="'Save ' + formatMoney(getPeriodSavingsRaw(selectedPeriod))"></span>
-          </div>
-        </template>
-
-        {# Monthly price + strikethrough #}
-        <div x-show="selectedPeriod">
-          <div class="text-2xl font-bold text-slate-900 leading-tight">
-            <span x-text="formatMoney(getPeriodMonthly(selectedPeriod))"></span><span class="text-sm font-normal text-slate-500">/mo</span>
-          </div>
-          <template x-if="(periodMonthsMap[selectedPeriod] || 1) > 1 && productRawPrices['1M']">
-            <div class="text-sm text-slate-400 line-through"
-                 x-text="formatMoney(productRawPrices['1M']) + '/mo'"></div>
-          </template>
-        </div>
-      </div>
+      {% else %}
+      <input type="hidden" name="period" :value="selectedPeriod">
+      <p class="text-sm font-semibold text-slate-900" x-text="getPeriodLabel(selectedPeriod)"></p>
       {% endif %}
-
     </div>
 
-    {# Renewal text (below header, left-aligned) #}
-    {% if _opf_enabled is defined and _opf_enabled|length > 0 %}
-    <p class="text-sm text-slate-500 mb-4" x-show="selectedPeriod">
-      Renews at
-      <span x-text="formatMoney(productRawPrices[selectedPeriod] || 0)"></span>
-      for a <span x-text="getPeriodLabel(selectedPeriod)"></span>. Cancel anytime.
-    </p>
-    {% endif %}
+    {# Middle: savings badge #}
+    <template x-if="getPeriodSavingsRaw(selectedPeriod) > 0">
+      <span class="inline-block px-3 py-1.5 bg-green-100 text-green-700 text-sm font-bold rounded-lg self-start sm:self-center"
+            x-text="'Save ' + formatMoney(getPeriodSavingsRaw(selectedPeriod))"></span>
+    </template>
 
-    {# FREE domain notice — shown when domain price is 0 #}
-    <div x-show="domainRawPrice === 0"
-         class="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-dashed border-slate-200 mb-6">
-      <svg class="w-5 h-5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+    {# Right: effective monthly price + strikethrough #}
+    <div class="text-right" x-show="selectedPeriod">
+      <div class="text-2xl font-bold text-slate-900 leading-tight">
+        <span x-text="formatMoney(getPeriodMonthly(selectedPeriod))"></span><span class="text-sm font-normal text-slate-500"> /mo</span>
+      </div>
+      <template x-if="(periodMonthsMap[selectedPeriod] || 1) > 1 && productRawPrices['1M']">
+        <div class="text-sm text-slate-400 line-through"
+             x-text="formatMoney(productRawPrices['1M']) + '/mo'"></div>
+      </template>
+    </div>
+
+  </div>
+
+  {# Renewal text #}
+  <p class="text-sm text-slate-500 mt-3" x-show="selectedPeriod && (productRawPrices[selectedPeriod] || 0) > 0">
+    Renews at
+    <span x-text="formatMoney(productRawPrices[selectedPeriod] || 0)"></span>
+    <span x-text="getPeriodLabel(selectedPeriod).toLowerCase()"></span>. Cancel anytime.
+  </p>
+
+</div>
+{% endif %}
+
+<style>
+  .domain-tab-active { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04); color:#0f172a; }
+  .domain-tab-idle   { color:#64748b; }
+  .domain-tab-idle:hover { background:rgba(255,255,255,.55); color:#334155; }
+  /* Left-border divider used in the "Use Own Domain" TLD extension input */
+  .dsg-divider { border-left:1px solid rgb(226 232 240); }
+  /* Fallback for color-mix() on Safari <16.2 — action buttons inherit --color-primary at 65% opacity */
+  .domain-action-btn { background:var(--color-primary); }
+  @supports (background:color-mix(in srgb,red 1%,white)) {
+    .domain-action-btn { background:color-mix(in srgb, var(--color-primary) 65%, white); }
+  }
+</style>
+
+{# ══ Card 2 — Domain configuration ══ #}
+<div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" id="domain-config-card">
+
+  {# Header — icon + title + subtitle, divided from the body #}
+  <div class="flex items-center gap-4 px-6 py-4 border-b border-slate-100">
+    <div class="domain-card-icon w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0"
+         style="background:rgba(var(--color-primary-rgb),0.06); color:var(--color-primary);">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+              d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
       </svg>
-      <span>Great news! You get a <span class="font-bold">FREE domain</span> included with this order.</span>
-      <button type="button" class="ml-auto text-slate-400 hover:text-slate-600 flex-shrink-0">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      </button>
     </div>
+    <div>
+      <h3 class="text-base font-bold text-slate-900">Secure your domain</h3>
+      <p class="text-sm text-slate-500">Get your domain right away and publish your website faster</p>
+    </div>
+  </div>
 
-    <hr class="border-slate-100 mb-6">
+  <div class="p-6">
 
     {# Hidden domain action field — updated by JS on tab switch #}
     <input type="hidden" name="domain[action]" id="domain-action-input" value="{{ default_action }}">
@@ -114,48 +129,46 @@
       <input type="hidden" name="domain[subdomain_base_domain]" value="{{ subdomain_base_domain }}">
     {% endif %}
 
-    {# ── Mode tabs — Stitch: rounded-full pill buttons, gap-2, "Free" badges ── #}
-    <div class="flex flex-wrap gap-2 mb-6">
+    {# ── Mode tabs — segmented control (Stitch style) ── #}
+    <div class="flex gap-1 p-1 bg-slate-100 border border-slate-200/60 rounded-xl mb-6">
       {% if can_register %}
       <button type="button"
-              class="domain-tab flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all"
+              class="domain-tab flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all"
               data-mode="register" data-active="{{ default_action == 'register' ? 'true' : 'false' }}">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
-        Register New
-        <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-bold">Free</span>
+        <span>Register New</span>
       </button>
       {% endif %}
       {% if can_transfer %}
       <button type="button"
-              class="domain-tab flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all"
+              class="domain-tab flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all"
               data-mode="transfer" data-active="{{ default_action == 'transfer' ? 'true' : 'false' }}">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
         </svg>
-        Transfer Domain
-        <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-bold">Free</span>
+        <span>Transfer Domain</span>
       </button>
       {% endif %}
       {% if can_own %}
       <button type="button"
-              class="domain-tab flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all"
+              class="domain-tab flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all"
               data-mode="owndomain" data-active="{{ default_action == 'owndomain' ? 'true' : 'false' }}">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
         </svg>
-        Use Own Domain
+        <span>Use Own Domain</span>
       </button>
       {% endif %}
       {% if can_subdomain %}
       <button type="button"
-              class="domain-tab flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all"
+              class="domain-tab flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all"
               data-mode="subdomain" data-active="{{ default_action == 'subdomain' ? 'true' : 'false' }}">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
         </svg>
-        Subdomain
+        <span>Subdomain</span>
       </button>
       {% endif %}
     </div>
@@ -165,11 +178,11 @@
          style="{{ default_action != 'register' ? 'display:none' : '' }}">
       <label class="block text-sm font-medium text-slate-700">Domain name</label>
 
-      {# Main search row: input container + Check button attached (rounded-l + rounded-r) #}
-      <div class="flex">
-        <div class="relative flex-1">
+      {# Main search row: bordered input group + detached Check button #}
+      <div class="flex items-stretch gap-3">
+        <div class="domain-search-group relative flex-1 flex rounded-lg border border-slate-200 bg-white focus-within:border-slate-400 transition-colors">
           {# Search icon — absolute left #}
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
@@ -177,14 +190,13 @@
           {# Text input #}
           <input type="text" name="domain[register_sld]" id="register-sld"
                  value="{{ request.register_sld|default('') }}"
-                 class="w-full pl-10 pr-24 py-3 border border-slate-200 rounded-l-lg text-slate-900 outline-none focus:border-opacity-60"
-                 style="border-right:none;"
+                 class="min-w-0 flex-1 pl-11 pr-3 py-3 bg-transparent border-0 text-slate-900 outline-none"
                  placeholder="yourdomain">
-          {# TLD selector — absolute right inside input #}
-          <div class="absolute inset-y-0 right-0 flex items-center pr-2 border-l border-slate-200">
+          {# TLD selector — right side, with its own chevron #}
+          <div class="relative flex items-center border-l border-slate-200">
             <select name="domain[register_tld]" id="register-tld"
-                    class="px-2 py-1 text-sm font-semibold text-slate-700 bg-transparent appearance-none outline-none cursor-pointer"
-                    style="min-width:4.5rem;">
+                    class="pl-3 pr-8 py-1 h-full text-sm font-semibold text-slate-700 bg-transparent appearance-none outline-none cursor-pointer border-0"
+                    style="min-width:5.5rem;">
               {% for tld in tlds %}
                 <option value="{{ tld.tld }}"
                         {% if request.register_tld is defined and request.register_tld == tld.tld %}selected{% endif %}>
@@ -192,18 +204,25 @@
                 </option>
               {% endfor %}
             </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
           </div>
         </div>
-        {# Check button — attached right, matches Stitch bg-brand-300 (lighter primary) #}
+        {# Check button — detached, with search icon #}
         <button type="button" id="domain-check-btn"
-                class="text-white px-8 py-3 rounded-r-lg font-bold transition-all whitespace-nowrap disabled:opacity-60"
-                style="background:color-mix(in srgb, var(--color-primary) 65%, white);">
-          Check
+                class="domain-action-btn flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold transition-all whitespace-nowrap hover:opacity-90 disabled:opacity-60">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <span id="domain-check-btn-label">Check</span>
         </button>
       </div>
 
-      {# Years select — subtle row below, matches functional need not in Stitch design #}
-      <div class="flex items-center gap-2">
+      {# Years select — appears only after a successful availability check #}
+      <div class="flex items-center gap-2" id="register-years-row" style="display:none;">
         <label class="text-xs text-slate-500">Registration period:</label>
         <select name="domain[register_years]" id="register-years-select"
                 class="text-xs text-slate-600 border border-slate-200 rounded px-2 py-1 bg-white outline-none"
@@ -232,22 +251,21 @@
     <div id="domain-panel-transfer" class="space-y-4"
          style="{{ default_action != 'transfer' ? 'display:none' : '' }}">
       <label class="block text-sm font-medium text-slate-700">Domain name</label>
-      <div class="flex">
-        <div class="relative flex-1">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+      <div class="flex items-stretch gap-3">
+        <div class="domain-search-group relative flex-1 flex rounded-lg border border-slate-200 bg-white focus-within:border-slate-400 transition-colors">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
             </svg>
           </div>
           <input type="text" name="domain[transfer_sld]" id="transfer-sld"
                  value="{{ request.transfer_sld|default('') }}"
-                 class="w-full pl-10 pr-24 py-3 border border-slate-200 rounded-l-lg text-slate-900 outline-none"
-                 style="border-right:none;"
+                 class="min-w-0 flex-1 pl-11 pr-3 py-3 bg-transparent border-0 text-slate-900 outline-none"
                  placeholder="yourdomain">
-          <div class="absolute inset-y-0 right-0 flex items-center pr-2 border-l border-slate-200">
+          <div class="relative flex items-center border-l border-slate-200">
             <select name="domain[transfer_tld]" id="transfer-tld"
-                    class="px-2 py-1 text-sm font-semibold text-slate-700 bg-transparent appearance-none outline-none cursor-pointer"
-                    style="min-width:4.5rem;">
+                    class="pl-3 pr-8 py-1 h-full text-sm font-semibold text-slate-700 bg-transparent appearance-none outline-none cursor-pointer border-0"
+                    style="min-width:5.5rem;">
               {% for tld in transfer_tlds %}
                 <option value="{{ tld.tld }}"
                         {% if request.transfer_tld is defined and request.transfer_tld == tld.tld %}selected{% endif %}>
@@ -255,12 +273,19 @@
                 </option>
               {% endfor %}
             </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
           </div>
         </div>
         <button type="button" id="transfer-check-btn"
-                class="text-white px-8 py-3 rounded-r-lg font-bold transition-all whitespace-nowrap disabled:opacity-60"
-                style="background:color-mix(in srgb, var(--color-primary) 65%, white);">
-          Check
+                class="domain-action-btn flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold transition-all whitespace-nowrap hover:opacity-90 disabled:opacity-60">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <span id="transfer-check-btn-label">Check</span>
         </button>
       </div>
       <div id="transfer-price-row" style="display:none;" class="text-sm text-slate-700">
@@ -273,16 +298,26 @@
     <div id="domain-panel-owndomain" class="space-y-4"
          style="{{ default_action != 'owndomain' ? 'display:none' : '' }}">
       <label class="block text-sm font-medium text-slate-700">Domain name</label>
-      <div class="flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden">
-        <input type="text" name="domain[owndomain_sld]"
-               value="{{ request.owndomain_sld|default('') }}"
-               class="min-w-0 flex-1 bg-transparent px-4 h-full text-slate-900 outline-none"
-               placeholder="yourdomain">
-        <input type="text" name="domain[owndomain_tld]"
-               value="{{ request.owndomain_tld|default('.com') }}"
-               class="border-l border-slate-200 bg-white px-3 h-full text-sm font-semibold outline-none"
-               style="color:var(--color-primary); min-width:5rem;"
-               placeholder=".com">
+      <div class="flex items-stretch gap-3">
+        <div class="domain-search-group relative flex-1 flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:border-slate-400 transition-colors">
+          <input type="text" name="domain[owndomain_sld]" id="owndomain-sld"
+                 value="{{ request.owndomain_sld|default('') }}"
+                 class="min-w-0 flex-1 px-4 h-full bg-transparent border-0 text-slate-900 outline-none"
+                 placeholder="yourdomain">
+          <input type="text" name="domain[owndomain_tld]" id="owndomain-tld"
+                 value="{{ request.owndomain_tld|default('.com') }}"
+                 class="dsg-divider w-28 flex-none px-3 h-full bg-transparent border-0 text-sm font-semibold outline-none"
+                 style="color:var(--color-primary);"
+                 placeholder=".com">
+        </div>
+        {# Use button — confirms the domain, mirrors the Check button pattern #}
+        <button type="button" id="owndomain-use-btn"
+                class="domain-action-btn flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold transition-all whitespace-nowrap hover:opacity-90 disabled:opacity-60">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+          </svg>
+          <span id="owndomain-use-btn-label">Use</span>
+        </button>
       </div>
       <p class="text-xs text-slate-500">You will need to update your nameservers to point to our servers after ordering.</p>
     </div>
@@ -292,7 +327,7 @@
     <div id="domain-panel-subdomain" class="space-y-4"
          style="{{ default_action != 'subdomain' ? 'display:none' : '' }}">
       <label class="block text-sm font-medium text-slate-700">Choose your free subdomain</label>
-      <div class="flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div class="domain-search-group flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:border-slate-400 transition-colors">
         <input type="text" name="domain[subdomain_sld]"
                value="{{ request.subdomain_sld|default('') }}"
                class="min-w-0 flex-1 bg-transparent px-4 h-full text-slate-900 outline-none"
@@ -323,11 +358,9 @@
     // ── Tab styling — Stitch: bg-brand-50 text-brand-700 border-brand-200 for active ──
     function refreshTabStyles() {
         tabs.forEach(function (tab) {
-            if (tab.dataset.active === 'true') {
-                tab.style.cssText = 'background:rgba(var(--color-primary-rgb),0.07);border-color:rgba(var(--color-primary-rgb),0.30);color:var(--color-primary);';
-            } else {
-                tab.style.cssText = 'background:transparent;border-color:#e2e8f0;color:#475569;';
-            }
+            var active = tab.dataset.active === 'true';
+            tab.classList.toggle('domain-tab-active', active);
+            tab.classList.toggle('domain-tab-idle', !active);
         });
     }
 
@@ -347,6 +380,8 @@
 
         showAvailability(null, '');
         if (transferPriceRow) transferPriceRow.style.display = 'none';
+        document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: '' } }));
+        document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: 0 } }));
     }
 
     refreshTabStyles();
@@ -378,12 +413,20 @@
     }
 
     // ── Register check ──
-    var registerBtn   = document.getElementById('domain-check-btn');
-    var registerSld   = document.getElementById('register-sld');
-    var registerTld   = document.getElementById('register-tld');
-    var registerYears = document.getElementById('register-years-select');
+    var registerBtn      = document.getElementById('domain-check-btn');
+    var registerBtnLabel = document.getElementById('domain-check-btn-label');
+    var registerSld      = document.getElementById('register-sld');
+    var registerTld      = document.getElementById('register-tld');
+    var registerYears    = document.getElementById('register-years-select');
+    var registerYearsRow = document.getElementById('register-years-row');
+
+    function setRegisterBtn(label, disabled) {
+        if (registerBtnLabel) registerBtnLabel.textContent = label;
+        if (registerBtn) registerBtn.disabled = disabled;
+    }
 
     function resetYearOptions() {
+        if (registerYearsRow) registerYearsRow.style.display = 'none';
         if (!registerYears) return;
         registerYears.innerHTML = '';
         for (var i = 1; i <= 5; i++) {
@@ -405,15 +448,14 @@
             var tld = registerTld ? registerTld.value : '.com';
             if (!sld) return;
 
-            registerBtn.disabled = true;
-            registerBtn.textContent = 'Checking…';
+            setRegisterBtn('Checking…', true);
             showAvailability(null, '');
 
             FOSSBilling.api.guest.post('servicedomain/check', { sld: sld, tld: tld },
                 function () {
-                    registerBtn.disabled = false;
-                    registerBtn.textContent = 'Check';
+                    setRegisterBtn('Check', false);
                     showAvailability(true, sld + tld + ' is available.');
+                    document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
 
                     FOSSBilling.api.guest.post('servicedomain/pricing', { tld: tld },
                         function (result) {
@@ -426,13 +468,13 @@
                                 var total = (i === 1) ? regPrice : regPrice + (i - 1) * renewPrice;
                                 registerYears.append(new Option(i + (i === 1 ? ' year @ ' : ' years @ ') + formatPrice(total), i));
                             }
+                            if (registerYearsRow) registerYearsRow.style.display = '';
                             document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: regPrice } }));
                         }
                     );
                 },
                 function () {
-                    registerBtn.disabled = false;
-                    registerBtn.textContent = 'Check';
+                    setRegisterBtn('Check', false);
                     showAvailability(false, 'This domain is not available.');
                 }
             );
@@ -440,10 +482,16 @@
     }
 
     // ── Transfer check ──
-    var transferBtn  = document.getElementById('transfer-check-btn');
-    var transferSld  = document.getElementById('transfer-sld');
-    var transferTld  = document.getElementById('transfer-tld');
+    var transferBtn      = document.getElementById('transfer-check-btn');
+    var transferBtnLabel = document.getElementById('transfer-check-btn-label');
+    var transferSld      = document.getElementById('transfer-sld');
+    var transferTld      = document.getElementById('transfer-tld');
     var transferPriceVal = document.getElementById('transfer-price-value');
+
+    function setTransferBtn(label, disabled) {
+        if (transferBtnLabel) transferBtnLabel.textContent = label;
+        if (transferBtn) transferBtn.disabled = disabled;
+    }
 
     if (transferSld) transferSld.addEventListener('input', function () {
         showAvailability(null, '');
@@ -460,15 +508,14 @@
             var tld = transferTld ? transferTld.value : '.com';
             if (!sld) return;
 
-            transferBtn.disabled = true;
-            transferBtn.textContent = 'Checking…';
+            setTransferBtn('Checking…', true);
             showAvailability(null, '');
 
             FOSSBilling.api.guest.post('servicedomain/can_be_transferred', { sld: sld, tld: tld },
                 function () {
-                    transferBtn.disabled = false;
-                    transferBtn.textContent = 'Check';
+                    setTransferBtn('Check', false);
                     showAvailability(true, sld + tld + ' can be transferred.');
+                    document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
 
                     FOSSBilling.api.guest.post('servicedomain/pricing', { tld: tld },
                         function (result) {
@@ -481,11 +528,59 @@
                     );
                 },
                 function () {
-                    transferBtn.disabled = false;
-                    transferBtn.textContent = 'Check';
+                    setTransferBtn('Check', false);
                     showAvailability(false, 'This domain cannot be transferred.');
                 }
             );
+        });
+    }
+
+    // ── Own domain: Use button ──
+    var ownBtn = document.getElementById('owndomain-use-btn');
+    var ownSld = document.getElementById('owndomain-sld');
+    var ownTld = document.getElementById('owndomain-tld');
+
+    function clearOwnSelection() {
+        showAvailability(null, '');
+        document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: '' } }));
+    }
+
+    if (ownSld) ownSld.addEventListener('input', clearOwnSelection);
+    if (ownTld) ownTld.addEventListener('input', clearOwnSelection);
+    if (ownSld) ownSld.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); if (ownBtn) ownBtn.click(); }
+    });
+
+    if (ownBtn) {
+        ownBtn.addEventListener('click', function () {
+            var sld = ownSld ? ownSld.value.trim().toLowerCase() : '';
+            var tld = ownTld ? ownTld.value.trim().toLowerCase() : '';
+
+            // Accept a full domain typed into the name field (e.g. "mybusiness.com")
+            if (sld.indexOf('.') > 0) {
+                var dot = sld.indexOf('.');
+                tld = sld.slice(dot);
+                sld = sld.slice(0, dot);
+                if (ownSld) ownSld.value = sld;
+                if (ownTld) ownTld.value = tld;
+            }
+
+            if (!sld) {
+                showAvailability(false, 'Please enter your domain name.');
+                return;
+            }
+            if (!tld || tld.charAt(0) !== '.' || tld.length < 2) {
+                showAvailability(false, 'Please enter the domain extension with a leading dot, e.g. .com');
+                return;
+            }
+            if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(sld)) {
+                showAvailability(false, 'The domain name contains invalid characters.');
+                return;
+            }
+
+            showAvailability(true, sld + tld + ' will be used with this order.');
+            document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
+            document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: 0 } }));
         });
     }
 

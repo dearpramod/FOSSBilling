@@ -461,10 +461,10 @@
                                 this.payResult = result;
                                 if (result.remaining) this.payResult.remaining_fmt = result.remaining;
                                 if (result.type === 'full') {
-                                    if (typeof merovpsNotif === 'function') merovpsNotif('Invoice paid successfully!', 'success');
+                                    FOSSBilling.message('Invoice paid successfully!', 'success');
                                     setTimeout(() => location.reload(), 1500);
                                 } else {
-                                    if (typeof merovpsNotif === 'function') merovpsNotif('Partial payment applied. Remaining balance due.', 'info');
+                                    FOSSBilling.message('Partial payment applied. Remaining balance due.', 'info');
                                     setTimeout(() => location.reload(), 2000);
                                 }
                             }
@@ -472,7 +472,7 @@
                         (error) => {
                             this.paying = false;
                             const msg = (error && error.message) ? error.message : 'Payment failed. Please try again.';
-                            if (typeof merovpsNotif === 'function') merovpsNotif(msg, 'error');
+                            FOSSBilling.message(msg, 'error');
                         }
                     );
                 }

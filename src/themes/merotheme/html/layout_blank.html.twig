@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <title>{% block meta_title %}{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include 'partials/theme_colors.html.twig' %}
     <link rel="stylesheet" href="{{ 'build/css/merotheme.css' | asset_url }}">
     <script defer src="{{ 'build/js/merotheme.js' | asset_url }}"></script>
     {{ 'js/api.js' | public_asset_url | script_tag }}

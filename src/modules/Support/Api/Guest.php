@@ -128,7 +128,7 @@ class Guest extends \FOSSBilling\Api\AbstractApi
     public function kb_article_get_list(array $data): array
     {
         $search = $data['search'] ?? null;
-        $cat = $data['kb_article_category_id'] ?? null;
+        $cat = isset($data['kb_article_category_id']) ? (string) $data['kb_article_category_id'] : null;
 
         $pager = $this->getService()->kbSearchArticles('active', $search, $cat, PaginationOptions::fromArray($data));
 

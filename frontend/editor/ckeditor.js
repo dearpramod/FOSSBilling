@@ -16,7 +16,6 @@ import { List } from '@ckeditor/ckeditor5-list/dist/index.js';
 import { Markdown } from '@ckeditor/ckeditor5-markdown-gfm/dist/index.js';
 import { Paragraph } from '@ckeditor/ckeditor5-paragraph/dist/index.js';
 import { PasteFromOffice } from '@ckeditor/ckeditor5-paste-from-office/dist/index.js';
-import { SourceEditing } from '@ckeditor/ckeditor5-source-editing/dist/index.js';
 import { Table, TableToolbar } from '@ckeditor/ckeditor5-table/dist/index.js';
 import { TextTransformation } from '@ckeditor/ckeditor5-typing/dist/index.js';
 
@@ -45,7 +44,6 @@ import '@ckeditor/ckeditor5-link/dist/index.css';
 import '@ckeditor/ckeditor5-list/dist/index.css';
 import '@ckeditor/ckeditor5-markdown-gfm/dist/index.css';
 import '@ckeditor/ckeditor5-paste-from-office/dist/index.css';
-import '@ckeditor/ckeditor5-source-editing/dist/index.css';
 import '@ckeditor/ckeditor5-table/dist/index.css';
 
 class FOSSBillingCKEditor extends ClassicEditor {
@@ -67,7 +65,6 @@ class FOSSBillingCKEditor extends ClassicEditor {
     Markdown,
     Paragraph,
     PasteFromOffice,
-    SourceEditing,
     Strikethrough,
     Table,
     TableToolbar,
@@ -78,7 +75,7 @@ class FOSSBillingCKEditor extends ClassicEditor {
   static defaultConfig = {
     licenseKey: 'GPL',
     toolbar: {
-      items: [ 'undo', 'redo', '|', 'sourceEditing', '|', 'heading', '|',
+      items: [ 'undo', 'redo', '|', 'heading', '|',
         'bold', 'italic', 'underline', 'strikethrough', 'code', '|',
         'bulletedList', 'numberedList', '|', 'link', 'insertTable', 'blockQuote', '|',
         'insertImage', 'imageStyle:inline', 'imageStyle:wrapText', 'imageStyle:breakText'

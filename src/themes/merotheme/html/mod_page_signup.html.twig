@@ -451,13 +451,19 @@
                 </div>
                 {% endif %}
 
-                {# reCAPTCHA #}
-                {% if guest.extension_is_on({'mod': 'spamchecker'}) %}
-                    {% set _rc = guest.spamchecker_recaptcha %}
-                    {% if _rc.enabled and _rc.publickey and _rc.pages.register %}
-                    {% if _rc.version == 3 %}
-                    {# Enterprise: invisible; token injected into hidden field before submit #}
-                    <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
+                {# Captcha (Antispam module) #}
+                {% if guest.extension_is_on({'mod': 'antispam'}) %}
+                    {% set _rc = guest.antispam_recaptcha %}
+                    {% if _rc.enabled %}
+                    {% set _sp = _rc.captcha_provider|default('recaptcha_v2') %}
+                    {% if _sp == 'turnstile' and _rc.turnstile_site_key %}
+                    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                    <div class="cf-turnstile mb-4" data-sitekey="{{ _rc.turnstile_site_key }}"></div>
+                    {% elseif _sp == 'hcaptcha' and _rc.hcaptcha_site_key %}
+                    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+                    <div class="h-captcha mb-4" data-sitekey="{{ _rc.hcaptcha_site_key }}"></div>
+                    {% elseif _sp == 'recaptcha_v3' and _rc.publickey %}
+                    <script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
                     <input type="hidden" name="g-recaptcha-response" id="g-rc-signup">
                     <script>
                     (function(){
@@ -466,8 +472,8 @@
                             if (!form) return;
                             form.addEventListener('submit', function(e){
                                 e.preventDefault();
-                                grecaptcha.enterprise.ready(function(){
-                                    grecaptcha.enterprise.execute('{{ _rc.publickey }}', {action: 'REGISTER'}).then(function(token){
+                                grecaptcha.ready(function(){
+                                    grecaptcha.execute('{{ _rc.publickey }}', {action: 'REGISTER'}).then(function(token){
                                         document.getElementById('g-rc-signup').value = token;
                                         form.submit();
                                     });
@@ -476,7 +482,7 @@
                         });
                     }());
                     </script>
-                    {% else %}
+                    {% elseif _rc.publickey %}
                     <div class="mb-4" style="overflow:hidden;">
                         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                         <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}" style="transform-origin:top left;"></div>

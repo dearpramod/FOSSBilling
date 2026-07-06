@@ -47,9 +47,11 @@
 {% block content %}
 
 {# ── If a specific product is selected, show its order form ── #}
-{% if request.product %}
+{# product may come from the controller (slug route) or from ?product=ID query param #}
+{% if product is not defined and request.product %}
 {% set product = guest.product_get({'id': request.product}) %}
-{% if product %}
+{% endif %}
+{% if product is defined and product %}
 {% set pricing = product.pricing %}
 {% set periods = guest.system_periods %}
 {% set first_period = '' %}
@@ -60,10 +62,17 @@
 {% set _period_months = {'1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36} %}
 
 <div class="ord-srv-detail">
-    <a href="{{ '/order/vps'|url }}" class="inline-flex items-center gap-1.5 text-sm transition-colors mb-6" style="color:#6b7280;" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='#6b7280'">
+    <a href="{{ '/order/vps'|url }}" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark-link-muted transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         Back to Server Plans
     </a>
+    <div class="flex items-end gap-3 mb-6">
+        <h1 class="text-2xl font-bold text-slate-900 ord-srv-heading">{{ product.title }}</h1>
+        <span class="mb-1 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide"
+              style="background:rgba(var(--color-primary-rgb),0.12);color:var(--color-primary);">
+            {{ pricing.type == 'recurrent' ? 'Subscription' : (pricing.type == 'once' ? 'One-time' : 'Free') }}
+        </span>
+    </div>
 
     {# Check for a per-product override first: mod_serviceserver_order_form_{id}.html.twig #}
     {% set service_order_tpl_product = 'mod_service' ~ product.type ~ '_order_form_' ~ product.id ~ '.html.twig' %}
@@ -74,103 +83,120 @@
         {{ include(service_order_tpl) }}
     {% else %}
 
+    {% include 'partial_order_product_component.html.twig' %}
+
     {# ══ Two-column Stitch layout ══ #}
     <div x-data="orderProduct({{ product.id }}, '{{ first_period }}')" class="ord-srv-layout">
 
         {# ═══ LEFT COLUMN ═══ #}
         <div class="ord-srv-main">
 
-            {# Product header card #}
-            <div class="ord-srv-card">
-                <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(var(--color-primary-rgb),0.12);border:1px solid rgba(var(--color-primary-rgb),0.2);">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M5 12H3a9 9 0 0018 0h-2M12 3v2m0 14v2M5 8l1.5 1.5M17.5 8L16 9.5M5 16l1.5-1.5M17.5 16L16 14.5M12 8a4 4 0 100 8 4 4 0 000-8z"/>
-                        </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h2 class="text-xl font-bold text-white leading-tight">{{ product.title }}</h2>
-                        <span class="inline-flex items-center mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold" style="background:rgba(var(--color-primary-rgb),0.15);color:var(--color-primary);">
-                            {{ pricing.type == 'recurrent' ? 'Subscription' : (pricing.type == 'once' ? 'One-time' : 'Free') }}
-                        </span>
-                    </div>
+            {# ── Billing cycle card grid (Stitch) ── #}
+            {% if pricing.type == 'recurrent' %}
+            {% set _period_keys = [] %}
+            {% for code, prices in pricing.recurrent %}{% if prices.enabled %}{% set _period_keys = _period_keys|merge([code]) %}{% endif %}{% endfor %}
+            {% set _best_period = _period_keys|last %}
+            <section class="ord-srv-section-card">
+                <div class="flex items-center justify-between mb-5">
+                    <h3 class="text-base font-semibold ord-srv-heading flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Select billing cycle
+                    </h3>
+                    <span class="text-emerald-600 text-xs font-semibold flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                        Longer plans save more
+                    </span>
                 </div>
-
-                {# Billing period picker #}
-                {% if pricing.type == 'recurrent' %}
-                <div class="mt-5 pt-5" style="border-top:1px solid rgba(255,255,255,0.07);">
-                    <p class="text-xs font-semibold uppercase tracking-wide mb-3" style="color:#6b7280;">Billing Period</p>
-                    <div class="space-y-2.5">
-                        {% for code, prices in pricing.recurrent %}{% if prices.enabled %}
-                        {# Savings % vs monthly #}
-                        {% set _months = _period_months[code] ?? 1 %}
-                        {% set _savings = _base_mo_price > 0 and code != '1M' and _months > 1 ? ((1 - prices.price / (_base_mo_price * _months)) * 100)|round : 0 %}
-                        <div @click="selectedPeriod = '{{ code }}'"
-                             class="ord-srv-period-row cursor-pointer rounded-xl p-4 flex items-center justify-between transition-all select-none"
-                             :class="selectedPeriod === '{{ code }}' ? 'ord-period-active' : 'ord-period-idle'">
-                            <div class="flex items-center gap-3">
-                                <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                                     :class="selectedPeriod === '{{ code }}' ? 'ord-radio-on' : 'ord-radio-off'">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-white transition-transform"
-                                         :class="selectedPeriod === '{{ code }}' ? 'scale-100' : 'scale-0'"></div>
-                                </div>
-                                <div>
-                                    <span class="text-sm font-medium text-white">{{ periods[code] ?? code }}</span>
-                                    {% if prices.setup is defined and prices.setup > 0 %}
-                                    <p class="text-xs mt-0.5" style="color:#6b7280;">+ {{ prices.setup|money_convert }} setup fee</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                {% if _savings > 0 %}
-                                <span class="text-[10px] font-bold px-2 py-0.5 rounded" style="background:#d1fae5;color:#065f46;">Save {{ _savings }}%</span>
-                                {% endif %}
-                                <div class="text-right">
-                                    <span class="text-base font-bold text-white">{{ prices.price|money_convert }}</span>
-                                    <span class="text-xs" style="color:#6b7280;">
-                                        {%- if code == '1M' -%}/mo{%- elseif code == '3M' -%}/qtr{%- elseif code == '6M' -%}/6mo{%- elseif code == '1Y' -%}/yr{%- elseif code == '2Y' -%}/2yr{%- else -%}/{{ code }}{%- endif -%}
-                                    </span>
-                                </div>
-                            </div>
+                <div class="grid grid-cols-2 {% if _period_keys|length >= 3 %}sm:grid-cols-3{% endif %} gap-3">
+                    {% for code, prices in pricing.recurrent %}{% if prices.enabled %}
+                    {% set _months = _period_months[code] ?? 1 %}
+                    {% set _savings = _base_mo_price > 0 and _months > 1 ? ((1 - prices.price / (_base_mo_price * _months)) * 100)|round : 0 %}
+                    {% set _mo_equiv = _months > 1 ? (prices.price / _months)|round(2) : 0 %}
+                    {% set _suffix = code == '1M' ? '/mo' : (code == '3M' ? '/qtr' : (code == '6M' ? '/6mo' : (code == '1Y' ? '/yr' : (code == '2Y' ? '/2yr' : '/3yr')))) %}
+                    <div @click="selectedPeriod = '{{ code }}'"
+                         class="relative flex flex-col p-4 border-2 rounded-xl cursor-pointer transition-all select-none {% if code == _best_period and _period_keys|length > 1 %}mt-3{% endif %}"
+                         :class="selectedPeriod === '{{ code }}' ? 'ord-period-tile-on' : 'ord-period-tile-off'">
+                        {# Best value badge #}
+                        {% if code == _best_period and _period_keys|length > 1 %}
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style="background:#10b981;">Best Value</div>
+                        {% endif %}
+                        {# Radio dot (top-right) #}
+                        <div class="absolute top-3 right-3 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0"
+                             :class="selectedPeriod === '{{ code }}' ? 'ord-radio-tile-on' : 'ord-radio-tile-off'">
+                            <div class="w-2 h-2 rounded-full transition-transform" style="background:var(--color-primary);"
+                                 :class="selectedPeriod === '{{ code }}' ? 'scale-100' : 'scale-0'"></div>
                         </div>
-                        {% endif %}{% endfor %}
+                        {# Period label #}
+                        <div class="mb-4 pr-6">
+                            <span class="text-sm font-medium ord-srv-muted">{{ periods[code] ?? code }}</span>
+                            {% if prices.setup is defined and prices.setup > 0 %}
+                            <p class="text-xs ord-srv-dimmed mt-0.5">+ {{ prices.setup|money_convert }} setup</p>
+                            {% endif %}
+                        </div>
+                        {# Price + mo equiv #}
+                        <div class="mt-auto">
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-xl font-bold ord-srv-heading">{{ prices.price|money_convert }}</span>
+                                <span class="text-xs ord-srv-dimmed">{{ _suffix }}</span>
+                            </div>
+                            {% if _mo_equiv > 0 %}
+                            <div class="text-emerald-600 text-[11px] font-semibold mt-1">{{ _mo_equiv|money_convert }}/mo equiv.</div>
+                            {% endif %}
+                        </div>
                     </div>
+                    {% endif %}{% endfor %}
                 </div>
-                {% elseif pricing.type == 'once' %}
-                <div class="mt-5 pt-5 flex items-center justify-between" style="border-top:1px solid rgba(255,255,255,0.07);">
-                    <span class="text-sm" style="color:#9ca3af;">One-time payment</span>
-                    <span class="text-xl font-bold text-white">{{ pricing.once.price|money_convert }}</span>
-                </div>
-                {% elseif pricing.type == 'free' %}
-                <div class="mt-5 pt-5 flex items-center justify-between" style="border-top:1px solid rgba(255,255,255,0.07);">
-                    <span class="text-sm" style="color:#9ca3af;">Free</span>
-                    <span class="text-xl font-bold" style="color:#34d399;">{{ 0|money_convert }}</span>
-                </div>
-                {% endif %}
+            </section>
+            {% elseif pricing.type == 'once' %}
+            <div class="ord-srv-section-card flex items-center justify-between">
+                <span class="text-sm ord-srv-muted">One-time payment</span>
+                <span class="text-2xl font-bold ord-srv-heading">{{ pricing.once.price|money_convert }}</span>
             </div>
-
-            {# Formbuilder section #}
-            {% if product.form_id is defined and product.form_id and guest.extension_is_on({ 'mod': 'formbuilder' }) %}
-            {% set form = guest.formbuilder_get({ 'id': product.form_id }) %}
-            <div class="ord-srv-card" x-ref="formbuilderSection">
-                {{ include('mod_formbuilder_build.html.twig', ignore_missing: true) }}
+            {% elseif pricing.type == 'free' %}
+            <div class="ord-srv-section-card flex items-center justify-between">
+                <span class="text-sm ord-srv-muted">Free plan</span>
+                <span class="text-2xl font-bold text-emerald-500">{{ 0|money_convert }}</span>
             </div>
             {% endif %}
 
-            {# Add-ons card #}
-            {% if product.addons is defined and product.addons is not empty %}
-            <div class="ord-srv-card">
-                <div class="flex items-center gap-2 mb-4">
-                    <h3 class="font-bold text-white">Optional Add-ons</h3>
-                    <span class="text-xs ml-auto" style="color:#6b7280;">{{ product.addons|length }} available</span>
+            {# ── Custom configuration card (formbuilder) ── #}
+            {% if product.form_id is defined and product.form_id and guest.extension_is_on({ 'mod': 'formbuilder' }) %}
+            {% set form = guest.formbuilder_get({ 'id': product.form_id }) %}
+            <section class="ord-srv-section-card-divided" x-ref="formbuilderSection">
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold ord-srv-heading">Custom Configuration</h4>
+                        <p class="ord-srv-dimmed text-xs mt-0.5">Fill in the details below to configure your order</p>
+                    </div>
                 </div>
-                <div class="space-y-3">
+                <div class="p-6">
+                    {{ include('mod_formbuilder_build.html.twig', ignore_missing: true) }}
+                </div>
+            </section>
+            {% endif %}
+
+            {# ── Optional add-ons card ── #}
+            {% if product.addons is defined and product.addons is not empty %}
+            <section class="ord-srv-section-card-divided">
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold ord-srv-heading">Optional Add-ons</h4>
+                        <p class="ord-srv-dimmed text-xs mt-0.5">{{ product.addons|length }} available</p>
+                    </div>
+                </div>
+                <div class="p-5 space-y-3">
                     {% for i, addon in product.addons %}
                     {% set addon_default_period = '' %}
                     {% if addon.pricing.type == 'recurrent' %}{% for acode, aprices in addon.pricing.recurrent %}{% if addon_default_period == '' and aprices.enabled %}{% set addon_default_period = acode %}{% endif %}{% endfor %}{% endif %}
                     <div @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
-                         class="rounded-xl p-4 border transition-all cursor-pointer"
-                         :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'ord-addon-on' : 'ord-addon-off'">
+                         class="ord-addon-card rounded-xl p-4 transition-all cursor-pointer"
+                         :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'ord-addon-active' : ''">
                         <div class="flex items-start justify-between gap-3">
                             <div class="flex items-start gap-3 flex-1 min-w-0">
                                 <div class="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all"
@@ -179,22 +205,22 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="text-sm font-semibold text-white">{{ addon.title }}</span>
-                                        {% if i == 0 %}<span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider" style="background:rgba(var(--color-primary-rgb),0.15);color:var(--color-primary);">Recommended</span>{% endif %}
+                                        <span class="text-sm font-semibold ord-srv-heading">{{ addon.title }}</span>
+                                        {% if i == 0 %}<span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider" style="background:rgba(var(--color-primary-rgb),0.12);color:var(--color-primary);">Recommended</span>{% endif %}
                                     </div>
-                                    {% if addon.description %}<p class="text-xs mt-1 leading-relaxed" style="color:#6b7280;">{{ addon.description|striptags|slice(0,120) }}{{ addon.description|striptags|length > 120 ? '…' : '' }}</p>{% endif %}
+                                    {% if addon.description %}<p class="text-xs mt-1 leading-relaxed ord-srv-dimmed">{{ addon.description|striptags|slice(0,120) }}{{ addon.description|striptags|length > 120 ? '…' : '' }}</p>{% endif %}
                                 </div>
                             </div>
                             <div class="text-right flex-shrink-0">
                                 {% if addon.pricing.type == 'once' %}
-                                <span class="text-sm font-bold text-white">{{ addon.pricing.once.price | money_convert }}</span>
-                                <span class="text-xs block" style="color:#6b7280;">one-time</span>
+                                <span class="text-sm font-bold ord-srv-heading">{{ addon.pricing.once.price | money_convert }}</span>
+                                <span class="text-xs block ord-srv-dimmed">one-time</span>
                                 {% elseif addon.pricing.type == 'free' %}
-                                <span class="text-sm font-bold" style="color:#34d399;">Free</span>
+                                <span class="text-sm font-bold text-emerald-500">Free</span>
                                 {% elseif addon.pricing.type == 'recurrent' %}
-                                <span class="text-sm font-bold text-white"
+                                <span class="text-sm font-bold ord-srv-heading"
                                       x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : (addonRawPrices['{{ addon.id }}'] && addonRawPrices['{{ addon.id }}']['{{ addon_default_period }}'] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}']['{{ addon_default_period }}']) : '')">{{ addon_default_period ? (addon.pricing.recurrent[addon_default_period].price | money_convert) : '&mdash;' }}</span>
-                                <span class="text-xs block" style="color:#6b7280;"
+                                <span class="text-xs block ord-srv-dimmed"
                                       x-text="'/' + (addonPeriodLabels[selectedPeriod] || addonPeriodLabels['{{ addon_default_period }}'] || '{{ addon_default_period }}')">{{ addon_default_period ? ('/' ~ addon_default_period) : '' }}</span>
                                 {% endif %}
                             </div>
@@ -202,13 +228,15 @@
                     </div>
                     {% endfor %}
                 </div>
-            </div>
+            </section>
             {% endif %}
 
-            {# Error + mobile CTA #}
-            <div x-show="errorMsg" x-cloak class="p-3 rounded-xl" style="border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.05);">
-                <p class="text-sm text-red-400" x-text="errorMsg"></p>
+            {# Error message #}
+            <div x-show="errorMsg" x-cloak class="p-4 rounded-xl border border-red-200 bg-red-50">
+                <p class="text-sm text-red-600" x-text="errorMsg"></p>
             </div>
+
+            {# Mobile CTA #}
             <div class="ord-srv-mobile-cta">
                 <button type="button"
                         @click="addToCart({% if pricing.type == 'free' %}'free'{% elseif pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
@@ -221,115 +249,127 @@
             </div>
         </div>
 
-        {# ═══ RIGHT COLUMN — sticky sidebar ═══ #}
-        <div class="ord-srv-sidebar">
-            <div class="ord-srv-card">
-                <h3 class="font-bold text-xl text-white mb-5">Order Summary</h3>
+        {# ═══ RIGHT COLUMN — sticky white sidebar (Stitch) ═══ #}
+        <div class="ord-srv-sidebar self-start">
+            {% set currency = guest.cart_get_currency %}
+            <div class="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden sticky top-6 ord-srv-sidebar-card">
 
-                {# Line items #}
-                <div class="space-y-2.5 mb-5">
-                    <p class="font-semibold text-sm text-white">{{ product.title }}</p>
-
-                    {% if pricing.type == 'recurrent' %}
-                    <div x-show="selectedPeriod" class="flex items-center justify-between text-sm">
-                        <span style="color:#9ca3af;" x-text="periodLabels[selectedPeriod] + ' billing'">Monthly billing</span>
-                        <span class="font-semibold text-white" x-text="formatMoney(productRawPrices[selectedPeriod] || 0)"></span>
-                    </div>
-                    {% elseif pricing.type == 'once' %}
-                    <div class="flex items-center justify-between text-sm">
-                        <span style="color:#9ca3af;">One-time</span>
-                        <span class="font-semibold text-white">{{ pricing.once.price|money_convert }}</span>
-                    </div>
-                    {% endif %}
-
-                    {% for addon in product.addons ?? [] %}
-                    {% set addon_default_period = '' %}
-                    {% if addon.pricing.type == 'recurrent' %}{% for acode, aprices in addon.pricing.recurrent %}{% if addon_default_period == '' and aprices.enabled %}{% set addon_default_period = acode %}{% endif %}{% endfor %}{% endif %}
-                    <div x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" x-cloak class="flex items-center justify-between text-sm">
-                        <span style="color:#9ca3af;">{{ addon.title }}</span>
-                        {% if addon.pricing.type == 'free' %}
-                        <span class="font-semibold" style="color:#34d399;">Free</span>
-                        {% elseif addon.pricing.type == 'once' %}
-                        <span class="font-semibold text-white">{{ addon.pricing.once.price|money_convert }}</span>
-                        {% else %}
-                        <span class="font-semibold text-white" x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : '—'"></span>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-
-                    <div x-show="couponDiscount > 0" x-cloak class="flex items-center justify-between text-sm pt-2.5" style="border-top:1px solid rgba(255,255,255,0.07);">
-                        <span style="color:#34d399;">Coupon discount</span>
-                        <span class="font-semibold" style="color:#34d399;" x-text="'−' + formatMoney(couponDiscount)"></span>
-                    </div>
+                {# Header row #}
+                <div class="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between ord-srv-sidebar-hd">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Order Summary</span>
+                    <span class="px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-500">{{ currency.code }}</span>
                 </div>
 
-                {# Total #}
-                <div class="pt-4" style="border-top:1px solid rgba(255,255,255,0.07);">
-                    <div class="flex items-baseline justify-between mb-5">
-                        <span class="font-bold text-white">Total due today</span>
-                        <span class="text-2xl font-black text-white" x-text="calcTotal({% if pricing.type == 'once' %}'once'{% elseif pricing.type == 'free' %}'free'{% else %}selectedPeriod || '{{ first_period }}'{% endif %})"></span>
-                    </div>
+                <div class="p-5 space-y-4">
 
-                    {# Coupon code collapsible #}
-                    <div class="mb-4">
-                        <button type="button" @click="couponOpen = !couponOpen; couponError = null"
-                                class="flex items-center gap-1.5 text-sm font-semibold w-full focus:outline-none transition-colors"
-                                :class="couponApplied ? 'text-emerald-400' : ''"
-                                :style="couponApplied ? '' : 'color:var(--color-primary);'">
-                            <template x-if="couponApplied">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            </template>
-                            <template x-if="!couponApplied">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                            </template>
-                            <span x-text="couponApplied ? 'Code saved!' : 'Have a coupon code?'"></span>
-                            <svg class="w-3 h-3 transition-transform duration-200 ml-auto" :class="couponOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
-                        </button>
-                        <div x-show="couponOpen" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="mt-2 flex gap-2">
-                            <input type="text" x-model="couponCode"
-                                   @keydown.enter.prevent="applyCoupon()"
-                                   placeholder="Enter coupon code"
-                                   class="flex-1 min-w-0 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none transition-all"
-                                   style="border:1.5px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);"
-                                   @focus="$el.style.borderColor='var(--color-primary)';$el.style.background='rgba(255,255,255,0.08)'"
-                                   @blur="$el.style.borderColor='rgba(255,255,255,0.1)';$el.style.background='rgba(255,255,255,0.05)'"
-                                   :disabled="couponApplied">
-                            <button type="button" @click="applyCoupon()"
-                                    :disabled="!couponCode.trim() || couponApplied"
-                                    class="flex-shrink-0 px-3 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-50"
-                                    style="background:var(--color-primary);">Apply</button>
+                    {# Line items #}
+                    <div class="space-y-2">
+                        <h5 class="font-bold text-slate-900 text-sm ord-srv-heading">{{ product.title }}</h5>
+
+                        {% if pricing.type == 'recurrent' %}
+                        <div x-show="selectedPeriod" class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 ord-srv-muted" x-text="(periodLabels[selectedPeriod] || selectedPeriod) + ' plan'"></span>
+                            <span class="font-semibold text-slate-900 ord-srv-heading" x-text="formatMoney(productRawPrices[selectedPeriod] || 0)"></span>
                         </div>
-                        <p x-show="couponError" x-cloak x-text="couponError" class="mt-1.5 text-xs text-red-400"></p>
-                        <p x-show="couponApplied && !couponError" x-cloak class="mt-1.5 text-xs font-medium" style="color:#34d399;">Code saved — discount applied at checkout.</p>
+                        <div x-show="!selectedPeriod" class="text-xs text-slate-400 italic">Select a billing period above</div>
+                        {% elseif pricing.type == 'once' %}
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 ord-srv-muted">One-time</span>
+                            <span class="font-semibold text-slate-900 ord-srv-heading">{{ pricing.once.price|money_convert }}</span>
+                        </div>
+                        {% endif %}
+
+                        {% for addon in product.addons ?? [] %}
+                        {% set addon_default_period = '' %}
+                        {% if addon.pricing.type == 'recurrent' %}{% for acode, aprices in addon.pricing.recurrent %}{% if addon_default_period == '' and aprices.enabled %}{% set addon_default_period = acode %}{% endif %}{% endfor %}{% endif %}
+                        <div x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" x-cloak class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 ord-srv-muted">{{ addon.title }}</span>
+                            {% if addon.pricing.type == 'free' %}
+                            <span class="font-semibold text-emerald-500">Free</span>
+                            {% elseif addon.pricing.type == 'once' %}
+                            <span class="font-semibold text-slate-900 ord-srv-heading">{{ addon.pricing.once.price|money_convert }}</span>
+                            {% else %}
+                            <span class="font-semibold text-slate-900 ord-srv-heading" x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : '—'"></span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+
+                        <div x-show="couponDiscount > 0" x-cloak class="flex items-center justify-between text-sm pt-2 border-t border-slate-100">
+                            <span class="text-emerald-600">Coupon discount</span>
+                            <span class="font-semibold text-emerald-600" x-text="'−' + formatMoney(couponDiscount)"></span>
+                        </div>
                     </div>
 
-                    {# CTA button #}
+                    {# Total — Stitch: big 40px font #}
+                    <div class="pt-4 border-t border-slate-100">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Due Today</span>
+                        <div class="text-[2.25rem] leading-none font-black text-slate-900 mt-1 ord-srv-heading"
+                             x-text="calcTotal({% if pricing.type == 'once' %}'once'{% elseif pricing.type == 'free' %}'free'{% else %}selectedPeriod || '{{ first_period }}'{% endif %})"></div>
+                    </div>
+
+                    {# Coupon — always-visible input + Apply button #}
+                    <div class="space-y-2">
+                        <div x-show="!couponApplied" class="flex gap-2">
+                            <div class="relative flex-1 min-w-0">
+                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                <input type="text" x-model="couponCode"
+                                       @keydown.enter.prevent="applyCoupon()"
+                                       @input="couponError = null"
+                                       placeholder="Promo code"
+                                       class="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 border border-slate-200 bg-slate-50 transition-all">
+                            </div>
+                            <button type="button" @click="applyCoupon()"
+                                    :disabled="!couponCode.trim() || couponLoading"
+                                    class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style="background:var(--color-primary);">
+                                <span x-show="!couponLoading">Apply</span>
+                                <span x-show="couponLoading" class="flex items-center">
+                                    <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                </span>
+                            </button>
+                        </div>
+                        <p x-show="couponError" x-cloak x-text="couponError" class="text-xs text-red-500"></p>
+                        <div x-show="couponApplied" x-cloak class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                <span class="text-xs font-mono font-bold text-emerald-700 uppercase tracking-wide" x-text="couponCode"></span>
+                            </div>
+                            <button type="button"
+                                    @click="couponApplied = false; couponDiscount = 0; couponCode = ''; promoType = null; promoValue = 0; promoPeriods = []; couponError = null;"
+                                    class="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium ml-3">Remove</button>
+                        </div>
+                    </div>
+
+                    {# Continue button #}
                     <button type="button"
                             @click="addToCart({% if pricing.type == 'free' %}'free'{% elseif pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
                             :disabled="loading{% if pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
-                            class="w-full py-4 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 20px rgba(var(--color-primary-rgb),0.3);">
+                            class="w-full py-4 rounded-xl text-base font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 8px 24px rgba(var(--color-primary-rgb),0.25);">
                         <span x-show="!loading" class="flex items-center gap-2">
-                            Continue to Checkout
-                            <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                            Continue
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
                         </span>
                         <span x-show="loading" class="flex items-center gap-2">
                             <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                             Adding to cart…
                         </span>
                     </button>
-                </div>
-            </div>
 
-            {# Trust signals #}
-            <div class="flex flex-col gap-3 mt-3 px-1">
-                <div class="flex items-center justify-center gap-2 text-xs font-medium" style="color:#6b7280;">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#34d399;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                    30-day money-back guarantee
+                    {# Guarantee #}
+                    <div class="flex items-center justify-center gap-2 pt-1">
+                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <span class="text-xs font-semibold text-emerald-600">30-day money-back guarantee</span>
+                    </div>
                 </div>
-                <div class="flex items-center justify-center gap-2 text-xs font-medium" style="color:#6b7280;">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                    Instant activation after payment
+
+                {# Footer — terms #}
+                <div class="px-5 py-3 bg-slate-50 border-t border-slate-100 ord-srv-sidebar-ft">
+                    <p class="text-[10px] text-slate-400 text-center leading-relaxed">
+                        By ordering, you agree to our
+                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-slate-500 underline hover:text-indigo-600">Terms of Service</a>
+                        and Privacy Policy. All taxes are calculated at checkout.
+                    </p>
                 </div>
             </div>
         </div>
@@ -583,7 +623,7 @@
 
                             <div class="p-5 pt-0">
                                 <template x-if="!(pricing.type === 'recurrent' || pricing.recurrent) || getPrice(pricing, period) !== null">
-                                    <a href="{{ ('/order/server'|url) ~ '?product=' ~ product.id }}"
+                                    <a href="{{ ('/order/' ~ product.slug)|url }}"
                                        class="block w-full text-center py-2.5 rounded-xl text-sm font-semibold transition-all
                                               {% if i == 1 %}text-white hover:opacity-90{% else %}bg-white/5 hover:bg-indigo-500/15 text-gray-300 hover:text-white border border-white/10 hover:border-indigo-500/30{% endif %}"
                                        {% if i == 1 %}style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));"{% endif %}>
@@ -804,16 +844,48 @@
 .ord-srv-detail { max-width: 1100px; margin: 0 auto; }
 .ord-srv-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: start; }
 .ord-srv-main { display: flex; flex-direction: column; gap: 1.25rem; }
-.ord-srv-sidebar { }
+/* Sidebar column: self-start so sticky on inner card works */
+.ord-srv-sidebar { align-self: start; }
 /* Base card — white bg + subtle border in light; near-transparent in dark */
 .ord-srv-card { border-radius: 1rem; border: 1px solid rgba(0,0,0,0.09); background: #fff; padding: 1.5rem; }
 [data-theme="dark"] .ord-srv-card { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.025); }
-/* Section card (no padding, overflow hidden for header/body split) */
-.ord-section-card { border-radius: 1rem; overflow: hidden; border: 1px solid rgba(0,0,0,0.09); background: #fff; }
-[data-theme="dark"] .ord-section-card { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.025); }
-.ord-section-header { padding: 1rem 1.25rem; border-bottom: 1px solid rgba(0,0,0,0.07); }
-[data-theme="dark"] .ord-section-header { border-bottom-color: rgba(255,255,255,0.06); }
-.ord-section-body { padding: 1.25rem; }
+
+/* ── Semantic color tokens ── */
+.ord-srv-heading { color: #0f172a; }
+.ord-srv-muted   { color: #64748b; }
+.ord-srv-dimmed  { color: #94a3b8; }
+[data-theme="dark"] .ord-srv-heading { color: #f1f5f9; }
+[data-theme="dark"] .ord-srv-muted   { color: #94a3b8; }
+[data-theme="dark"] .ord-srv-dimmed  { color: #64748b; }
+
+/* ── Section cards — Stitch white cards ── */
+.ord-srv-section-card { background: #fff; border: 1px solid rgba(0,0,0,0.09); border-radius: 1rem; padding: 1.5rem; }
+[data-theme="dark"] .ord-srv-section-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+
+/* Divided section card (slate-50 header bar + content body) */
+.ord-srv-section-card-divided { background: #fff; border: 1px solid rgba(0,0,0,0.09); border-radius: 1rem; overflow: hidden; }
+[data-theme="dark"] .ord-srv-section-card-divided { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+.ord-srv-section-hd { background: #f8fafc; border-bottom: 1px solid rgba(0,0,0,0.07); padding: 1rem 1.25rem; }
+[data-theme="dark"] .ord-srv-section-hd { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.06); }
+
+/* ── Billing period tile cards ── */
+.ord-period-tile-on  { border-color: var(--color-primary) !important; background: rgba(var(--color-primary-rgb),0.06) !important; }
+.ord-period-tile-off { border-color: rgba(0,0,0,0.12); background: #fff; }
+.ord-period-tile-off:hover { border-color: rgba(0,0,0,0.25); background: #f8fafc; }
+[data-theme="dark"] .ord-period-tile-off { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); }
+[data-theme="dark"] .ord-period-tile-off:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); }
+
+/* Radio dot states on period tiles */
+.ord-radio-tile-on  { border-color: var(--color-primary); }
+.ord-radio-tile-off { border-color: rgba(0,0,0,0.25); }
+[data-theme="dark"] .ord-radio-tile-off { border-color: rgba(255,255,255,0.3); }
+
+/* ── Sidebar white card (Stitch-style) + dark mode overrides ── */
+.ord-srv-sidebar-card { background: #fff; }
+[data-theme="dark"] .ord-srv-sidebar-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+[data-theme="dark"] .ord-srv-sidebar-hd { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .ord-srv-sidebar-ft { background: rgba(255,255,255,0.03); border-top-color: rgba(255,255,255,0.06); }
+
 /* Add-on cards */
 .ord-addon-card { border: 1.5px solid rgba(0,0,0,0.1); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: transparent; }
 .ord-addon-card:hover { border-color: rgba(0,0,0,0.22); }
@@ -824,20 +896,10 @@
 .ord-chk-on { border-color: var(--color-primary); background: var(--color-primary); }
 .ord-chk-off { border-color: rgba(0,0,0,0.25); background: transparent; }
 [data-theme="dark"] .ord-chk-off { border-color: rgba(255,255,255,0.3); }
-/* Billing period card */
-.ord-period-card { border-radius: 1rem; border: 1px solid rgba(0,0,0,0.09); background: #fff; padding: 1.25rem; }
-[data-theme="dark"] .ord-period-card { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.025); }
-/* Period selector dropdown */
-.ord-period-select { border: 2px solid var(--color-primary); border-radius: 0.5rem; background: rgba(var(--color-primary-rgb),0.06); color: inherit; font-size: 0.875rem; font-weight: 600; padding: 0.625rem 2.25rem 0.625rem 0.875rem; min-width: 180px; outline: none; appearance: none; cursor: pointer; }
-[data-theme="dark"] .ord-period-select { background: rgba(255,255,255,0.06); }
-/* Sidebar summary card */
-.ord-summary-card { border-radius: 1rem; border: 1px solid rgba(0,0,0,0.09); background: #fff; overflow: hidden; }
-[data-theme="dark"] .ord-summary-card { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
 /* Mobile CTA */
 .ord-srv-mobile-cta { display: block; }
 @media (min-width: 1024px) {
   .ord-srv-layout { grid-template-columns: 1fr 380px; gap: 2rem; }
-  .ord-srv-sidebar { position: sticky; top: 6rem; }
   .ord-srv-mobile-cta { display: none; }
 }
 /* ── Formbuilder field styles (order form) ── */
@@ -944,280 +1006,5 @@
     }
 }());
 </script>
-{% if request.product and product %}
-{% if not guest.system_template_exists({ 'file': 'mod_service' ~ product.type ~ '_order_form.html.twig' }) %}
-{% autoescape false %}
-<script>
-function orderProduct(productId, defaultPeriod) {
-    return {
-        productId: productId,
-        selectedPeriod: defaultPeriod || null,
-        loading: false,
-        errorMsg: null,
-        addons: {},
-        couponCode: '',
-        couponApplied: false,
-        couponDiscount: 0,
-        couponOpen: false,
-        couponError: null,
-        couponLoading: false,
-        promoType: null,
-        promoValue: 0,
-        promoPeriods: [],
-        periodLabels: { '1W': 'Weekly', '1M': 'Monthly', '3M': '3-Month', '6M': '6-Month', '1Y': 'Annual', '2Y': '2-Year', '3Y': '3-Year' },
-        addonPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _pf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _pf %}, {% endif %}'{{ code }}': '{{ prices.price | money_convert }}'{% set _pf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonPricingTypes: {
-            {% for addon in product.addons %}
-            '{{ addon.id }}': '{{ addon.pricing.type }}',
-            {% endfor %}
-        },
-        addonPeriodLabels: { '1W': 'week', '1M': 'mo', '3M': 'qtr', '6M': '6mo', '1Y': 'yr', '2Y': '2yr', '3Y': '3yr' },
 
-        addonRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _rf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _rf %}, {% endif %}'{{ code }}': {{ prices.price|default(0) }}{% set _rf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonOnceRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'once' %}
-            '{{ addon.id }}': {{ addon.pricing.once.price|default(0) }},
-            {% endif %}{% endfor %}
-        },
-        productRawPrices: {
-            {% if product.pricing.type == 'recurrent' %}{% for code, prices in product.pricing.recurrent %}{% if prices.enabled %}'{{ code }}': {{ prices.price|default(0) }}, {% endif %}{% endfor %}{% endif %}
-        },
-        productOnceRawPrice: {% if product.pricing.type == 'once' %}{{ product.pricing.once.price|default(0) }}{% else %}0{% endif %},
-        currencyRate: {{ currency.conversion_rate|default(1) }},
-        currencyPriceFormat: {{ currency.price_format|default(2)|json_encode(constant('JSON_HEX_TAG'))|raw }},
-        currencyFormat: {{ (currency.symbol|default(currency.code|default('')) ~ '__PRICE__')|json_encode(constant('JSON_HEX_TAG'))|raw }},
-
-        formatMoney(rawPrice) {
-            const p = parseFloat(rawPrice) * this.currencyRate;
-            const fmt = parseInt(this.currencyPriceFormat);
-            let s;
-            const addThousands = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-            if (fmt === 1) {
-                s = p.toFixed(2);
-            } else if (fmt === 2) {
-                const pts = p.toFixed(2).split('.');
-                pts[0] = addThousands(pts[0], ',');
-                s = pts.join('.');
-            } else if (fmt === 3) {
-                const pts = p.toFixed(2).split('.');
-                pts[0] = addThousands(pts[0], '.');
-                s = pts.join(',');
-            } else if (fmt === 4) {
-                s = addThousands(Math.round(p).toString(), ',');
-            } else if (fmt === 5) {
-                s = Math.round(p).toString();
-            } else {
-                const pts = p.toFixed(2).split('.');
-                pts[0] = addThousands(pts[0], ',');
-                s = pts.join('.');
-            }
-            return this.currencyFormat.replace('__PRICE__', s);
-        },
-
-        calcTotal(period) {
-            if (!period) return '';
-            let base = 0;
-            if (period === 'once') {
-                base = this.productOnceRawPrice;
-            } else if (period && this.productRawPrices[period] !== undefined) {
-                base = this.productRawPrices[period];
-            }
-            Object.entries(this.addons).forEach(([id, state]) => {
-                if (!state.selected) return;
-                const type = this.addonPricingTypes[id];
-                if (type === 'recurrent') {
-                    const addonPeriod = state.period || period;
-                    if (this.addonRawPrices[id] && this.addonRawPrices[id][addonPeriod] !== undefined) {
-                        base += this.addonRawPrices[id][addonPeriod];
-                    }
-                } else if (type === 'once') {
-                    if (this.addonOnceRawPrices[id] !== undefined) {
-                        base += this.addonOnceRawPrices[id];
-                    }
-                }
-            });
-            // Apply promo discount if code is validated and period is not restricted
-            let discount = 0;
-            if (this.couponApplied && this.promoType && base > 0) {
-                const periodOk = this.promoPeriods.length === 0 || period === 'once' || this.promoPeriods.includes(period);
-                if (periodOk) {
-                    if (this.promoType === 'percentage') {
-                        discount = Math.round(base * this.promoValue / 100 * 100) / 100;
-                    } else if (this.promoType === 'absolute') {
-                        discount = Math.min(this.promoValue, base);
-                    }
-                }
-            }
-            this.couponDiscount = discount;
-            return this.formatMoney(Math.max(0, base - discount));
-        },
-
-        init() {
-            if (!this.selectedPeriod) {
-                const firstRadio = this.$el.querySelector('input[name="period"]');
-                if (firstRadio) {
-                    this.selectedPeriod = firstRadio.value;
-                }
-            }
-            const addonIds = Object.keys(this.addonPricingTypes);
-            addonIds.forEach(id => {
-                const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                const resolve = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                if (!this.addons[id]) {
-                    this.addons[id] = { selected: false, period: resolve(this.selectedPeriod || '') };
-                }
-            });
-            this.$watch('selectedPeriod', (v) => {
-                addonIds.forEach(id => {
-                    const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                    const resolve = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                    if (this.addons[id]) this.addons[id].period = resolve(v || '');
-                });
-            });
-        },
-
-        applyCoupon() {
-            const code = this.couponCode.trim();
-            if (!code || this.couponLoading || this.couponApplied) return;
-            this.couponLoading = true;
-            this.couponError   = null;
-            API.guest.post('cart/validate_promo', { promocode: code, product_id: this.productId, period: this.selectedPeriod || '' },
-                (promo) => {
-                    this.couponLoading = false;
-                    this.couponApplied = true;
-                    this.promoType     = promo.type    || null;
-                    this.promoValue    = promo.value   || 0;
-                    this.promoPeriods  = promo.periods || [];
-                },
-                (err) => {
-                    this.couponLoading = false;
-                    this.couponApplied = false;
-                    this.couponError   = err.message || 'Invalid promo code.';
-                }
-            );
-        },
-
-        toggleAddon(addonId, pricingType) {
-            const key = String(addonId);
-            if (!this.addons[key]) {
-                let addonPeriod = '';
-                if (pricingType === 'recurrent' || this.addonPricingTypes[key] === 'recurrent') {
-                    const enabledPeriods = this.addonPrices[key] ? Object.keys(this.addonPrices[key]) : [];
-                    if (this.selectedPeriod && enabledPeriods.includes(this.selectedPeriod)) {
-                        addonPeriod = this.selectedPeriod;
-                    } else if (enabledPeriods.length > 0) {
-                        addonPeriod = enabledPeriods[0];
-                    }
-                }
-                this.addons[key] = { selected: false, period: addonPeriod };
-            }
-            this.addons[key].selected = !this.addons[key].selected;
-        },
-
-        addToCart(period) {
-            if (!period) return;
-            this.loading = true;
-            this.errorMsg = null;
-
-            const data = { id: this.productId, multiple: 1 };
-            if (period !== 'once' && period !== 'free') {
-                data.period = period;
-            }
-
-            // Collect formbuilder fields if present
-            const fbSection = this.$refs.formbuilderSection;
-            if (fbSection) {
-                const inputs = fbSection.querySelectorAll('input[name], select[name], textarea[name]');
-                inputs.forEach(el => {
-                    if (el.name === 'form_id' || el.name === 'id') {
-                        data[el.name] = el.value;
-                    } else if (el.type === 'checkbox') {
-                        if (!data[el.name]) data[el.name] = [];
-                        if (el.checked) data[el.name].push(el.value);
-                    } else if (el.type === 'radio') {
-                        if (el.checked) data[el.name] = el.value;
-                    } else {
-                        data[el.name] = el.value;
-                    }
-                });
-                const required = fbSection.querySelectorAll('[required]');
-                for (const el of required) {
-                    if (!el.value || !el.value.trim()) {
-                        this.loading = false;
-                        this.errorMsg = 'Please fill in all required fields.';
-                        el.focus();
-                        return;
-                    }
-                }
-            }
-
-            // Attach selected addons
-            const addonPayload = {};
-            let hasAddons = false;
-            Object.entries(this.addons).forEach(([id, state]) => {
-                addonPayload[id] = { selected: state.selected };
-                if (state.selected) {
-                    if (this.addonPricingTypes[id] === 'recurrent') {
-                        let addonPeriod = state.period;
-                        if (!addonPeriod) {
-                            const enabledPeriods = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                            if (period && enabledPeriods.includes(period)) {
-                                addonPeriod = period;
-                            } else if (enabledPeriods.length > 0) {
-                                addonPeriod = enabledPeriods[0];
-                            }
-                        }
-                        if (!addonPeriod) {
-                            this.loading = false;
-                            this.errorMsg = 'Selected add-on has no valid billing period. Please deselect it or contact support.';
-                            return;
-                        }
-                        addonPayload[id].period = addonPeriod;
-                    } else if (state.period) {
-                        addonPayload[id].period = state.period;
-                    }
-                }
-                hasAddons = true;
-            });
-            if (hasAddons) {
-                data.addons = addonPayload;
-            }
-
-            API.guest.post('cart/add_item', data,
-                (response) => {
-                    document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
-                    const goCheckout = () => { window.location.href = '{{ "/order/checkout"|url }}'; };
-                    if (this.couponCode && this.couponApplied) {
-                        API.guest.post('cart/apply_promo', { promocode: this.couponCode },
-                            goCheckout,
-                            (err) => {
-                                this.loading = false;
-                                this.couponApplied = false;
-                                this.couponError   = err.message || 'Promo code could not be applied.';
-                            }
-                        );
-                    } else {
-                        goCheckout();
-                    }
-                },
-                (error) => {
-                    this.loading = false;
-                    this.errorMsg = error.message || 'Failed to add to cart. Please try again.';
-                }
-            );
-        }
-    }
-}
-</script>
-{% endautoescape %}
-{% endif %}
-{% endif %}
 {% endblock %}

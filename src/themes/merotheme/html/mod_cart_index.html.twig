@@ -7,6 +7,32 @@
 {% set currentCurrency = guest.cart_get_currency %}
 
 {% block content %}
+<script>
+function cartPage() {
+    return {
+        showLogin: false,
+        loginEmail: '',
+        loginPassword: '',
+        loginLoading: false,
+        loginError: '',
+        init() {},
+        submitLogin() {
+            const self = this;
+            self.loginLoading = true;
+            self.loginError = '';
+            API.guest.post(
+                'client/login',
+                { email: self.loginEmail, password: self.loginPassword },
+                function () { location.reload(); },
+                function (err) {
+                    self.loginLoading = false;
+                    self.loginError = err.message || 'Invalid email or password.';
+                }
+            );
+        }
+    };
+}
+</script>
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="cartPage()" x-init="init()">
 
     {# ── Page header ── #}
@@ -407,31 +433,6 @@
 
 {% block js %}
 <script>
-function cartPage() {
-    return {
-        showLogin: false,
-        loginEmail: '',
-        loginPassword: '',
-        loginLoading: false,
-        loginError: '',
-        init() {},
-        submitLogin() {
-            const self = this;
-            self.loginLoading = true;
-            self.loginError = '';
-            API.guest.post(
-                'client/login',
-                { email: self.loginEmail, password: self.loginPassword },
-                function () { location.reload(); },
-                function (err) {
-                    self.loginLoading = false;
-                    self.loginError = err.message || 'Invalid email or password.';
-                }
-            );
-        }
-    };
-}
-
 // Exposed globally so inline onclick handlers can reach it
 function cartPage_removeItem(itemId) {
     API.guest.post('cart/remove_item', { id: itemId }, function () {

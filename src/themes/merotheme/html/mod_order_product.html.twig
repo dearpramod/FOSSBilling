@@ -14,7 +14,7 @@
 <div class="max-w-3xl mx-auto">
 
     {# Back link #}
-    <a href="{{ 'order'|url }}/{{ product.id }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-400 transition-colors mb-6">
+    <a href="{{ 'order'|url }}/{{ product.id }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:opacity-70 transition-colors mb-6">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         Back to product
     </a>
@@ -72,7 +72,7 @@
             {% endif %}
             <div class="flex justify-between text-sm font-semibold pt-2 border-t border-white/5">
                 <span class="text-white">Total</span>
-                <span class="text-indigo-400 text-base">{{ cart.total | money_convert }}</span>
+                <span class="text-base font-bold" style="color:var(--color-secondary);">{{ cart.total | money_convert }}</span>
             </div>
         </div>
     </div>
@@ -96,7 +96,7 @@
                 Sign In
             </button>
             <button @click="showSignup = true; showLogin = false"
-                    class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-300 hover:text-white border border-white/10 hover:border-indigo-500/30 hover:bg-white/5 transition-all">
+                    class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-300 hover:text-white border border-white/10 hover:border-white/30 hover:bg-white/5 transition-all">
                 Create Account
             </button>
         </div>
@@ -126,17 +126,17 @@
                                 <label class="block text-sm font-medium text-gray-300 mb-1.5">Email address</label>
                                 <input type="email" x-model="email" required autofocus
                                        placeholder="you@example.com"
-                                       class="w-full px-4 py-3 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                       class="w-full px-4 py-3 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                        style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                             </div>
                             <div>
                                 <div class="flex items-center justify-between mb-1.5">
                                     <label class="block text-sm font-medium text-gray-300">Password</label>
-                                    <a href="{{ 'password-reset'|url }}" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Forgot?</a>
+                                    <a href="{{ 'password-reset'|url }}" target="_blank" class="text-xs transition-colors hover:opacity-80" style="color:var(--color-secondary);">Forgot?</a>
                                 </div>
                                 <input type="password" x-model="password" required
                                        placeholder="••••••••"
-                                       class="w-full px-4 py-3 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                       class="w-full px-4 py-3 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                        style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                             </div>
                             <div x-show="authError" x-cloak class="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
@@ -156,7 +156,7 @@
 
                     <p class="text-xs text-gray-500 text-center mt-4">
                         Don't have an account?
-                        <button @click="showLogin = false; showSignup = true" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Create one</button>
+                        <button @click="showLogin = false; showSignup = true" class="font-medium transition-colors hover:opacity-80" style="color:var(--color-secondary);">Create one</button>
                     </p>
                 </div>
             </div>
@@ -186,13 +186,13 @@
                                 <div>
                                     <label class="block text-xs font-medium text-gray-300 mb-1.5">First Name</label>
                                     <input type="text" x-model="regFirstName" required
-                                           class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                           class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                            style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-gray-300 mb-1.5">Last Name</label>
                                     <input type="text" x-model="regLastName" required
-                                           class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                           class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                            style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                                 </div>
                             </div>
@@ -200,20 +200,20 @@
                                 <label class="block text-xs font-medium text-gray-300 mb-1.5">Email address</label>
                                 <input type="email" x-model="regEmail" required
                                        placeholder="you@example.com"
-                                       class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                       class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                        style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-300 mb-1.5">Password</label>
                                 <input type="password" x-model="regPassword" required minlength="8"
                                        placeholder="Minimum 8 characters"
-                                       class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                       class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                        style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-300 mb-1.5">Confirm Password</label>
                                 <input type="password" x-model="regPasswordConfirm" required minlength="8"
-                                       class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:ring-offset-0 transition-all"
+                                       class="w-full px-3.5 py-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 transition-all"
                                        style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
                             </div>
                             <div x-show="authError" x-cloak class="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
@@ -233,7 +233,7 @@
 
                     <p class="text-xs text-gray-500 text-center mt-4">
                         Already have an account?
-                        <button @click="showSignup = false; showLogin = true" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Sign in</button>
+                        <button @click="showSignup = false; showLogin = true" class="font-medium transition-colors hover:opacity-80" style="color:var(--color-secondary);">Sign in</button>
                     </p>
                 </div>
             </div>
@@ -264,12 +264,14 @@
                 {% for gtw in gateways %}
                     {% if cart.currency.code in gtw.accepted_currencies %}
                     <label class="flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all"
-                           :class="selectedGateway == '{{ gtw.id }}' ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-white/[0.07] hover:border-white/20'"
-                           style="background: rgba(255,255,255,0.015);">
+                           :class="selectedGateway == '{{ gtw.id }}' ? '' : 'border-white/[0.07] hover:border-white/20'"
+                           :style="selectedGateway == '{{ gtw.id }}' ? 'background:rgba(var(--color-primary-rgb),0.08); border-color:var(--color-primary);' : 'background:rgba(255,255,255,0.015);'">
                         <input type="radio" name="gateway_id" value="{{ gtw.id }}" x-model="selectedGateway" class="hidden">
                         <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                             :class="selectedGateway == '{{ gtw.id }}' ? 'border-indigo-500' : 'border-white/30'">
-                            <div class="w-2 h-2 rounded-full bg-indigo-500 transition-all" :class="selectedGateway == '{{ gtw.id }}' ? 'opacity-100' : 'opacity-0'"></div>
+                             :class="selectedGateway == '{{ gtw.id }}' ? '' : 'border-white/30'"
+                             :style="selectedGateway == '{{ gtw.id }}' ? 'border-color:var(--color-secondary);' : ''">
+                            <div class="w-2 h-2 rounded-full transition-all" :class="selectedGateway == '{{ gtw.id }}' ? 'opacity-100' : 'opacity-0'"
+                                 style="background:var(--color-secondary);"></div>
                         </div>
                         <span class="text-sm text-white">{{ gtw.title }}</span>
                     </label>
@@ -297,8 +299,8 @@
 
             <p class="text-xs text-gray-600 text-center mt-3">
                 By completing your order, you agree to our
-                <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank" class="text-gray-500 hover:text-indigo-400">Terms of Service</a>
-                and <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}" target="_blank" class="text-gray-500 hover:text-indigo-400">Privacy Policy</a>.
+                <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank" class="text-gray-500 hover:opacity-70">Terms of Service</a>
+                and <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}" target="_blank" class="text-gray-500 hover:opacity-70">Privacy Policy</a>.
             </p>
         </div>
     </div>
@@ -332,12 +334,13 @@
 {% else %}
     {% set first_period = '' %}
 {% endif %}
+{% include 'partial_order_product_component.html.twig' %}
 <div x-data="orderProduct({{ product.id }}, '{{ first_period }}')" class="max-w-4xl mx-auto">
 
     {% if product.type == 'hosting' %}
 
     {# ── Hosting: screenshot-style sidebar layout ── #}
-    <a href="{{ 'order'|url }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-400 transition-colors mb-4">
+    <a href="{{ 'order'|url }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:opacity-70 transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         Back to Plans
     </a>
@@ -350,123 +353,161 @@
         <div class="lg:col-span-2 space-y-5">
             {{ include('mod_servicehosting_order_form.html.twig') }}
         </div>
-        {# ── Order Summary Sidebar ── #}
-        <div class="lg:col-span-1">
-            <div class="rounded-2xl border border-white/[0.07] overflow-hidden sticky top-6" style="background:rgba(255,255,255,0.02);">
-                <div class="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Order Summary</p>
-                    {% set currency = guest.cart_get_currency %}
-                    <span class="inline-flex items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-xs font-bold text-gray-300">{{ currency.code }}</span>
+        {# ── Order Summary Sidebar (Stitch-style white card) ── #}
+        <div class="lg:col-span-1 self-start">
+            {% set currency = guest.cart_get_currency %}
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-lg p-6 sticky top-6 space-y-5">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-bold text-slate-900">Order summary</h2>
+                    <span class="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-500">{{ currency.code }}</span>
                 </div>
-                <div class="p-5 space-y-4">
-                    <p class="text-sm font-bold text-white">{{ product.title }}</p>
 
-                    {# Period pricing row #}
-                    {% if product.pricing.type == 'recurrent' %}
+                {# Line items #}
+                <div class="space-y-3">
                     <div>
+                        <p class="font-semibold text-slate-900 text-sm mb-2">{{ product.title }}</p>
+                        {% if product.pricing.type == 'recurrent' %}
                         {% for code, prices in product.pricing.recurrent %}{% if prices.enabled %}
                         <div x-show="selectedPeriod === '{{ code }}'" class="flex items-start justify-between gap-2">
-                            <p class="text-sm text-gray-400">{{ periods[code] ?? code }} plan</p>
+                            <span class="text-sm text-slate-500">{{ periods[code] ?? code }}</span>
                             <div class="text-right">
-                                {% if prices.setup > 0 %}<p class="text-xs text-gray-600 line-through">{{ (prices.price + prices.setup) | money_convert }}</p>{% endif %}
-                                <p class="text-sm font-semibold text-white">{{ prices.price | money_convert }}</p>
+                                {% if prices.setup > 0 %}<p class="text-xs text-slate-400 line-through">{{ (prices.price + prices.setup) | money_convert }}</p>{% endif %}
+                                <span class="text-sm font-semibold text-slate-900">{{ prices.price | money_convert }}</span>
                             </div>
                         </div>
                         {% endif %}{% endfor %}
-                        <div x-show="!selectedPeriod" class="text-sm text-gray-600 italic">Select a billing period above</div>
-                    </div>
-                    {% elseif product.pricing.type == 'once' %}
-                    <div class="flex items-center justify-between gap-2">
-                        <p class="text-sm text-gray-400">One-time payment</p>
-                        <p class="text-sm font-semibold text-white">{{ product.pricing.once.price | money_convert }}</p>
-                    </div>
-                    {% endif %}
-
-                    <div class="flex items-center justify-between gap-2">
-                        <p class="text-sm text-gray-400">Domain name</p>
-                        <p class="text-sm text-gray-500">&mdash;</p>
-                    </div>
-
-                    <div class="border-t border-white/[0.06] pt-4 space-y-1">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Total due today</p>
-                        {% if product.pricing.type == 'recurrent' %}
-                        <p class="text-2xl font-bold text-white" x-show="selectedPeriod" x-text="calcTotal(selectedPeriod)"></p>
+                        <div x-show="!selectedPeriod" class="text-xs text-slate-400 italic">Select a billing period</div>
                         {% elseif product.pricing.type == 'once' %}
-                        <p class="text-2xl font-bold text-white" x-text="calcTotal('once')">{{ product.pricing.once.price | money_convert }}</p>
-                        {% else %}
-                        <p class="text-2xl font-bold text-emerald-400">Free</p>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm text-slate-500">One-time</span>
+                            <span class="text-sm font-semibold text-slate-900">{{ product.pricing.once.price | money_convert }}</span>
+                        </div>
                         {% endif %}
-                        <div x-show="couponDiscount > 0" x-cloak class="flex items-center gap-1.5 mt-1">
-                            <svg class="w-3 h-3 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                            <span class="text-xs text-emerald-400" x-text="'Coupon: −' + formatMoney(couponDiscount)"></span>
-                        </div>
                     </div>
 
-                    {# Coupon code #}
-                    {% if product.pricing.type != 'free' %}
-                    <div>
-                        <button type="button" @click="couponOpen = !couponOpen; couponError = null"
-                                class="flex items-center gap-1.5 text-sm font-semibold focus:outline-none transition-colors w-full"
-                                :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:text-indigo-400'">
-                            <template x-if="couponApplied">
-                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            </template>
-                            <template x-if="!couponApplied">
-                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                            </template>
-                            <span x-text="couponApplied ? 'Code saved!' : 'Have a coupon code?'"></span>
-                            <svg class="w-3.5 h-3.5 transition-transform duration-200 ml-auto flex-shrink-0" :class="couponOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-sm text-slate-500">Domain name</span>
+                        <span class="text-sm text-slate-400" id="sidebar-domain-label">&mdash;</span>
+                    </div>
+                </div>
+
+                <hr class="border-slate-100">
+
+                {# Taxes row #}
+                {% if client and client.client_is_taxable %}
+                {% set tax_rate = client.invoice_get_tax_rate %}
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-sm text-slate-500 flex items-center gap-1">
+                        Taxes
+                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </span>
+                    <span class="text-sm font-semibold text-slate-900">{{ tax_rate }}%</span>
+                </div>
+                <hr class="border-slate-100">
+                {% endif %}
+
+                {# Total #}
+                <div class="flex items-end justify-between">
+                    <span class="text-base font-bold text-slate-900">Total</span>
+                    <div class="text-right">
+                        {% if product.pricing.type == 'recurrent' %}
+                        <p class="text-2xl font-bold text-slate-900" x-show="selectedPeriod" x-text="calcTotal(selectedPeriod)"></p>
+                        <p class="text-sm italic text-slate-400" x-show="!selectedPeriod">—</p>
+                        {% elseif product.pricing.type == 'once' %}
+                        <p class="text-2xl font-bold text-slate-900" x-text="calcTotal('once')">{{ product.pricing.once.price | money_convert }}</p>
+                        {% else %}
+                        <p class="text-2xl font-bold text-emerald-600">Free</p>
+                        {% endif %}
+                        <div x-show="couponDiscount > 0" x-cloak class="flex items-center justify-end gap-1 mt-1">
+                            <svg class="w-3 h-3 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <span class="text-xs text-emerald-600 font-medium" x-text="'−' + formatMoney(couponDiscount)"></span>
+                        </div>
+                    </div>
+                </div>
+
+                {# Coupon code — always-visible input + Apply button #}
+                {% if product.pricing.type != 'free' %}
+                <div class="space-y-2">
+                    {# Input row: hidden once applied #}
+                    <div x-show="!couponApplied" class="flex gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                            <input type="text" x-model="couponCode"
+                                   @keydown.enter.prevent="applyCoupon()"
+                                   @input="couponError = null"
+                                   placeholder="Promo code"
+                                   class="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-white/20 border border-slate-200 bg-slate-50 transition-all">
+                        </div>
+                        <button type="button" @click="applyCoupon()"
+                                :disabled="!couponCode.trim() || couponLoading"
+                                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                style="background:var(--color-primary);">
+                            <span x-show="!couponLoading">Apply</span>
+                            <span x-show="couponLoading" class="flex items-center">
+                                <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            </span>
                         </button>
-                        <div x-show="couponOpen" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="mt-2.5">
-                            <div class="flex gap-2">
-                                <input type="text" x-model="couponCode" @keydown.enter.prevent="applyCoupon()" placeholder="Enter coupon code"
-                                       class="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none transition-all"
-                                       style="border: 1.5px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);"
-                                       @focus="$el.style.borderColor='var(--color-primary)'; $el.style.background='rgba(255,255,255,0.08)'"
-                                       @blur="$el.style.borderColor='rgba(255,255,255,0.1)'; $el.style.background='rgba(255,255,255,0.05)'"
-                                       :disabled="couponApplied">
-                                <button type="button" @click="applyCoupon()" :disabled="!couponCode.trim() || couponLoading || couponApplied"
-                                        class="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style="background: var(--color-primary); color:#fff;">
-                                    <span x-show="!couponLoading && !couponApplied">Apply</span>
-                                    <span x-show="couponLoading" class="flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                                    </span>
-                                    <span x-show="couponApplied"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></span>
-                                </button>
-                            </div>
-                            <p x-show="couponError" x-cloak x-text="couponError" class="mt-1.5 text-xs text-red-400"></p>
-                            <p x-show="couponApplied" x-cloak class="mt-1.5 text-xs text-emerald-400 font-medium flex items-center gap-1">
-                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                Code saved — discount applied at checkout.
-                            </p>
+                    </div>
+                    {# Error message #}
+                    <p x-show="couponError" x-cloak x-text="couponError" class="text-xs text-red-500 flex items-center gap-1">
+                    </p>
+                    {# Applied state: pill badge + Remove link #}
+                    <div x-show="couponApplied" x-cloak class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <span class="text-xs font-mono font-bold text-emerald-700 uppercase tracking-wide" x-text="couponCode"></span>
                         </div>
+                        <button type="button"
+                                @click="couponApplied = false; couponDiscount = 0; couponCode = ''; promoType = null; promoValue = 0; promoPeriods = []; couponError = null;"
+                                class="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium ml-3">
+                            Remove
+                        </button>
                     </div>
-                    {% endif %}
+                </div>
+                {% endif %}
 
-                    {# Continue button #}
-                    <button type="button"
-                            @click="addToCart({% if product.pricing.type == 'free' %}'free'{% elseif product.pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
-                            :disabled="loading{% if product.pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
-                            class="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-60"
-                            style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary)); box-shadow:0 8px 24px rgba(var(--color-primary-rgb),0.22);">
-                        <span x-show="!loading">→ Continue</span>
-                        <span x-show="loading" class="flex items-center gap-2">
-                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                            Processing...
-                        </span>
-                    </button>
-                    <div x-show="errorMsg" x-cloak class="rounded-xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-sm text-red-400" x-text="errorMsg"></div>
+                {# Continue / Add to cart button #}
+                <button type="button"
+                        @click="addToCart({% if product.pricing.type == 'free' %}'free'{% elseif product.pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
+                        :disabled="loading{% if product.pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
+                        class="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-4 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                        style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary)); box-shadow:0 8px 24px rgba(var(--color-primary-rgb),0.25);">
+                    <span x-show="!loading">Continue</span>
+                    <span x-show="loading" class="flex items-center gap-2">
+                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        Processing...
+                    </span>
+                </button>
+                <div x-show="errorMsg" x-cloak class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600" x-text="errorMsg"></div>
+                <a x-show="domainInCart" x-cloak href="{{ '/order/checkout'|url }}"
+                   class="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                   style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));">
+                    View Cart →
+                </a>
 
-                    <div class="border-t border-white/[0.06] pt-4 space-y-2.5">
-                        <p class="flex items-center gap-2 text-xs text-gray-500">
-                            <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                            30-day money-back guarantee
-                        </p>
-                        <p class="text-xs text-gray-600 text-center">
-                            By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:text-indigo-400">Terms of Service</a>
-                        </p>
+                {# Trust signals #}
+                <div class="border-t border-slate-100 pt-4 space-y-3">
+                    <div class="flex items-center gap-2 text-xs text-slate-500">
+                        <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <span>30-day money-back guarantee</span>
                     </div>
+                    {# Trustpilot-style star rating #}
+                    <div class="flex flex-col items-center gap-1 py-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-slate-700">Excellent</span>
+                            <div class="flex gap-0.5">
+                                <span class="w-4 h-4 bg-[#00b67a] flex items-center justify-center text-white" style="font-size:10px;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)">★</span>
+                                <span class="w-4 h-4 bg-[#00b67a] flex items-center justify-center text-white" style="font-size:10px;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)">★</span>
+                                <span class="w-4 h-4 bg-[#00b67a] flex items-center justify-center text-white" style="font-size:10px;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)">★</span>
+                                <span class="w-4 h-4 bg-[#00b67a] flex items-center justify-center text-white" style="font-size:10px;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)">★</span>
+                                <span class="w-4 h-4 bg-[#dcdce6] flex items-center justify-center text-slate-400" style="font-size:10px;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)">★</span>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Trusted by thousands of customers worldwide</p>
+                    </div>
+                    <p class="text-xs text-slate-400 text-center">
+                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-slate-500 underline hover:text-indigo-600">Terms of Service</a>
+                    </p>
                 </div>
             </div>
         </div>
@@ -474,19 +515,29 @@
 
     {% else %}
 
-    {# ── Non-hosting products: original 3-col layout ── #}
-    <a href="{{ 'order'|url }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-400 transition-colors mb-6">
+    {# ── Non-hosting products ── #}
+    {%- set _is_formbuilder = (product.form_id is defined and product.form_id and guest.extension_is_on({ 'mod': 'formbuilder' })) -%}
+
+    <a href="{{ 'order'|url }}" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:opacity-70 transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         All Plans
     </a>
 
+    {% if _is_formbuilder %}
+    <div class="mb-6">
+        <span class="inline-flex items-center rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1 text-xs font-semibold text-gray-300 mb-3">{{ product.pricing.type == 'recurrent' ? 'Subscription' : (product.pricing.type == 'once' ? 'One-time' : 'Free') }}</span>
+        <h1 class="text-3xl font-bold text-white">{{ product.title }}</h1>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {# ── Left: Product info ── #}
+        {# ── Left: Product info (hidden for formbuilder — form takes full 2/3 + sidebar 1/3) ── #}
+        {% if not _is_formbuilder %}
         <div class="lg:col-span-1">
             <div class="rounded-2xl border border-white/[0.07] p-6 sticky top-6" style="background:rgba(255,255,255,0.02);">
-                <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4">
-                    <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-12 h-12 rounded-xl border flex items-center justify-center mb-4" style="background:rgba(var(--color-primary-rgb),0.10); border-color:rgba(var(--color-primary-rgb),0.20);">
+                    <svg class="w-6 h-6" style="color:var(--color-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
                 </div>
@@ -495,7 +546,7 @@
                 {# Parse description into feature bullets.
                    Supports HTML (<br>, <li>, <p>), newline-separated, or "- / *" markdown lists.
                    Falls back to type-appropriate defaults if description is empty. #}
-                {% set _desc_raw = product.description|default('')|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim %}
+                {% set _desc_raw = product.description|default('')|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||', 'check\\_circle': '', 'check_circle': ''})|striptags|trim %}
                 {% set _bullets = _desc_raw|split('|||')|filter(l => l|trim != '') %}
                 {% if _bullets|length <= 1 and product.description %}
                     {% set _bullets = [] %}
@@ -522,9 +573,10 @@
                 </ul>
             </div>
         </div>
+        {% endif %}
 
         {# ── Right: Configure & Order ── #}
-        <div class="lg:col-span-2 space-y-5">
+        <div class="{{ _is_formbuilder ? 'lg:col-span-3' : 'lg:col-span-2' }} space-y-5">
 
             {# Pricing type display #}
             {% if product.type == 'domain' %}
@@ -551,7 +603,8 @@
                             <div class="flex items-center" :class="idx < 2 ? 'flex-1' : ''">
                                 <div class="flex flex-col items-center gap-1">
                                     <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all"
-                                         :class="step === idx+1 ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : (step > idx+1 ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-gray-500 border border-white/10')">
+                                         :class="step === idx+1 ? 'text-white shadow-lg' : (step > idx+1 ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-gray-500 border border-white/10')"
+                                         :style="step === idx+1 ? 'background:var(--color-primary);' : ''">
                                         <template x-if="step > idx+1">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                         </template>
@@ -560,7 +613,8 @@
                                         </template>
                                     </div>
                                     <span class="text-[10px] font-medium whitespace-nowrap"
-                                          :class="step === idx+1 ? 'text-indigo-300' : (step > idx+1 ? 'text-green-400' : 'text-gray-600')"
+                                          :class="step === idx+1 ? '' : (step > idx+1 ? 'text-green-400' : 'text-gray-600')"
+                                          :style="step === idx+1 ? 'color:var(--color-secondary);' : ''"
                                           x-text="label"></span>
                                 </div>
                                 <div x-show="idx < 2" class="flex-1 h-px mx-2 mb-4 transition-all"
@@ -581,10 +635,8 @@
                             {% if reg_tlds %}
                             <button type="button" @click="mode='register'; available=null; errorMsg=null"
                                     class="relative text-left rounded-2xl border p-4 transition-all focus:outline-none"
-                                    :class="mode==='register'
-                                        ? 'border-indigo-500/60 shadow-lg shadow-indigo-500/10'
-                                        : 'border-white/[0.07] hover:border-white/20'"
-                                    :style="mode==='register' ? 'background:rgba(var(--color-primary-rgb),0.10);' : 'background:rgba(255,255,255,0.02);'">
+                                    :class="mode==='register' ? 'shadow-lg' : 'border-white/[0.07] hover:border-white/20'"
+                                    :style="mode==='register' ? 'background:rgba(var(--color-primary-rgb),0.10); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.02);'">
                                 {# checkmark badge #}
                                 <span x-show="mode==='register'"
                                       class="absolute top-0 right-0 w-6 h-6 flex items-center justify-center rounded-bl-xl rounded-tr-2xl"
@@ -594,12 +646,12 @@
                                 <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
                                      :class="mode==='register' ? '' : ''"
                                      :style="mode==='register' ? 'background:rgba(var(--color-primary-rgb),0.20);' : 'background:rgba(255,255,255,0.05);'">
-                                    <svg class="w-5 h-5" :class="mode==='register' ? 'text-indigo-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5" :style="mode==='register' ? 'color:var(--color-secondary);' : 'color:rgb(107,114,128);'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
                                     </svg>
                                 </div>
                                 <p class="text-sm font-semibold mb-0.5" :class="mode==='register' ? 'text-white' : 'text-gray-300'">Register New</p>
-                                <p class="text-xs leading-relaxed" :class="mode==='register' ? 'text-indigo-300/70' : 'text-gray-600'">Find & register a new domain name</p>
+                                <p class="text-xs leading-relaxed" :style="mode==='register' ? 'color:rgba(var(--color-secondary-rgb),0.70);' : 'color:rgb(75,85,99);'">Find & register a new domain name</p>
                             </button>
                             {% endif %}
 
@@ -607,10 +659,8 @@
                             {% if xfr_tlds %}
                             <button type="button" @click="mode='transfer'; available=null; errorMsg=null"
                                     class="relative text-left rounded-2xl border p-4 transition-all focus:outline-none"
-                                    :class="mode==='transfer'
-                                        ? 'border-indigo-500/60 shadow-lg shadow-indigo-500/10'
-                                        : 'border-white/[0.07] hover:border-white/20'"
-                                    :style="mode==='transfer' ? 'background:rgba(var(--color-primary-rgb),0.10);' : 'background:rgba(255,255,255,0.02);'">
+                                    :class="mode==='transfer' ? 'shadow-lg' : 'border-white/[0.07] hover:border-white/20'"
+                                    :style="mode==='transfer' ? 'background:rgba(var(--color-primary-rgb),0.10); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.02);'">
                                 <span x-show="mode==='transfer'"
                                       class="absolute top-0 right-0 w-6 h-6 flex items-center justify-center rounded-bl-xl rounded-tr-2xl"
                                       style="background:var(--color-primary);">
@@ -618,22 +668,20 @@
                                 </span>
                                 <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
                                      :style="mode==='transfer' ? 'background:rgba(var(--color-primary-rgb),0.20);' : 'background:rgba(255,255,255,0.05);'">
-                                    <svg class="w-5 h-5" :class="mode==='transfer' ? 'text-indigo-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5" :style="mode==='transfer' ? 'color:var(--color-secondary);' : 'color:rgb(107,114,128);'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                                     </svg>
                                 </div>
                                 <p class="text-sm font-semibold mb-0.5" :class="mode==='transfer' ? 'text-white' : 'text-gray-300'">Transfer Domain</p>
-                                <p class="text-xs leading-relaxed" :class="mode==='transfer' ? 'text-indigo-300/70' : 'text-gray-600'">Move your domain to us</p>
+                                <p class="text-xs leading-relaxed" :style="mode==='transfer' ? 'color:rgba(var(--color-secondary-rgb),0.70);' : 'color:rgb(75,85,99);'">Move your domain to us</p>
                             </button>
                             {% endif %}
 
                             {# Use Own Domain card #}
                             <button type="button" @click="mode='owndomain'; available=null; errorMsg=null"
                                     class="relative text-left rounded-2xl border p-4 transition-all focus:outline-none"
-                                    :class="mode==='owndomain'
-                                        ? 'border-indigo-500/60 shadow-lg shadow-indigo-500/10'
-                                        : 'border-white/[0.07] hover:border-white/20'"
-                                    :style="mode==='owndomain' ? 'background:rgba(var(--color-primary-rgb),0.10);' : 'background:rgba(255,255,255,0.02);'">
+                                    :class="mode==='owndomain' ? 'shadow-lg' : 'border-white/[0.07] hover:border-white/20'"
+                                    :style="mode==='owndomain' ? 'background:rgba(var(--color-primary-rgb),0.10); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.02);'">
                                 <span x-show="mode==='owndomain'"
                                       class="absolute top-0 right-0 w-6 h-6 flex items-center justify-center rounded-bl-xl rounded-tr-2xl"
                                       style="background:var(--color-primary);">
@@ -641,12 +689,12 @@
                                 </span>
                                 <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
                                      :style="mode==='owndomain' ? 'background:rgba(var(--color-primary-rgb),0.20);' : 'background:rgba(255,255,255,0.05);'">
-                                    <svg class="w-5 h-5" :class="mode==='owndomain' ? 'text-indigo-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5" :style="mode==='owndomain' ? 'color:var(--color-secondary);' : 'color:rgb(107,114,128);'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                                     </svg>
                                 </div>
                                 <p class="text-sm font-semibold mb-0.5" :class="mode==='owndomain' ? 'text-white' : 'text-gray-300'">Use Own Domain</p>
-                                <p class="text-xs leading-relaxed" :class="mode==='owndomain' ? 'text-indigo-300/70' : 'text-gray-600'">Already own a domain? Use it here</p>
+                                <p class="text-xs leading-relaxed" :style="mode==='owndomain' ? 'color:rgba(var(--color-secondary-rgb),0.70);' : 'color:rgb(75,85,99);'">Already own a domain? Use it here</p>
                             </button>
 
                         </div>
@@ -662,7 +710,7 @@
                                 <div class="p-5 space-y-4">
                                     <div>
                                         <label class="block text-xs text-gray-400 font-medium mb-2">Domain Name</label>
-                                        <div class="flex rounded-xl overflow-hidden border border-white/15 focus-within:border-indigo-500/60 transition-colors" style="background:#1a1a2e;">
+                                        <div class="flex rounded-xl overflow-hidden border border-white/15 focus-within:border-white/40 transition-colors" style="background:#1a1a2e;">
                                             <input type="text" x-model="regSld" placeholder="yourdomain"
                                                    @input="domainPreview = regSld.trim() ? regSld.trim() + regTld : ''; available = null"
                                                    @keydown.enter="checkAvailability()"
@@ -671,7 +719,7 @@
                                                 <div class="w-px h-6 bg-white/10 mr-1"></div>
                                                 <select x-model="regTld"
                                                         @change="domainPreview = regSld.trim() ? regSld.trim() + regTld : ''; available = null"
-                                                        class="bg-transparent text-indigo-300 text-sm font-medium focus:outline-none cursor-pointer pr-2 pl-2"
+                                                        class="bg-transparent text-sm font-medium focus:outline-none cursor-pointer pr-2 pl-2" style="color:var(--color-secondary);"
                                                         style="appearance:none; -webkit-appearance:none;">
                                                     {% for t in reg_tlds %}
                                                     <option value="{{ t.tld }}" style="background:#1e1e3a; color:#e2e8f0;">{{ t.tld }}</option>
@@ -682,7 +730,7 @@
                                         </div>
                                         <div x-show="domainPreview" class="mt-2 flex items-center gap-2">
                                             <span class="text-xs text-gray-500">Preview:</span>
-                                            <span class="text-xs font-mono font-semibold text-indigo-300" x-text="domainPreview"></span>
+                                            <span class="text-xs font-mono font-semibold" style="color:var(--color-secondary);" x-text="domainPreview"></span>
                                         </div>
                                     </div>
 
@@ -692,9 +740,9 @@
                                         <div class="flex gap-2 flex-wrap">
                                             {% for y in 1..5 %}
                                             <button type="button" @click="regYears={{ y }}"
-                                                    :class="regYears==={{ y }} ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300' : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-gray-200'"
-                                                    class="px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                                                    style="background:rgba(255,255,255,0.03);">
+                                                    :class="regYears==={{ y }} ? '' : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-gray-200'"
+                                                    :style="regYears==={{ y }} ? 'border-color:var(--color-secondary); background:rgba(var(--color-secondary-rgb),0.12); color:var(--color-secondary);' : 'background:rgba(255,255,255,0.03);'"
+                                                    class="px-4 py-2 rounded-xl border text-sm font-medium transition-all">
                                                 {{ y }}{{ y == 1 ? ' yr' : ' yrs' }}
                                             </button>
                                             {% endfor %}
@@ -713,12 +761,14 @@
                                     {% for t in reg_tlds %}
                                     <button type="button" @click="regTld='{{ t.tld }}'; domainPreview = regSld.trim() ? regSld.trim() + '{{ t.tld }}' : ''; available = null"
                                             class="w-full flex items-center justify-between px-5 py-3.5 transition-colors text-left"
-                                            :class="regTld === '{{ t.tld }}' ? 'bg-indigo-500/8' : 'hover:bg-white/[0.02]'">
+                                            :class="regTld === '{{ t.tld }}' ? '' : 'hover:bg-white/[0.02]'"
+                                            :style="regTld === '{{ t.tld }}' ? 'background:rgba(var(--color-secondary-rgb),0.06);' : ''">
                                         <div class="flex items-center gap-3">
                                             <div class="w-2 h-2 rounded-full flex-shrink-0 transition-all"
-                                                 :class="regTld === '{{ t.tld }}' ? 'bg-indigo-400 ring-2 ring-indigo-400/30' : 'bg-white/15'"></div>
+                                                 :class="regTld === '{{ t.tld }}' ? '' : 'bg-white/15'"
+                                                 :style="regTld === '{{ t.tld }}' ? 'background:var(--color-secondary); box-shadow:0 0 0 2px rgba(var(--color-secondary-rgb),0.30);' : ''"></div>
                                             <span class="text-sm font-mono font-medium"
-                                                  :class="regTld === '{{ t.tld }}' ? 'text-indigo-300' : 'text-gray-300'">{{ t.tld }}</span>
+                                                  :style="regTld === '{{ t.tld }}' ? 'color:var(--color-secondary);' : 'color:rgb(209,213,219);'">{{ t.tld }}</span>
                                         </div>
                                         <div class="text-right">
                                             <span class="text-sm font-semibold"
@@ -746,8 +796,8 @@
                             <div class="flex gap-3">
                                 <button type="button" @click="checkAvailability()"
                                         :disabled="checking || !regSld.trim()"
-                                        class="flex-1 py-3.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10"
-                                        style="background:rgba(var(--color-primary-rgb),0.06);">
+                                        class="flex-1 py-3.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed border"
+                                        style="background:rgba(var(--color-secondary-rgb),0.08); border-color:rgba(var(--color-secondary-rgb),0.40); color:var(--color-secondary);">
                                     <span x-show="!checking">Check Availability</span>
                                     <span x-show="checking" class="flex items-center justify-center gap-2">
                                         <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
@@ -776,14 +826,14 @@
                                 <div class="p-5 space-y-4">
                                     <div>
                                         <label class="block text-xs text-gray-400 font-medium mb-2">Domain Name</label>
-                                        <div class="flex rounded-xl overflow-hidden border border-white/15 focus-within:border-indigo-500/60 transition-colors" style="background:#1a1a2e;">
+                                        <div class="flex rounded-xl overflow-hidden border border-white/15 focus-within:border-white/40 transition-colors" style="background:#1a1a2e;">
                                             <input type="text" x-model="xfrSld" placeholder="yourdomain"
                                                    @input="available = null"
                                                    class="flex-1 bg-transparent px-4 py-3.5 text-white text-sm placeholder-gray-600 focus:outline-none min-w-0">
                                             <div class="flex items-center px-1 py-1" style="background:rgba(255,255,255,0.03);">
                                                 <div class="w-px h-6 bg-white/10 mr-1"></div>
                                                 <select x-model="xfrTld"
-                                                        class="bg-transparent text-indigo-300 text-sm font-medium focus:outline-none cursor-pointer pr-2 pl-2"
+                                                        class="bg-transparent text-sm font-medium focus:outline-none cursor-pointer pr-2 pl-2" style="color:var(--color-secondary);"
                                                         style="appearance:none; -webkit-appearance:none;">
                                                     {% for t in xfr_tlds %}
                                                     <option value="{{ t.tld }}" style="background:#1e1e3a; color:#e2e8f0;">{{ t.tld }}</option>
@@ -796,7 +846,7 @@
                                     <div>
                                         <label class="block text-xs text-gray-400 font-medium mb-2">EPP / Authorization Code</label>
                                         <input type="text" x-model="authCode" placeholder="e.g. Ab3#Xy9!kL2..."
-                                               class="w-full rounded-xl px-4 py-3.5 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3.5 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                         <p class="text-xs text-gray-600 mt-1.5">Obtain this code from your current registrar's control panel</p>
                                     </div>
@@ -820,8 +870,8 @@
                             <div class="flex gap-3">
                                 <button type="button" @click="checkTransfer()"
                                         :disabled="checking || !xfrSld.trim()"
-                                        class="flex-1 py-3.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10"
-                                        style="background:rgba(var(--color-primary-rgb),0.06);">
+                                        class="flex-1 py-3.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed border"
+                                        style="background:rgba(var(--color-secondary-rgb),0.08); border-color:rgba(var(--color-secondary-rgb),0.40); color:var(--color-secondary);">
                                     <span x-show="!checking">Check Transfer</span>
                                     <span x-show="checking" class="flex items-center justify-center gap-2">
                                         <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
@@ -849,14 +899,14 @@
                                 <div class="p-5 space-y-3">
                                     <div>
                                         <label class="block text-xs text-gray-400 font-medium mb-2">Domain Name</label>
-                                        <div class="flex rounded-xl overflow-hidden border border-white/15 focus-within:border-indigo-500/60 transition-colors" style="background:#1a1a2e;">
+                                        <div class="flex rounded-xl overflow-hidden border border-white/15 focus-within:border-white/40 transition-colors" style="background:#1a1a2e;">
                                             <input type="text" x-model="ownSld" placeholder="yourdomain"
                                                    @keydown.enter.prevent=""
                                                    class="flex-1 bg-transparent px-4 py-3.5 text-white text-sm placeholder-gray-600 focus:outline-none min-w-0">
                                             <div class="flex items-center px-1 py-1" style="background:rgba(255,255,255,0.03);">
                                                 <div class="w-px h-6 bg-white/10 mr-1"></div>
                                                 <input type="text" x-model="ownTld" placeholder=".com"
-                                                       class="bg-transparent text-indigo-300 text-sm font-medium focus:outline-none w-20 px-2"
+                                                       class="bg-transparent text-sm font-medium focus:outline-none w-20 px-2" style="color:var(--color-secondary);"
                                                        style="appearance:none; -webkit-appearance:none;">
                                             </div>
                                         </div>
@@ -894,12 +944,14 @@
                                 {# Toggle #}
                                 <div class="flex gap-1 p-1 rounded-xl border border-white/10" style="background:rgba(255,255,255,0.04);">
                                     <button type="button" @click="useDefaultNs = true"
-                                            :class="useDefaultNs ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white'"
+                                            :class="useDefaultNs ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'"
+                                            :style="useDefaultNs ? 'background:var(--color-primary);' : ''"
                                             class="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all">
                                         Use Default Nameservers
                                     </button>
                                     <button type="button" @click="useDefaultNs = false"
-                                            :class="!useDefaultNs ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white'"
+                                            :class="!useDefaultNs ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'"
+                                            :style="!useDefaultNs ? 'background:var(--color-primary);' : ''"
                                             class="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all">
                                         Custom Nameservers
                                     </button>
@@ -907,11 +959,12 @@
 
                                 {# Default NS notice #}
                                 <div x-show="useDefaultNs" x-transition
-                                     class="flex items-start gap-2.5 p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/15">
-                                    <svg class="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                     class="flex items-start gap-2.5 p-3.5 rounded-xl border"
+                                     style="background:rgba(var(--color-secondary-rgb),0.06); border-color:rgba(var(--color-secondary-rgb),0.20);">
+                                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" style="color:var(--color-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                     <div>
-                                        <p class="text-sm text-indigo-300 font-medium">Default nameservers will be used</p>
-                                        <p class="text-xs text-indigo-400/60 mt-0.5">Our default nameservers will be automatically configured for your domain.</p>
+                                        <p class="text-sm font-medium" style="color:var(--color-secondary);">Default nameservers will be used</p>
+                                        <p class="text-xs mt-0.5 text-gray-500">Our default nameservers will be automatically configured for your domain.</p>
                                     </div>
                                 </div>
 
@@ -921,25 +974,25 @@
                                         <div>
                                             <label class="block text-xs text-gray-400 font-medium mb-1.5">Nameserver 1 <span class="text-red-400">*</span></label>
                                             <input type="text" x-model="ns1" placeholder="ns1.example.com"
-                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                    style="background:#1a1a2e;">
                                         </div>
                                         <div>
                                             <label class="block text-xs text-gray-400 font-medium mb-1.5">Nameserver 2 <span class="text-red-400">*</span></label>
                                             <input type="text" x-model="ns2" placeholder="ns2.example.com"
-                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                    style="background:#1a1a2e;">
                                         </div>
                                         <div>
                                             <label class="block text-xs text-gray-400 font-medium mb-1.5">Nameserver 3 <span class="text-gray-600">(optional)</span></label>
                                             <input type="text" x-model="ns3" placeholder="ns3.example.com"
-                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                    style="background:#1a1a2e;">
                                         </div>
                                         <div>
                                             <label class="block text-xs text-gray-400 font-medium mb-1.5">Nameserver 4 <span class="text-gray-600">(optional)</span></label>
                                             <input type="text" x-model="ns4" placeholder="ns4.example.com"
-                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                                   class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                    style="background:#1a1a2e;">
                                         </div>
                                     </div>
@@ -979,12 +1032,14 @@
                                 {# Source toggle #}
                                 <div class="flex gap-1 p-1 rounded-xl border border-white/10" style="background:rgba(255,255,255,0.04);">
                                     <button type="button" @click="useAccountContact = true; loadContactFromAccount()"
-                                            :class="useAccountContact ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white'"
+                                            :class="useAccountContact ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'"
+                                            :style="useAccountContact ? 'background:var(--color-primary);' : ''"
                                             class="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all">
                                         Use Account Contact
                                     </button>
                                     <button type="button" @click="useAccountContact = false; contact = {first_name:'',last_name:'',email:'',company:'',address_1:'',city:'',state:'',country:'',postcode:'',phone_cc:'',phone:''}"
-                                            :class="!useAccountContact ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white'"
+                                            :class="!useAccountContact ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'"
+                                            :style="!useAccountContact ? 'background:var(--color-primary);' : ''"
                                             class="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all">
                                         Custom Contact
                                     </button>
@@ -1003,7 +1058,7 @@
                                         <input type="text" x-model="contact.first_name" placeholder="John"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1011,7 +1066,7 @@
                                         <input type="text" x-model="contact.last_name" placeholder="Doe"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div class="col-span-2">
@@ -1019,7 +1074,7 @@
                                         <input type="email" x-model="contact.email" placeholder="john@example.com"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div class="col-span-2">
@@ -1027,7 +1082,7 @@
                                         <input type="text" x-model="contact.company" placeholder="Acme Corp"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div class="col-span-2">
@@ -1035,7 +1090,7 @@
                                         <input type="text" x-model="contact.address_1" placeholder="123 Main Street"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1043,7 +1098,7 @@
                                         <input type="text" x-model="contact.city" placeholder="New York"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1051,7 +1106,7 @@
                                         <input type="text" x-model="contact.state" placeholder="NY"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1059,7 +1114,7 @@
                                         <input type="text" x-model="contact.country" placeholder="US"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1067,7 +1122,7 @@
                                         <input type="text" x-model="contact.postcode" placeholder="10001"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1075,7 +1130,7 @@
                                         <input type="text" x-model="contact.phone_cc" placeholder="+1"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                     <div>
@@ -1083,7 +1138,7 @@
                                         <input type="text" x-model="contact.phone" placeholder="5551234567"
                                                :readonly="useAccountContact"
                                                :class="useAccountContact ? 'opacity-70 cursor-not-allowed' : ''"
-                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-indigo-500/60 transition-colors"
+                                               class="w-full rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 border border-white/15 focus:outline-none focus:border-white/40 transition-colors"
                                                style="background:#1a1a2e;">
                                     </div>
                                 </div>
@@ -1096,12 +1151,17 @@
                             <svg class="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             <p class="text-sm text-red-400" x-text="errorMsg"></p>
                         </div>
+                        <a x-show="domainInCart" x-cloak href="{{ '/order/checkout'|url }}"
+                           class="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                           style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));">
+                            View Cart →
+                        </a>
 
                         {# ── Coupon code ── #}
                         <div>
                             <button type="button" @click="couponOpen = !couponOpen; couponError = null"
                                     class="flex items-center gap-1.5 text-sm font-semibold focus:outline-none transition-colors w-full"
-                                    :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:text-indigo-400'">
+                                    :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:opacity-70'">
                                 <template x-if="couponApplied">
                                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 </template>
@@ -1165,7 +1225,7 @@
                         </div>
 
                         <p class="text-xs text-gray-600 text-center">
-                            By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:text-indigo-400">Terms of Service</a>
+                            By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
                         </p>
 
                     </div>{# /step 3 #}
@@ -1184,24 +1244,21 @@
                     {% set pricing = product.pricing %}
                     {% set periods = guest.system_periods %}
 
-                    <div class="space-y-5" x-ref="formbuilderSection">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    <div class="lg:col-span-2 space-y-5" x-ref="formbuilderSection">
 
-                        {# ── Custom form fields ── #}
-                        <div class="rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.02);">
-                            <div class="p-5">
-                                {{ include('mod_formbuilder_build.html.twig', ignore_missing: true) }}
-                            </div>
-                        </div>
-
-                        {# ── Pricing ── #}
+                        {# ── 1. Billing cycle (recurrent only) — shown FIRST ── #}
                         {% if pricing.type == 'recurrent' %}
                         {%- set _base_price = (pricing.recurrent['1M'] is defined and pricing.recurrent['1M'].enabled) ? pricing.recurrent['1M'].price : 0 -%}
-                        <div>
-                            <div class="flex items-center justify-between mb-3">
-                                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Select Billing Cycle</p>
-                                {% if _base_price > 0 %}<span class="text-xs" style="color:rgba(52,211,153,0.7);">Longer plans save more</span>{% endif %}
+                        <div class="rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.02);">
+                            <div class="px-5 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <p class="text-sm font-semibold text-gray-200">Select billing cycle</p>
+                                </div>
+                                {% if _base_price > 0 %}<span class="text-xs font-medium" style="color:rgba(52,211,153,0.8);">Longer plans save more</span>{% endif %}
                             </div>
-                            <div class="space-y-2.5">
+                            <div class="p-4 space-y-2.5">
                                 {% for code, prices in pricing.recurrent %}
                                 {% if prices.enabled %}
                                 {%- set _months_map = {'1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36} -%}
@@ -1209,13 +1266,14 @@
                                 {%- set _ppm = (_months > 0) ? (prices.price / _months) : prices.price -%}
                                 {%- set _savings_pct = (_base_price > 0 and _months > 1 and _ppm < _base_price) ? ((1 - (_ppm / _base_price)) * 100)|round : 0 -%}
                                 <div @click="selectedPeriod = '{{ code }}'"
-                                     :class="selectedPeriod === '{{ code }}' ? 'border-indigo-500/50' : 'border-white/[0.07] hover:border-white/15'"
+                                     :class="selectedPeriod === '{{ code }}' ? '' : 'border-white/[0.07] hover:border-white/15'"
                                      class="flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all"
-                                     :style="selectedPeriod === '{{ code }}' ? 'background:rgba(var(--color-primary-rgb),0.07);' : 'background:rgba(255,255,255,0.015);'">
+                                     :style="selectedPeriod === '{{ code }}' ? 'background:rgba(var(--color-primary-rgb),0.07); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.015);'">
                                     <div class="flex items-center gap-3">
                                         <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0"
-                                             :class="selectedPeriod === '{{ code }}' ? 'border-indigo-500' : 'border-white/30'">
-                                            <div class="w-1.5 h-1.5 rounded-full bg-indigo-500 transition-transform"
+                                             :class="selectedPeriod === '{{ code }}' ? '' : 'border-white/30'"
+                                             :style="selectedPeriod === '{{ code }}' ? 'border-color:var(--color-secondary);' : ''"
+                                            <div class="w-1.5 h-1.5 rounded-full transition-transform" style="background:var(--color-secondary);"
                                                  :class="selectedPeriod === '{{ code }}' ? 'scale-100' : 'scale-0'"></div>
                                         </div>
                                         <div>
@@ -1251,26 +1309,24 @@
                                 {% endfor %}
                             </div>
                         </div>
-                        {% elseif pricing.type == 'once' %}
-                        <div class="rounded-2xl border border-white/[0.07] p-5" style="background:rgba(255,255,255,0.02);">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm text-gray-400">One-time Payment</span>
-                                <div class="text-right">
-                                    <span class="text-2xl font-bold text-white">{{ pricing.once.price|money_convert }}</span>
-                                    {% if pricing.once.setup is defined and pricing.once.setup > 0 %}
-                                    <p class="text-xs text-gray-500 mt-0.5">+ {{ pricing.once.setup|money_convert }} setup fee</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% elseif pricing.type == 'free' %}
-                        <div class="rounded-2xl border border-emerald-500/20 p-5" style="background:rgba(16,185,129,0.04);">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm text-gray-400">Free</span>
-                                <span class="text-2xl font-bold text-emerald-400">{{ 0|money_convert }}</span>
-                            </div>
-                        </div>
                         {% endif %}
+
+                        {# ── 2. Configuration form — shown SECOND ── #}
+                        <div class="rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.02);">
+                            <div class="px-5 py-3.5 border-b border-white/[0.05] flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-white">{{ product.type }}</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Fill in the details below to configure your order</p>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            </div>
+                            <div class="p-5">
+                                {{ include('mod_formbuilder_build.html.twig', ignore_missing: true) }}
+                            </div>
+                        </div>
 
                         {# ── Add-ons ── #}
                         {% if product.addons is defined and product.addons is not empty %}
@@ -1285,14 +1341,14 @@
                                 {% set addon_default_period = '' %}
                                 {% if addon.pricing.type == 'recurrent' %}{% for code, prices in addon.pricing.recurrent %}{% if addon_default_period == '' and prices.enabled %}{% set addon_default_period = code %}{% endif %}{% endfor %}{% endif %}
                                 <div class="rounded-2xl border transition-all duration-200"
-                                     :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'border-indigo-500/40' : 'border-white/[0.08] hover:border-white/[0.12]'"
-                                     :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.06);' : 'background:rgba(255,255,255,0.02);'">
+                                     :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? '' : 'border-white/[0.08] hover:border-white/[0.12]'"
+                                     :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.06); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.02);'">
                                     <div class="p-4">
                                         <div class="flex items-start gap-3">
                                             <div class="w-9 h-9 rounded-xl flex-shrink-0 mt-0.5 flex items-center justify-center transition-all"
                                                  :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.2);border:1px solid rgba(var(--color-primary-rgb),0.35);' : 'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);'">
                                                 <svg class="w-4 h-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                                     :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'text-indigo-400' : 'text-gray-500'">
+                                                     :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'color:var(--color-secondary);' : 'color:rgb(107,114,128);'">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                                                 </svg>
                                             </div>
@@ -1319,7 +1375,7 @@
                                                 <div class="flex items-center justify-between mt-3 gap-2">
                                 {% if addon.pricing.type == 'recurrent' %}
                                 <p class="text-xs flex items-center gap-1"
-                                   :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'text-indigo-300/60' : 'text-gray-600'">
+                                   :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'color:rgba(var(--color-secondary-rgb),0.60);' : 'color:rgb(75,85,99);'">
                                     <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                     Billed <span class="ml-0.5" x-text="selectedPeriod ? (addonPeriodLabels[selectedPeriod] || selectedPeriod) : '{{ addon_default_period }}'"></span>&nbsp;with your plan
                                 </p>
@@ -1334,8 +1390,8 @@
                                 {% endif %}
                                                     <button @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
                                                             class="px-4 py-2 rounded-xl text-xs font-semibold transition-all border whitespace-nowrap flex items-center gap-1.5"
-                                                            :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20' : 'border-transparent text-white hover:opacity-90'"
-                                                            :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? '' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
+                                                            :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'hover:opacity-80' : 'border-transparent text-white hover:opacity-90'"
+                                                            :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-secondary-rgb),0.10); border-color:rgba(var(--color-secondary-rgb),0.30); color:var(--color-secondary);' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
                                                         <svg class="w-3 h-3" x-show="!(addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                                                         <svg class="w-3 h-3" x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                                         <span x-text="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'Added' : 'Add'">Add</span>
@@ -1349,103 +1405,127 @@
                             </div>
                         </div>
                         {% endif %}
+                    </div>{# /formbuilderSection #}
 
-                        {# ── Order summary ── #}
-                        {% if pricing.type == 'recurrent' %}
-                        <div class="rounded-2xl border border-white/[0.07] p-5" style="background:rgba(255,255,255,0.02);">
-                            <div class="flex items-start justify-between gap-4">
+                    {# ── Order Summary Sidebar ── #}
+                    <div class="sticky top-6">
+                        <div class="rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.02);">
+                            <div class="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Order Summary</p>
+                                {% set _fb_currency = guest.cart_get_currency %}
+                                <span class="inline-flex items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-xs font-bold text-gray-300">{{ _fb_currency.code }}</span>
+                            </div>
+                            <div class="p-5 space-y-4">
+                                <p class="text-sm font-bold text-white">{{ product.title }}</p>
+
+                                {# Per-period or one-time price row #}
+                                {% if pricing.type == 'recurrent' %}
                                 <div>
-                                    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">You pay today</p>
-                                    <p class="text-xs text-gray-600 mt-0.5">Renews on the same schedule</p>
-                                    <div x-show="couponDiscount > 0" x-cloak class="mt-2 flex items-center gap-1.5">
+                                    {% for code, prices in pricing.recurrent %}{% if prices.enabled %}
+                                    <div x-show="selectedPeriod === '{{ code }}'" class="flex items-start justify-between gap-2">
+                                        <p class="text-sm text-gray-400">{{ periods[code] ?? code }} plan</p>
+                                        <div class="text-right">
+                                            {% if prices.setup > 0 %}<p class="text-xs text-gray-600 line-through">{{ (prices.price + prices.setup) | money_convert }}</p>{% endif %}
+                                            <p class="text-sm font-semibold text-white">{{ prices.price | money_convert }}</p>
+                                        </div>
+                                    </div>
+                                    {% endif %}{% endfor %}
+                                    <div x-show="!selectedPeriod" class="text-sm text-gray-600 italic">Select a billing period</div>
+                                </div>
+                                {% elseif pricing.type == 'once' %}
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="text-sm text-gray-400">One-time payment</p>
+                                    <p class="text-sm font-semibold text-white">{{ pricing.once.price | money_convert }}</p>
+                                </div>
+                                {% endif %}
+
+                                <div class="border-t border-white/[0.06] pt-4 space-y-1">
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Total due today</p>
+                                    {% if pricing.type == 'recurrent' %}
+                                    <p class="text-2xl font-bold text-white" x-show="selectedPeriod" x-text="calcTotal(selectedPeriod)"></p>
+                                    {% elseif pricing.type == 'once' %}
+                                    <p class="text-2xl font-bold text-white" x-text="calcTotal('once')">{{ pricing.once.price | money_convert }}</p>
+                                    {% else %}
+                                    <p class="text-2xl font-bold text-emerald-400">Free</p>
+                                    {% endif %}
+                                    <div x-show="couponDiscount > 0" x-cloak class="flex items-center gap-1.5 mt-1">
                                         <svg class="w-3 h-3 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                                         <span class="text-xs text-emerald-400" x-text="'Coupon: −' + formatMoney(couponDiscount)"></span>
                                     </div>
                                 </div>
-                                <div class="text-right flex-shrink-0">
-                                    <div class="text-2xl font-bold text-white" x-text="calcTotal(selectedPeriod)"></div>
-                                </div>
-                            </div>
-                        </div>
-                        {% elseif pricing.type == 'once' %}
-                        <div x-show="couponDiscount > 0" x-cloak class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 flex items-center justify-between gap-4">
-                            <span class="text-sm text-emerald-400">After coupon</span>
-                            <span class="text-xl font-bold text-emerald-400" x-text="calcTotal('once')"></span>
-                        </div>
-                        {% endif %}
 
-                        {% if pricing.type != 'free' %}
-                        {# ── Coupon code ── #}
-                        <div>
-                            <button type="button" @click="couponOpen = !couponOpen; couponError = null"
-                                    class="flex items-center gap-1.5 text-sm font-semibold focus:outline-none transition-colors w-full"
-                                    :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:text-indigo-400'">
-                                <template x-if="couponApplied">
-                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                </template>
-                                <template x-if="!couponApplied">
-                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                                </template>
-                                <span x-text="couponApplied ? 'Code saved!' : 'Have a coupon code?'"></span>
-                                <svg class="w-3.5 h-3.5 transition-transform duration-200 ml-auto flex-shrink-0"
-                                     :class="couponOpen ? 'rotate-180' : ''"
-                                     fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
-                            </button>
-                            <div x-show="couponOpen" x-transition:enter="transition ease-out duration-150"
-                                 x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
-                                 class="mt-2.5">
-                                <div class="flex gap-2">
-                                    <input type="text" x-model="couponCode"
-                                           @keydown.enter.prevent="applyCoupon()"
-                                           placeholder="Enter coupon code"
-                                           class="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none transition-all"
-                                           style="border: 1.5px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);"
-                                           @focus="$el.style.borderColor='var(--color-primary)'; $el.style.background='rgba(255,255,255,0.08)'"
-                                           @blur="$el.style.borderColor='rgba(255,255,255,0.1)'; $el.style.background='rgba(255,255,255,0.05)'"
-                                           :disabled="couponApplied">
-                                    <button type="button" @click="applyCoupon()"
-                                            :disabled="!couponCode.trim() || couponLoading || couponApplied"
-                                            class="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style="background: var(--color-primary); color:#fff;">
-                                        <span x-show="!couponLoading && !couponApplied">Apply</span>
-                                        <span x-show="couponLoading" class="flex items-center gap-1.5">
-                                            <svg class="w-3.5 h-3.5 animate-spin" aria-hidden="true" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                                        </span>
-                                        <span x-show="couponApplied">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                                        </span>
+                                {% if pricing.type != 'free' %}
+                                {# ── Coupon code ── #}
+                                <div>
+                                    <button type="button" @click="couponOpen = !couponOpen; couponError = null"
+                                            class="flex items-center gap-1.5 text-sm font-semibold focus:outline-none transition-colors w-full"
+                                            :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:opacity-70'">
+                                        <template x-if="couponApplied">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        </template>
+                                        <template x-if="!couponApplied">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                        </template>
+                                        <span x-text="couponApplied ? 'Code saved!' : 'Have a coupon code?'"></span>
+                                        <svg class="w-3.5 h-3.5 transition-transform duration-200 ml-auto flex-shrink-0" :class="couponOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                                     </button>
+                                    <div x-show="couponOpen" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="mt-2.5">
+                                        <div class="flex gap-2">
+                                            <input type="text" x-model="couponCode" @keydown.enter.prevent="applyCoupon()" placeholder="Enter coupon code"
+                                                   class="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none transition-all"
+                                                   style="border: 1.5px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);"
+                                                   @focus="$el.style.borderColor='var(--color-primary)'; $el.style.background='rgba(255,255,255,0.08)'"
+                                                   @blur="$el.style.borderColor='rgba(255,255,255,0.1)'; $el.style.background='rgba(255,255,255,0.05)'"
+                                                   :disabled="couponApplied">
+                                            <button type="button" @click="applyCoupon()" :disabled="!couponCode.trim() || couponLoading || couponApplied"
+                                                    class="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    style="background: var(--color-primary); color:#fff;">
+                                                <span x-show="!couponLoading && !couponApplied">Apply</span>
+                                                <span x-show="couponLoading" class="flex items-center gap-1.5"><svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></span>
+                                                <span x-show="couponApplied"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></span>
+                                            </button>
+                                        </div>
+                                        <p x-show="couponError" x-cloak x-text="couponError" class="mt-1.5 text-xs text-red-400"></p>
+                                        <p x-show="couponApplied" x-cloak class="mt-1.5 text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                            Code saved — discount applied at checkout.
+                                        </p>
+                                    </div>
                                 </div>
-                                <p x-show="couponError" x-cloak x-text="couponError" class="mt-1.5 text-xs text-red-400"></p>
-                                <p x-show="couponApplied" x-cloak class="mt-1.5 text-xs text-emerald-400 font-medium flex items-center gap-1">
-                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                    Code saved — discount applied at checkout.
-                                </p>
+                                {% endif %}
+
+                                {# ── Continue button ── #}
+                                <button type="button"
+                                        @click="addToCart({% if pricing.type == 'free' %}'free'{% elseif pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
+                                        :disabled="loading{% if pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
+                                        class="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                                        style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary)); box-shadow:0 8px 24px rgba(var(--color-primary-rgb),0.22);">
+                                    <span x-show="!loading">→ Continue</span>
+                                    <span x-show="loading" class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                        Processing...
+                                    </span>
+                                </button>
+                                <div x-show="errorMsg" x-cloak class="rounded-xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-sm text-red-400" x-text="errorMsg"></div>
+                                <a x-show="domainInCart" x-cloak href="{{ '/order/checkout'|url }}"
+                                   class="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                                   style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));">
+                                    View Cart →
+                                </a>
+
+                                <div class="border-t border-white/[0.06] pt-4 space-y-2.5">
+                                    <p class="flex items-center gap-2 text-xs text-gray-500">
+                                        <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                        30-day money-back guarantee
+                                    </p>
+                                    <p class="text-xs text-gray-600 text-center">
+                                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                        {% endif %}
-
-                        {# ── Add to cart ── #}
-                        <button type="button"
-                                @click="addToCart({% if pricing.type == 'free' %}'free'{% elseif pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
-                                :disabled="loading{% if pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
-                                class="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 4px 16px rgba(var(--color-primary-rgb),0.3);">
-                            <span x-show="!loading">Continue to Checkout →</span>
-                            <span x-show="loading" class="flex items-center justify-center gap-2">
-                                <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                                Adding to cart...
-                            </span>
-                        </button>
-
-                        <div x-show="errorMsg" x-cloak class="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
-                            <p class="text-sm text-red-400" x-text="errorMsg"></p>
-                        </div>
-
-                        <p class="text-xs text-gray-600 text-center">
-                            By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:text-indigo-400">Terms of Service</a>
-                        </p>
-                    </div>
+                    </div>{# /sidebar #}
+                    </div>{# /inner grid #}
 
                 {% elseif product.pricing.type == 'free' %}
                 {# Free product #}
@@ -1495,14 +1575,14 @@
                         {% if addon.pricing.type == 'recurrent' %}{% for code, prices in addon.pricing.recurrent %}{% if addon_default_period == '' and prices.enabled %}{% set addon_default_period = code %}{% endif %}{% endfor %}{% endif %}
                         <div class="rounded-2xl border transition-all duration-200"
                              x-init="if (!addons['{{ addon.id }}']) addons['{{ addon.id }}'] = { selected: false, period: '{{ addon_default_period }}' }"
-                             :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'border-indigo-500/40' : 'border-white/[0.08] hover:border-white/[0.12]'"
-                             :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.06);' : 'background:rgba(255,255,255,0.02);'">
+                             :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? '' : 'border-white/[0.08] hover:border-white/[0.12]'"
+                             :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.06); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.02);'">
                             <div class="p-4">
                                 <div class="flex items-start gap-3">
                                     <div class="w-9 h-9 rounded-xl flex-shrink-0 mt-0.5 flex items-center justify-center transition-all"
                                          :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.2);border:1px solid rgba(var(--color-primary-rgb),0.35);' : 'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);'">
                                         <svg class="w-4 h-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                             :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'text-indigo-400' : 'text-gray-500'">
+                                             :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'color:var(--color-secondary);' : 'color:rgb(107,114,128);'">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                                         </svg>
                                     </div>
@@ -1538,8 +1618,8 @@
                     {% endif %}
                                             <button @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
                                                     class="px-4 py-2 rounded-xl text-xs font-semibold transition-all border whitespace-nowrap flex items-center gap-1.5"
-                                                    :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20' : 'border-transparent text-white hover:opacity-90'"
-                                                    :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? '' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
+                                                    :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'hover:opacity-80' : 'border-transparent text-white hover:opacity-90'"
+                                                    :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-secondary-rgb),0.10); border-color:rgba(var(--color-secondary-rgb),0.30); color:var(--color-secondary);' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
                                                 <svg class="w-3 h-3" x-show="!(addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                                                 <svg class="w-3 h-3" x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                                 <span x-text="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'Added' : 'Add'">Add</span>
@@ -1571,7 +1651,7 @@
                 <div>
                     <button type="button" @click="couponOpen = !couponOpen; couponError = null"
                             class="flex items-center gap-1.5 text-sm font-semibold focus:outline-none transition-colors w-full"
-                            :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:text-indigo-400'">
+                            :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:opacity-70'">
                         <template x-if="couponApplied">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         </template>
@@ -1635,13 +1715,14 @@
                         {% for code, prices in product.pricing.recurrent %}
                             {% if prices.enabled %}
                             <label class="flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all"
-                                   :class="selectedPeriod === '{{ code }}' ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-white/[0.07] hover:border-white/15'"
-                                   style="background: rgba(255,255,255,0.015);">
+                                   :class="selectedPeriod === '{{ code }}' ? '' : 'border-white/[0.07] hover:border-white/15'"
+                                   :style="selectedPeriod === '{{ code }}' ? 'background:rgba(var(--color-primary-rgb),0.05); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.015);'">
                                 <div class="flex items-center gap-3">
                                     <input type="radio" name="period" value="{{ code }}" x-model="selectedPeriod" class="hidden">
                                     <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all"
-                                         :class="selectedPeriod === '{{ code }}' ? 'border-indigo-500' : 'border-white/30'">
-                                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500 transition-transform"
+                                         :class="selectedPeriod === '{{ code }}' ? '' : 'border-white/30'"
+                                         :style="selectedPeriod === '{{ code }}' ? 'border-color:var(--color-secondary);' : ''"
+                                        <div class="w-1.5 h-1.5 rounded-full transition-transform" style="background:var(--color-secondary);"
                                              :class="selectedPeriod === '{{ code }}' ? 'scale-100' : 'scale-0'"></div>
                                     </div>
                                     <div>
@@ -1677,14 +1758,14 @@
                         {% for addon in product.addons %}
                         <div class="rounded-2xl border transition-all duration-200"
                              x-init="(() => { const id = '{{ addon.id }}'; const ep = addonPrices[id] ? Object.keys(addonPrices[id]) : []; const resolvePeriod = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p); if (!addons[id]) addons[id] = { selected: false, period: resolvePeriod(selectedPeriod || '') }; $watch('selectedPeriod', v => { if (addons[id]) addons[id].period = resolvePeriod(v || ''); }); })()"
-                             :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'border-indigo-500/40' : 'border-white/[0.08] hover:border-white/[0.12]'"
-                             :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.06);' : 'background:rgba(255,255,255,0.02);'">
+                             :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? '' : 'border-white/[0.08] hover:border-white/[0.12]'"
+                             :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.06); border-color:var(--color-secondary);' : 'background:rgba(255,255,255,0.02);'">
                             <div class="p-4">
                                 <div class="flex items-start gap-3">
                                     <div class="w-9 h-9 rounded-xl flex-shrink-0 mt-0.5 flex items-center justify-center transition-all"
                                          :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-primary-rgb),0.2);border:1px solid rgba(var(--color-primary-rgb),0.35);' : 'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);'">
                                         <svg class="w-4 h-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                             :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'text-indigo-400' : 'text-gray-500'">
+                                             :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'color:var(--color-secondary);' : 'color:rgb(107,114,128);'">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                                         </svg>
                                     </div>
@@ -1711,7 +1792,7 @@
                                         <div class="flex items-center justify-between mt-3 gap-2">
                     {% if addon.pricing.type == 'recurrent' %}
                     <p class="text-xs flex items-center gap-1"
-                       :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'text-indigo-300/60' : 'text-gray-600'">
+                       :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'color:rgba(var(--color-secondary-rgb),0.60);' : 'color:rgb(75,85,99);'">
                         <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         Billed <span class="ml-0.5" x-text="addonPeriodLabels[selectedPeriod] || selectedPeriod"></span>&nbsp;with your plan
                     </p>
@@ -1726,8 +1807,8 @@
                     {% endif %}
                                             <button @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
                                                     class="px-4 py-2 rounded-xl text-xs font-semibold transition-all border whitespace-nowrap flex items-center gap-1.5"
-                                                    :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20' : 'border-transparent text-white hover:opacity-90'"
-                                                    :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? '' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
+                                                    :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'hover:opacity-80' : 'border-transparent text-white hover:opacity-90'"
+                                                    :style="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'background:rgba(var(--color-secondary-rgb),0.10); border-color:rgba(var(--color-secondary-rgb),0.30); color:var(--color-secondary);' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
                                                 <svg class="w-3 h-3" x-show="!(addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                                                 <svg class="w-3 h-3" x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                                 <span x-text="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'Added' : 'Add'">Add</span>
@@ -1764,7 +1845,7 @@
                     <div>
                         <button type="button" @click="couponOpen = !couponOpen; couponError = null"
                                 class="flex items-center gap-1.5 text-sm font-semibold focus:outline-none transition-colors w-full"
-                                :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:text-indigo-400'">
+                                :class="couponApplied ? 'text-emerald-400' : 'text-gray-400 hover:opacity-70'">
                             <template x-if="couponApplied">
                                 <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </template>
@@ -1824,9 +1905,14 @@
                     <div x-show="errorMsg" x-cloak class="mt-3 p-3 rounded-xl border border-red-500/20 bg-red-500/5">
                         <p class="text-sm text-red-400" x-text="errorMsg"></p>
                     </div>
+                    <a x-show="domainInCart" x-cloak href="{{ '/order/checkout'|url }}"
+                       class="flex items-center justify-center gap-2 mt-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                       style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));">
+                        View Cart →
+                    </a>
 
                     <p class="text-xs text-gray-600 text-center mt-3">
-                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:text-indigo-400">Terms of Service</a>
+                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
                     </p>
                 </div>
 
@@ -1888,6 +1974,7 @@ function domainOrder(productId) {
 
         loading: false,
         errorMsg: null,
+        domainInCart: false,
 
         // Coupon state
         couponDiscount: 0,
@@ -1961,6 +2048,7 @@ function domainOrder(productId) {
         addToCart() {
             this.loading = true;
             this.errorMsg = null;
+            this.domainInCart = false;
 
             const params = {
                 id: this.productId,
@@ -1993,20 +2081,22 @@ function domainOrder(productId) {
                 () => {
                     document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
                     const redirect = () => { window.location.href = '{{ "/order/checkout"|url }}'; };
-                    if (this.couponCode && this.couponCode.trim()) {
+                    if (this.couponApplied && this.couponCode.trim()) {
+                        // Only apply a promo that was pre-validated; failure is non-blocking
                         API.guest.post('cart/apply_promo', { promocode: this.couponCode.trim() },
                             redirect,
-                            (err) => {
-                                this.loading = false;
-                                this.couponApplied = false;
-                                this.couponError   = err.message || 'Promo code could not be applied.';
-                            }
+                            redirect
                         );
                     } else {
                         redirect();
                     }
                 },
-                (err) => { this.loading = false; this.errorMsg = err.message || 'Failed to add to cart.'; }
+                (err) => {
+                    this.loading = false;
+                    const msg = (err && err.message) || 'Failed to add to cart.';
+                    this.errorMsg = msg;
+                    this.domainInCart = /already in the cart/i.test(msg);
+                }
             );
         },
 
@@ -2033,285 +2123,6 @@ function domainOrder(productId) {
     }
 }
 
-function orderProduct(productId, defaultPeriod) {
-    return {
-        productId: productId,
-        selectedPeriod: defaultPeriod || null,
-        loading: false,
-        errorMsg: null,
-        addons: {},  // { addonId: { selected: bool, period: string } }
-
-        // Coupon state
-        couponDiscount: 0,
-        couponOpen: false,
-        couponCode: '',
-        couponLoading: false,
-        couponError: null,
-        couponApplied: false,
-        promoType: null,
-        promoValue: 0,
-        promoPeriods: [],
-        addonPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _pf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _pf %}, {% endif %}'{{ code }}': '{{ prices.price | money_convert }}'{% set _pf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonPricingTypes: {
-            {% for addon in product.addons %}
-            '{{ addon.id }}': '{{ addon.pricing.type }}',
-            {% endfor %}
-        },
-        addonPeriodLabels: { '1W': 'week', '1M': 'mo', '3M': 'qtr', '6M': '6mo', '1Y': 'yr', '2Y': '2yr', '3Y': '3yr' },
-
-        // Raw (unconverted) prices for reactive total calculation
-        addonRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _rf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _rf %}, {% endif %}'{{ code }}': {{ prices.price|default(0) }}{% set _rf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonOnceRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'once' %}
-            '{{ addon.id }}': {{ addon.pricing.once.price|default(0) }},
-            {% endif %}{% endfor %}
-        },
-        productRawPrices: {
-            {% if product.pricing.type == 'recurrent' %}{% for code, prices in product.pricing.recurrent %}{% if prices.enabled %}'{{ code }}': {{ prices.price|default(0) }}, {% endif %}{% endfor %}{% endif %}
-        },
-        productOnceRawPrice: {% if product.pricing.type == 'once' %}{{ product.pricing.once.price|default(0) }}{% else %}0{% endif %},
-        currencyRate: {{ (guest.cart_get_currency).conversion_rate|default(1) }},
-        currencyPriceFormat: {{ (guest.cart_get_currency).price_format|default(2)|json_encode|raw }},
-        currencyFormat: {{ ((guest.cart_get_currency).symbol|default((guest.cart_get_currency).code|default('')) ~ '__PRICE__')|json_encode|raw }},
-
-        formatMoney(rawPrice) {
-            const p = parseFloat(rawPrice) * this.currencyRate;
-            const fmt = parseInt(this.currencyPriceFormat);
-            let s;
-            const addThousands = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-            if (fmt === 1) {
-                s = p.toFixed(2);
-            } else if (fmt === 2) {
-                const pts = p.toFixed(2).split('.');
-                pts[0] = addThousands(pts[0], ',');
-                s = pts.join('.');
-            } else if (fmt === 3) {
-                const pts = p.toFixed(2).split('.');
-                pts[0] = addThousands(pts[0], '.');
-                s = pts.join(',');
-            } else if (fmt === 4) {
-                s = addThousands(Math.round(p).toString(), ',');
-            } else if (fmt === 5) {
-                s = Math.round(p).toString();
-            } else {
-                const pts = p.toFixed(2).split('.');
-                pts[0] = addThousands(pts[0], ',');
-                s = pts.join('.');
-            }
-            return this.currencyFormat.replace('__PRICE__', s);
-        },
-
-        calcTotal(period) {
-            if (!period) return '';
-            let base = 0;
-            if (period === 'once') {
-                base = this.productOnceRawPrice;
-            } else if (period && this.productRawPrices[period] !== undefined) {
-                base = this.productRawPrices[period];
-            }
-            Object.entries(this.addons).forEach(([id, state]) => {
-                if (!state.selected) return;
-                const type = this.addonPricingTypes[id];
-                if (type === 'recurrent') {
-                    const addonPeriod = state.period || period;
-                    if (this.addonRawPrices[id] && this.addonRawPrices[id][addonPeriod] !== undefined) {
-                        base += this.addonRawPrices[id][addonPeriod];
-                    }
-                } else if (type === 'once') {
-                    if (this.addonOnceRawPrices[id] !== undefined) {
-                        base += this.addonOnceRawPrices[id];
-                    }
-                }
-            });
-            let discount = 0;
-            if (this.couponApplied && this.promoType && base > 0) {
-                const periodOk = this.promoPeriods.length === 0 || period === 'once' || this.promoPeriods.includes(period);
-                if (periodOk) {
-                    if (this.promoType === 'percentage') {
-                        discount = Math.round(base * this.promoValue / 100 * 100) / 100;
-                    } else if (this.promoType === 'absolute') {
-                        discount = Math.min(this.promoValue, base);
-                    }
-                }
-            }
-            this.couponDiscount = discount;
-            return this.formatMoney(Math.max(0, base - discount));
-        },
-
-        applyCoupon() {
-            const code = this.couponCode.trim();
-            if (!code || this.couponLoading || this.couponApplied) return;
-            this.couponLoading = true;
-            this.couponError   = null;
-            API.guest.post('cart/validate_promo', { promocode: code, product_id: this.productId, period: this.selectedPeriod || '' },
-                (promo) => {
-                    this.couponLoading = false;
-                    this.couponApplied = true;
-                    this.promoType     = promo.type    || null;
-                    this.promoValue    = promo.value   || 0;
-                    this.promoPeriods  = promo.periods || [];
-                },
-                (err) => {
-                    this.couponLoading = false;
-                    this.couponApplied = false;
-                    this.couponError   = err.message || 'Invalid promo code.';
-                }
-            );
-        },
-
-        init() {
-            if (!this.selectedPeriod) {
-                const firstRadio = this.$el.querySelector('input[name="period"]');
-                if (firstRadio) {
-                    this.selectedPeriod = firstRadio.value;
-                }
-            }
-            // Initialize addon state and sync periods with selectedPeriod
-            const addonIds = Object.keys(this.addonPricingTypes);
-            addonIds.forEach(id => {
-                const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                const resolve = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                if (!this.addons[id]) {
-                    this.addons[id] = { selected: false, period: resolve(this.selectedPeriod || '') };
-                }
-            });
-            this.$watch('selectedPeriod', (v) => {
-                addonIds.forEach(id => {
-                    const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                    const resolve = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                    if (this.addons[id]) this.addons[id].period = resolve(v || '');
-                });
-            });
-        },
-
-        toggleAddon(addonId, pricingType) {
-            const key = String(addonId);
-            if (!this.addons[key]) {
-                // For recurrent addons, resolve a valid period: prefer selectedPeriod if the addon supports it, else use addon's first enabled period
-                let addonPeriod = '';
-                if (pricingType === 'recurrent' || this.addonPricingTypes[key] === 'recurrent') {
-                    const enabledPeriods = this.addonPrices[key] ? Object.keys(this.addonPrices[key]) : [];
-                    if (this.selectedPeriod && enabledPeriods.includes(this.selectedPeriod)) {
-                        addonPeriod = this.selectedPeriod;
-                    } else if (enabledPeriods.length > 0) {
-                        addonPeriod = enabledPeriods[0];
-                    }
-                }
-                this.addons[key] = { selected: false, period: addonPeriod };
-            }
-            this.addons[key].selected = !this.addons[key].selected;
-        },
-
-        addToCart(period) {
-            if (!period) return;
-            this.loading = true;
-            this.errorMsg = null;
-
-            const data = { id: this.productId, multiple: 1 };
-            if (period !== 'once' && period !== 'free') {
-                data.period = period;
-            }
-
-            // Collect domain fields for hosting products (equivalent to form POST in native theme)
-            this.$el.querySelectorAll('input[name^="domain["], select[name^="domain["]').forEach(el => {
-                if (el.type === 'radio' && !el.checked) return;
-                data[el.name] = el.value;
-            });
-
-            // Collect formbuilder fields if present
-            const fbSection = this.$refs.formbuilderSection;
-            if (fbSection) {
-                const inputs = fbSection.querySelectorAll('input[name], select[name], textarea[name]');
-                inputs.forEach(el => {
-                    if (el.name === 'form_id' || el.name === 'id') {
-                        data[el.name] = el.value;
-                    } else if (el.type === 'checkbox') {
-                        if (!data[el.name]) data[el.name] = [];
-                        if (el.checked) data[el.name].push(el.value);
-                    } else if (el.type === 'radio') {
-                        if (el.checked) data[el.name] = el.value;
-                    } else {
-                        data[el.name] = el.value;
-                    }
-                });
-                // Validate required fields
-                const required = fbSection.querySelectorAll('[required]');
-                for (const el of required) {
-                    if (!el.value || !el.value.trim()) {
-                        this.loading = false;
-                        this.errorMsg = 'Please fill in all required fields.';
-                        el.focus();
-                        return;
-                    }
-                }
-            }
-
-            // Attach selected addons
-            const addonPayload = {};
-            let hasAddons = false;
-            Object.entries(this.addons).forEach(([id, state]) => {
-                addonPayload[id] = { selected: state.selected };
-                if (state.selected) {
-                    // For recurrent addons, always send a period — resolve fallback if missing
-                    if (this.addonPricingTypes[id] === 'recurrent') {
-                        let addonPeriod = state.period;
-                        if (!addonPeriod) {
-                            const enabledPeriods = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                            if (period && enabledPeriods.includes(period)) {
-                                addonPeriod = period;
-                            } else if (enabledPeriods.length > 0) {
-                                addonPeriod = enabledPeriods[0];
-                            }
-                        }
-                        if (!addonPeriod) {
-                            this.loading = false;
-                            this.errorMsg = 'Selected add-on has no valid billing period. Please deselect it or contact support.';
-                            return;
-                        }
-                        addonPayload[id].period = addonPeriod;
-                    } else if (state.period) {
-                        addonPayload[id].period = state.period;
-                    }
-                }
-                hasAddons = true;
-            });
-            if (hasAddons) {
-                data.addons = addonPayload;
-            }
-
-            API.guest.post('cart/add_item', data,
-                (response) => {
-                    document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
-                    const redirect = () => { window.location.href = '{{ "/order/checkout"|url }}'; };
-                    if (this.couponCode.trim()) {
-                        API.guest.post('cart/apply_promo', { promocode: this.couponCode.trim() },
-                            redirect,
-                            (err) => {
-                                this.loading = false;
-                                this.couponApplied = false;
-                                this.couponError   = err.message || 'Promo code could not be applied.';
-                            }
-                        );
-                    } else {
-                        redirect();
-                    }
-                },
-                (error) => {
-                    this.loading = false;
-                    this.errorMsg = error.message || 'Failed to add to cart. Please try again.';
-                }
-            );
-        }
-    }
-}
 
 function checkoutAuth() {
     return {

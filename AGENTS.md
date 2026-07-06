@@ -1,5 +1,18 @@
 # FOSSBilling Project
 
+## Legacy Module / Theme Porting
+
+When importing any code from the `merovps/` v0.7.2 legacy snapshot, **read `LEGACY_MIGRATION.md`** in this directory before touching any file. It covers every breaking change from 0.7.2 → 0.8.3:
+- Twig filter renames (`bb_date` → `format_date`, etc.)
+- Removed `Box_*` classes and the pagination API change
+- Removed modules (Paidsupport, Servicemembership, Spamchecker→Antispam, Queue, Wysiwyg)
+- UUID library swap (ramsey → symfony/uid)
+- Webpack → esbuild frontend build migration
+- Email template action code format and file-backed template structure
+- merotheme-specific porting checklist (Alpine.js, dark mode, icon format)
+
+---
+
 ## Project Overview
 
 FOSSBilling is a free and open-source billing and client management solution designed for hosting businesses and other online service providers. It automates invoicing, payment processing, and client management while being extensible and easily integrable with server management software and payment gateways. The project is primarily written in PHP with modern frontend technologies.

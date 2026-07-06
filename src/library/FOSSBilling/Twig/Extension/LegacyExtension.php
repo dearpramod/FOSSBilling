@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace FOSSBilling\Twig\Extension;
 
 use Twig\Attribute\AsTwigFilter;
+use Twig\Environment;
 
 class LegacyExtension
 {
@@ -69,5 +70,54 @@ class LegacyExtension
         }
 
         return $this->di['api_guest']->system_period_title(['code' => $period]);
+    }
+
+    #[AsTwigFilter('money', isSafe: ['html'], needsEnvironment: true)]
+    public function money(Environment $env, mixed $price, ?string $currency = null): string
+    {
+        $globals = $env->getGlobals();
+
+        return $globals['guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => false]);
+    }
+
+    #[AsTwigFilter('money_convert', isSafe: ['html'], needsEnvironment: true)]
+    public function moneyConvert(Environment $env, mixed $price, ?string $currency = null): string
+    {
+        $globals = $env->getGlobals();
+        $api_guest = $globals['guest'];
+        if ($currency === null) {
+            $c = $api_guest->cart_get_currency();
+            $currency = $c['code'];
+        }
+
+        return $api_guest->currency_format(['price' => $price, 'code' => $currency, 'convert' => true]);
+    }
+
+    #[AsTwigFilter('money_without_currency', isSafe: ['html'], needsEnvironment: true)]
+    public function moneyWithoutCurrency(Environment $env, mixed $price, ?string $currency = null): string
+    {
+        $globals = $env->getGlobals();
+
+        return $globals['guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => false, 'without_currency' => true]);
+    }
+
+    #[AsTwigFilter('gravatar')]
+    public function gravatar(?string $email, int $size = 20): string
+    {
+        if (empty($email)) {
+            return '';
+        }
+
+        return 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($email))) . "?s={$size}&d=mp&r=g";
+    }
+
+    #[AsTwigFilter('markdown', isSafe: ['html'])]
+    public function markdown(?string $content): string
+    {
+        if ($content === null) {
+            return '';
+        }
+
+        return (new \FOSSBilling\Twig\Markdown\FOSSBillingMarkdown($this->di))->convert($content);
     }
 }

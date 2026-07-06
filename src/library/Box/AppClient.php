@@ -28,6 +28,16 @@ class Box_AppClient extends Box_App
             ini_set('display_startup_errors', '0');
         } else {
             $extensionService = $this->di['mod_service']('extension');
+
+            // Register client routes from ALL installed modules so modules can
+            // define any URL pattern, not just paths prefixed by their own name.
+            foreach ($extensionService->getInstalledMods() as $installedMod) {
+                if ($installedMod === $this->mod) {
+                    continue; // already registered above
+                }
+                $this->di['mod']($installedMod)->registerClientRoutes($this);
+            }
+
             if ($extensionService->isExtensionActive('mod', 'redirect')) {
                 $m = $this->di['mod']('redirect');
                 $m->registerClientRoutes($this);

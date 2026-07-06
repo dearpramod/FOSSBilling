@@ -11,25 +11,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ CSRFToken }}">
 
-    {# ── Theme color custom properties ── #}
-    {% set pc = settings.primary_color|default('#6366f1') %}
-    {% set sc = settings.secondary_color|default('#7c3aed') %}
-    <style>
-        :root {
-            --color-primary: {{ pc }};
-            --color-primary-container: {{ pc }};
-            --color-on-primary-container: #ffffff;
-            --color-secondary: {{ sc }};
-        }
-    </style>
-    <script>
-        (function(){
-            function hexToRgb(h){var r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return r+','+g+','+b;}
-            var s=document.documentElement.style;
-            s.setProperty('--color-primary-rgb',hexToRgb('{{ pc }}'));
-            s.setProperty('--color-secondary-rgb',hexToRgb('{{ sc }}'));
-        })();
-    </script>
+    {# ── Theme color custom properties (shared partial: full brand scale) ── #}
+    {% include 'partials/theme_colors.html.twig' %}
     <link rel="shortcut icon" href="{{ guest.system_company.favicon_url }}">
     <link rel="canonical" href="{% block canonical_url %}{{ constant('SYSTEM_URL') ~ current_path|trim('/') }}{% endblock %}">
     {% block opengraph %}
@@ -148,6 +131,8 @@
         globalThis.FOSSBilling = Object.assign(globalThis.FOSSBilling || {}, globalThis.FBPanel);
         // Shorthand alias used throughout templates: API.client.post(...) etc.
         globalThis.API = window.FOSSBilling.api;
+        // StablePanel: thin alias used across templates for toast notifications.
+        globalThis.StablePanel = { message: function(msg, type) { FOSSBilling.message(msg, type); } };
     })();
     </script>
 
@@ -310,7 +295,7 @@
             {% if settings.nav_dashboard != '0' %}
             <a href="{{ '/dashboard'|url }}" title="Home"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if request.uri == '/' or request.uri == '/dashboard' %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if request.uri == '/' or request.uri == '/dashboard' %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
@@ -323,7 +308,7 @@
             {% if settings.nav_services != '0' %}
             <a href="{{ '/order/service'|url }}" title="My Services"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'order/service' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'order/service' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 10h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
@@ -339,7 +324,7 @@
             <a x-show="sidebarCollapsed"
                href="{{ '/order'|url }}" title="Order Services"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if orderServicesActive %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if orderServicesActive %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -351,7 +336,7 @@
             <div x-show="!sidebarCollapsed">
                 <button @click="orderServicesOpen = !orderServicesOpen"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                               {% if orderServicesActive %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}">
+                               {% if orderServicesActive %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -367,14 +352,14 @@
 
                           <a href="{{ '/order'|url }}"
                               class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
-                              {% if request.uri == '/order' %}text-[#6366f1] bg-[#f5f3ff]{% else %}text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff]{% endif %}">
+                              {% if request.uri == '/order' %}text-primary bg-violet-50{% else %}text-slate-400 hover:text-primary hover:bg-violet-50{% endif %}">
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
                         </svg>
                         All Products
                     </a>
 
-                    {%- set sidebarCategories = guest.product_category_get_list({'per_page': 50}) -%}
+                    {%- set sidebarCategories = guest.product_category_get_list({'per_page': 50, 'deep': 0}) -%}
                     {%- set _sb_type_order = {'hosting': 0, 'server': 1, 'custom': 2, 'domain': 3, 'downloadable': 4, 'license': 5, 'membership': 6} -%}
                     {%- set _sb_type_icons = {
                         'hosting':      {'path': 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2', 'active': 'text-indigo-400 bg-indigo-500/10'},
@@ -392,7 +377,7 @@
                     {%- set catActive = (category.type == 'domain') ? ('order/domain-registration' in request.uri) : (('order/' ~ category.slug) in request.uri) -%}
                           <a href="{{ catHref }}"
                               class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
-                              {{ catActive ? _ci.active : 'text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff]' }}">
+                              {{ catActive ? _ci.active : 'text-slate-400 hover:text-primary hover:bg-violet-50' }}">
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ _ci.path }}"/>
                         </svg>
@@ -408,7 +393,7 @@
             {% if settings.nav_support != '0' %}
             <a href="{{ (client ? '/support' : '/support/contact-us')|url }}" title="Support"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'support' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'support' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
@@ -419,7 +404,7 @@
 
             <a href="{{ '/support/kb'|url }}" title="Knowledge Base"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'support/kb' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'support/kb' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
@@ -429,7 +414,7 @@
 
             <a href="{{ '/news'|url }}" title="News"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'news' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'news' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
@@ -448,7 +433,7 @@
             {% if settings.nav_invoices != '0' %}
             <a href="{{ '/invoice'|url }}" title="Invoices"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'invoice' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'invoice' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
@@ -460,7 +445,7 @@
             {% if settings.nav_balance != '0' %}
             <a href="{{ '/client/balance'|url }}" title="Credits &amp; Balance"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'client/balance' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'client/balance' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
@@ -472,7 +457,7 @@
             {% if settings.nav_profile != '0' %}
             <a href="{{ '/client/profile'|url }}" title="Profile"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'client/profile' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'client/profile' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
@@ -482,7 +467,7 @@
             {% if _partnership_on and client %}
             <a href="{{ '/partnership-program'|url }}" title="Partnership Program"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'partnership-program' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'partnership-program' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2h-2m-5-12V6a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2h5a2 2 0 002-2v-2m0-8H9m4 0V7m0 1h4"/>
@@ -494,7 +479,7 @@
 
             <a href="{{ '/email'|url }}" title="Email History"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'email' in request.uri %}bg-[#f5f3ff] text-[#6366f1] border-l-[3px] border-l-[#6366f1] rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]{% endif %}"
+                      {% if 'email' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -509,7 +494,7 @@
         <div class="px-3 py-2">
             <button @click.stop="helpOpen = !helpOpen; sidebarOpen = false; if(helpOpen){ $nextTick(() => { const p = document.getElementById('help-panel'); p.classList.remove('hp-anim'); void p.offsetWidth; p.classList.add('hp-anim'); }) }"
                     title="Help &amp; Support"
-                    class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-slate-500 hover:bg-[#f5f3ff] hover:text-[#6366f1]"
+                    class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-slate-500 hover:bg-violet-50 hover:text-primary"
                     :class="[sidebarCollapsed ? 'justify-center px-2' : '', helpOpen ? 'bg-indigo-500/10 text-indigo-400 help-btn-active' : '']">
                 <div class="relative flex-shrink-0">
                     <svg class="w-5 h-5 chat-icon-animate" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
@@ -793,7 +778,7 @@
             {% if isDashboardRoute %}
             <div class="w-full flex items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
-                    {% if _show_sidebar %}<button @click="sidebarOpen = !sidebarOpen" class="lg:hidden p-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-colors">
+                    {% if _show_sidebar %}<button @click="sidebarOpen = !sidebarOpen" class="lg:hidden p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>
@@ -869,7 +854,7 @@
                     </button>
                     <div class="relative ml-1" x-data="{ open: false }" @click.outside="open=false">
                         <button @click="open=!open"
-                                class="flex items-center gap-1.5 px-2 py-2 rounded-lg text-slate-500 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all"
+                                class="flex items-center gap-1.5 px-2 py-2 rounded-lg text-slate-500 hover:text-primary hover:bg-violet-50 transition-all"
                                 title="Account">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -888,19 +873,19 @@
                                     <p class="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">{{ profile.email }}</p>
                                 </div>
                                 <div class="py-1">
-                                    <a href="{{ '/dashboard'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                    <a href="{{ '/dashboard'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                         <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                                         Dashboard
                                     </a>
-                                    <a href="{{ '/invoice'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                    <a href="{{ '/invoice'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                         <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                         Invoices
                                     </a>
-                                    <a href="{{ '/client/balance'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                    <a href="{{ '/client/balance'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                         <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                         Credits
                                     </a>
-                                    <a href="{{ '/client/profile'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                    <a href="{{ '/client/profile'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                         <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                                         Profile
                                     </a>
@@ -913,11 +898,11 @@
                                 </div>{% endif %}
                             {% else %}
                                 <div class="py-1">
-                                    <a href="{{ 'login'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                    <a href="{{ 'login'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                         <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
                                         Log in
                                     </a>
-                                    <a href="{{ 'signup'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                    <a href="{{ 'signup'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                         <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
                                         Create Account
                                     </a>
@@ -930,7 +915,7 @@
             {% else %}
             <div class="flex items-center gap-4">
                 <!-- Mobile menu button -->
-                {% if _show_sidebar %}<button @click="sidebarOpen = !sidebarOpen" class="lg:hidden p-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-colors">
+                {% if _show_sidebar %}<button @click="sidebarOpen = !sidebarOpen" class="lg:hidden p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
@@ -946,7 +931,7 @@
                 {# Notification bell #}
                 <a href="{{ (client ? '/support' : '/support/contact-us')|url }}" title="Support &amp; Tickets"
                    aria-label="Support and Tickets"
-                   class="relative p-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                   class="relative p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                     <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                     </svg>
@@ -955,7 +940,7 @@
                 {# Cart icon #}
                 <a id="cart-link-topbar" href="{{ '/cart'|url }}" title="Cart"
                    aria-label="Shopping cart"
-                   class="relative p-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                   class="relative p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                     <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
@@ -975,7 +960,7 @@
                 {% elseif not client and currencies|length > 1 %}
                 <div class="relative" x-data="{ open: false }" @click.outside="open=false">
                     <button @click="open=!open" title="Change currency"
-                            class="flex items-center gap-1 px-2 py-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                            class="flex items-center gap-1 px-2 py-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
@@ -1005,7 +990,7 @@
 
                 {% if client and guest.extension_is_on({'mod': 'supportpin'}) %}
                 <button type="button" @click="$dispatch('supportpin-open')" title="Support PIN"
-                        class="p-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                        class="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
                     </svg>
@@ -1014,7 +999,7 @@
 
                 {# Theme toggle #}
                 <button @click="darkMode = !darkMode" title="Toggle dark/light mode"
-                        class="p-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all" x-show="true">
+                        class="p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all" x-show="true">
                     <svg x-show="darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
                     </svg>
@@ -1026,7 +1011,7 @@
                 {# Account dropdown #}
                 <div class="relative" x-data="{ open: false }" @click.outside="open=false">
                     <button @click="open=!open"
-                            class="flex items-center gap-1.5 px-2 py-2 rounded-lg text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all"
+                            class="flex items-center gap-1.5 px-2 py-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all"
                             title="Account">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -1045,19 +1030,19 @@
                                 <p class="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">{{ profile.email }}</p>
                             </div>
                             <div class="py-1">
-                                <a href="{{ '/dashboard'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                <a href="{{ '/dashboard'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                                     Dashboard
                                 </a>
-                                <a href="{{ '/invoice'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                <a href="{{ '/invoice'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Invoices
                                 </a>
-                                <a href="{{ '/client/balance'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                <a href="{{ '/client/balance'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                     Credits
                                 </a>
-                                <a href="{{ '/client/profile'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                <a href="{{ '/client/profile'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                                     Profile
                                 </a>
@@ -1070,11 +1055,11 @@
                             </div>{% endif %}
                         {% else %}
                             <div class="py-1">
-                                <a href="{{ 'login'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                <a href="{{ 'login'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
                                     Log in
                                 </a>
-                                <a href="{{ 'signup'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-[#6366f1] dark:hover:text-indigo-400 hover:bg-[#f5f3ff] dark:hover:bg-indigo-500/10 transition-all">
+                                <a href="{{ 'signup'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 hover:bg-violet-50 dark:hover:bg-indigo-500/10 transition-all">
                                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
                                     Create Account
                                 </a>
@@ -1110,24 +1095,24 @@
                             {# reuses company set at top of template — no extra API call #}
                             <span class="text-[10px] text-slate-400 tabular-nums">
                                 &copy; {{ "now"|date("Y") }}
-                                <a href="{{ '/'|url }}" class="hover:text-[#6366f1] transition-colors font-medium">{{ company.name }}</a>.
+                                <a href="{{ '/'|url }}" class="hover:text-primary transition-colors font-medium">{{ company.name }}</a>.
                                 All rights reserved.
                             </span>
                         </div>
                         {# Right — nav links #}
                         <nav class="flex items-center gap-1 order-1 sm:order-2">
                             <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}"
-                               class="px-2.5 py-1 rounded-md text-[10px] text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                               class="px-2.5 py-1 rounded-md text-[10px] text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                                 Privacy Policy
                             </a>
                             <span class="text-slate-200 select-none">·</span>
                             <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}"
-                               class="px-2.5 py-1 rounded-md text-[10px] text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                               class="px-2.5 py-1 rounded-md text-[10px] text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                                 Terms &amp; Conditions
                             </a>
                             <span class="text-slate-200 select-none">·</span>
                             <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
-                               class="px-2.5 py-1 rounded-md text-[10px] text-slate-400 hover:text-[#6366f1] hover:bg-[#f5f3ff] transition-all">
+                               class="px-2.5 py-1 rounded-md text-[10px] text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
                                 Support
                             </a>
                         </nav>

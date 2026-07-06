@@ -101,21 +101,27 @@
 {% endmacro %}
 
 {% macro recaptcha() %}
-{% if guest.extension_is_on({"mod":"spamchecker"}) %}
-{% set rc = guest.spamchecker_recaptcha %}
-    {% if rc.enabled and rc.publickey and rc.pages.contact %}
-        {% if rc.version == 3 %}
-            {# reCAPTCHA Enterprise — invisible score-based, no user-facing widget #}
-            <script src="https://www.google.com/recaptcha/enterprise.js?render={{ rc.publickey }}" async defer></script>
+{% if guest.extension_is_on({"mod":"antispam"}) %}
+{% set rc = guest.antispam_recaptcha %}
+    {% if rc.enabled %}
+        {% set provider = rc.captcha_provider|default('recaptcha_v2') %}
+        {% if provider == 'turnstile' and rc.turnstile_site_key %}
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+            <div class="cf-turnstile mt-3 mb-4" data-sitekey="{{ rc.turnstile_site_key }}"></div>
+        {% elseif provider == 'hcaptcha' and rc.hcaptcha_site_key %}
+            <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+            <div class="h-captcha mt-3 mb-4" data-sitekey="{{ rc.hcaptcha_site_key }}"></div>
+        {% elseif provider == 'recaptcha_v3' and rc.publickey %}
+            <script src="https://www.google.com/recaptcha/api.js?render={{ rc.publickey }}" async defer></script>
             <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response-macro">
             <script>
             (function(){
-                function attachEnterprise(form) {
+                function attachV3(form) {
                     if (!form) return;
                     form.addEventListener('submit', function(e) {
                         e.preventDefault();
-                        grecaptcha.enterprise.ready(function() {
-                            grecaptcha.enterprise.execute('{{ rc.publickey }}', {action: 'SUBMIT_TICKET'}).then(function(token) {
+                        grecaptcha.ready(function() {
+                            grecaptcha.execute('{{ rc.publickey }}', {action: 'SUBMIT_TICKET'}).then(function(token) {
                                 var field = form.querySelector('[name="g-recaptcha-response"]');
                                 if (field) field.value = token;
                                 form.submit();
@@ -125,11 +131,11 @@
                 }
                 document.addEventListener('DOMContentLoaded', function() {
                     var el = document.getElementById('g-recaptcha-response-macro');
-                    if (el) attachEnterprise(el.closest('form'));
+                    if (el) attachV3(el.closest('form'));
                 });
             }());
             </script>
-        {% else %}
+        {% elseif rc.publickey %}
             {# reCAPTCHA v2 — checkbox widget #}
             <script src='https://www.google.com/recaptcha/api.js' async defer></script>
             <div class="g-recaptcha mt-3 mb-4" data-sitekey="{{ rc.publickey }}"></div>

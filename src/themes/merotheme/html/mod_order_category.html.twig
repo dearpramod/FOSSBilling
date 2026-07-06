@@ -88,202 +88,8 @@
 {% else %}
     {% set first_period = '' %}
 {% endif %}
-{# orderProduct script defined BEFORE its x-data element so Alpine (started eagerly in <head>) can find it #}
-<script>
-if (typeof orderProduct === 'undefined') {
-function orderProduct(productId, defaultPeriod) {
-    return {
-        productId: productId,
-        selectedPeriod: defaultPeriod || null,
-        loading: false,
-        errorMsg: null,
-        addons: {},
-        couponDiscount: 0,
-        couponOpen: false,
-        couponCode: '',
-        couponLoading: false,
-        couponError: null,
-        couponApplied: false,
-        promoType: null,
-        promoValue: 0,
-        promoPeriods: [],
-        addonPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _pf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _pf %}, {% endif %}'{{ code }}': '{{ prices.price | money_convert }}'{% set _pf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonPricingTypes: {
-            {% for addon in product.addons %}
-            '{{ addon.id }}': '{{ addon.pricing.type }}',
-            {% endfor %}
-        },
-        addonPeriodLabels: { '1W': 'week', '1M': 'mo', '3M': 'qtr', '6M': '6mo', '1Y': 'yr', '2Y': '2yr', '3Y': '3yr' },
-        addonRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
-            '{{ addon.id }}': { {% set _rf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _rf %}, {% endif %}'{{ code }}': {{ prices.price|default(0) }}{% set _rf = false %}{% endif %}{% endfor %} },
-            {% endif %}{% endfor %}
-        },
-        addonOnceRawPrices: {
-            {% for addon in product.addons %}{% if addon.pricing.type == 'once' %}
-            '{{ addon.id }}': {{ addon.pricing.once.price|default(0) }},
-            {% endif %}{% endfor %}
-        },
-        productRawPrices: {
-            {% if product.pricing.type == 'recurrent' %}{% for code, prices in product.pricing.recurrent %}{% if prices.enabled %}'{{ code }}': {{ prices.price|default(0) }}, {% endif %}{% endfor %}{% endif %}
-        },
-        productOnceRawPrice: {% if product.pricing.type == 'once' %}{{ product.pricing.once.price|default(0) }}{% else %}0{% endif %},
-        domainRawPrice: 0,
-        currencyRate: {{ (guest.cart_get_currency).conversion_rate|default(1) }},
-        currencyCode: {{ (guest.cart_get_currency).code|default('USD')|json_encode|raw }},
-        currencyPriceFormat: {{ (guest.cart_get_currency).price_format|default(2)|json_encode|raw }},
-        currencyFormat: {{ ((guest.cart_get_currency).symbol|default((guest.cart_get_currency).code|default('')) ~ '__PRICE__')|json_encode|raw }},
-        formatMoney(rawPrice) {
-            const p = parseFloat(rawPrice) * this.currencyRate;
-            const tpl = this.currencyFormat;
-            if (tpl && tpl.includes('__PRICE__')) {
-                const fmt = parseInt(this.currencyPriceFormat);
-                let s;
-                const th = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-                if (fmt === 3) { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], '.'); s = pts.join(','); }
-                else if (fmt === 4) { s = th(Math.round(p).toString(), ','); }
-                else if (fmt === 5) { s = Math.round(p).toString(); }
-                else { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], ','); s = pts.join('.'); }
-                return tpl.replace('__PRICE__', s);
-            }
-            return new Intl.NumberFormat(undefined, {
-                style: 'currency', currency: this.currencyCode, currencyDisplay: 'narrowSymbol',
-            }).format(p);
-        },
-        calcTotal(period) {
-            if (!period) return '';
-            let base = 0;
-            if (period === 'once') { base = this.productOnceRawPrice; }
-            else if (period === 'free') { base = 0; }
-            else if (this.productRawPrices[period] !== undefined) { base = this.productRawPrices[period]; }
-            base += this.domainRawPrice;
-            Object.entries(this.addons).forEach(([id, state]) => {
-                if (!state.selected) return;
-                const type = this.addonPricingTypes[id];
-                if (type === 'recurrent') {
-                    const ap = state.period || period;
-                    if (this.addonRawPrices[id] && this.addonRawPrices[id][ap] !== undefined) base += this.addonRawPrices[id][ap];
-                } else if (type === 'once') {
-                    if (this.addonOnceRawPrices[id] !== undefined) base += this.addonOnceRawPrices[id];
-                }
-            });
-            let discount = 0;
-            if (this.couponApplied && this.promoType && base > 0) {
-                const periodOk = this.promoPeriods.length === 0 || period === 'once' || this.promoPeriods.includes(period);
-                if (periodOk) {
-                    if (this.promoType === 'percentage') { discount = Math.round(base * this.promoValue / 100 * 100) / 100; }
-                    else if (this.promoType === 'absolute') { discount = Math.min(this.promoValue, base); }
-                }
-            }
-            this.couponDiscount = discount;
-            return this.formatMoney(Math.max(0, base - discount));
-        },
-        applyCoupon() {
-            const code = this.couponCode.trim();
-            if (!code || this.couponLoading || this.couponApplied) return;
-            this.couponLoading = true; this.couponError = null; this.couponApplied = false;
-            API.guest.post('cart/validate_promo', { promocode: code, product_id: this.productId, period: this.selectedPeriod || '' },
-                (promo) => {
-                    this.couponLoading = false; this.couponApplied = true; this.couponError = null;
-                    this.promoType = promo.type || null; this.promoValue = promo.value || 0; this.promoPeriods = promo.periods || [];
-                },
-                (err) => {
-                    this.couponLoading = false; this.couponApplied = false;
-                    this.couponError = (err && err.message) ? err.message : 'Invalid promo code.';
-                }
-            );
-        },
-        init() {
-            this._rootEl = this.$el;
-            if (!this.selectedPeriod) {
-                const periodEl = this._rootEl.querySelector('select[name="period"], input[name="period"]');
-                if (periodEl) this.selectedPeriod = periodEl.value || null;
-            }
-            const addonIds = Object.keys(this.addonPricingTypes);
-            addonIds.forEach(id => {
-                const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                const resolve = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                if (!this.addons[id]) this.addons[id] = { selected: false, period: resolve(this.selectedPeriod || '') };
-            });
-            this.$watch('selectedPeriod', (v) => {
-                addonIds.forEach(id => {
-                    const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                    const resolve = (p) => (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-                    if (this.addons[id]) this.addons[id].period = resolve(v || '');
-                });
-            });
-            document.addEventListener('domainPriceUpdated', (e) => {
-                this.domainRawPrice = parseFloat(e.detail.rawPrice) || 0;
-            });
-        },
-        toggleAddon(addonId, pricingType) {
-            const key = String(addonId);
-            if (!this.addons[key]) {
-                let addonPeriod = '';
-                if (pricingType === 'recurrent' || this.addonPricingTypes[key] === 'recurrent') {
-                    const ep = this.addonPrices[key] ? Object.keys(this.addonPrices[key]) : [];
-                    addonPeriod = (this.selectedPeriod && ep.includes(this.selectedPeriod)) ? this.selectedPeriod : (ep[0] || '');
-                }
-                this.addons[key] = { selected: false, period: addonPeriod };
-            }
-            this.addons[key].selected = !this.addons[key].selected;
-        },
-        addToCart(period) {
-            if (!period) return;
-            this.loading = true; this.errorMsg = null;
-            const data = { id: this.productId, multiple: 1 };
-            if (period !== 'once' && period !== 'free') data.period = period;
-            const domainInputs = (this._rootEl || this.$el).querySelectorAll('input[name^="domain["], select[name^="domain["]');
-            if (domainInputs.length > 0) {
-                const domainData = {};
-                domainInputs.forEach(el => {
-                    const m = el.name.match(/^domain\[([^\]]+)\]$/);
-                    if (!m) return;
-                    if (el.type === 'radio') { if (el.checked) domainData[m[1]] = el.value; }
-                    else { domainData[m[1]] = el.value; }
-                });
-                if (Object.keys(domainData).length > 0) data.domain = domainData;
-            }
-            const addonPayload = {}; let hasAddons = false;
-            Object.entries(this.addons).forEach(([id, state]) => {
-                addonPayload[id] = { selected: state.selected };
-                if (state.selected) {
-                    if (this.addonPricingTypes[id] === 'recurrent') {
-                        let ap = state.period;
-                        if (!ap) { const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : []; ap = (period && ep.includes(period)) ? period : (ep[0] || ''); }
-                        if (!ap) { this.loading = false; this.errorMsg = 'Selected add-on has no valid billing period.'; return; }
-                        addonPayload[id].period = ap;
-                    } else if (state.period) { addonPayload[id].period = state.period; }
-                }
-                hasAddons = true;
-            });
-            if (hasAddons) data.addons = addonPayload;
-            API.guest.post('cart/add_item', data,
-                (response) => {
-                    document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
-                    if (this.couponCode.trim()) {
-                        API.guest.post('cart/apply_promo', { promocode: this.couponCode.trim() },
-                            () => { window.location.href = '{{ "/order/checkout"|url }}'; },
-                            (err) => {
-                                this.loading = false; this.couponApplied = false;
-                                this.couponError = err.message || 'Promo code could not be applied.';
-                            }
-                        );
-                    } else {
-                        window.location.href = '{{ "/order/checkout"|url }}';
-                    }
-                },
-                (error) => { this.loading = false; this.errorMsg = error.message || 'Failed to add to cart. Please try again.'; }
-            );
-        }
-    }
-}
-}
-</script>
+{# Shared orderProduct component — included BEFORE its x-data element so Alpine can find it #}
+{% include 'partial_order_product_component.html.twig' %}
 {# Parse product description into feature bullets #}
 {% set _prod_desc_raw = product.description|default('')
     |replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})
@@ -379,30 +185,6 @@ function orderProduct(productId, defaultPeriod) {
                 {% include _order_form_tpl %}
             {% endif %}
 
-            {# ── Billing period selector ── #}
-            {% if product.pricing.type == 'recurrent' %}
-            <div class="{% if guest.system_template_exists({ 'file': _order_form_tpl }) %}pt-6 border-t border-outline-variant/40{% endif %}">
-                <div class="flex items-center gap-2 mb-3">
-                    <span class="material-symbols-outlined text-primary text-lg">calendar_today</span>
-                    <p class="text-sm font-semibold text-on-surface">{{ 'Billing Period'|trans }}</p>
-                </div>
-                {% if _opf_enabled|length > 1 %}
-                <div class="relative max-w-xs">
-                    <select x-model="selectedPeriod" name="period"
-                            class="w-full h-11 rounded-xl border border-outline-variant bg-white px-4 pr-10 text-sm text-on-surface appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
-                        {% for pk in _opf_enabled %}
-                        <option value="{{ pk }}">{{ _opf_pk_labels[pk] }}</option>
-                        {% endfor %}
-                    </select>
-                    <span class="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
-                </div>
-                {% else %}
-                <input type="hidden" name="period" :value="selectedPeriod">
-                <p class="text-sm font-medium text-on-surface">{{ _opf_pk_labels[_opf_enabled|first] ?? '' }}</p>
-                {% endif %}
-            </div>
-            {% endif %}
-
             {# ── Add-ons ── #}
             {% if product.addons|length > 0 %}
             <div class="pt-6 border-t border-outline-variant/40">
@@ -454,10 +236,10 @@ function orderProduct(productId, defaultPeriod) {
                     {% else %}
                     <button type="button" @click="addToCart('free')" :disabled="loading"
                     {% endif %}
-                            class="inline-flex items-center gap-2 px-8 py-4 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                            style="background: var(--color-primary); box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.3);">
+                            class="ord-cta-primary inline-flex items-center gap-2 px-8 py-4 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            style="background: var(--color-primary); color: #ffffff; box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.3);">
                         <span x-show="!loading" class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-lg">shopping_cart</span>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             {{ 'Add to Cart'|trans }}
                         </span>
                         <span x-show="loading" class="flex items-center gap-2">
@@ -798,7 +580,7 @@ function orderProduct(productId, defaultPeriod) {
                         {% endif %}
 
                         <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
-                            <a href="{{ ('/order/' ~ category_slug)|url ~ '?product=' ~ p.id }}"
+                            <a href="{{ ('/order/' ~ p.slug)|url }}"
                                class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if i == 1 %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
                                 Choose plan
                             </a>
@@ -1147,7 +929,7 @@ function orderProduct(productId, defaultPeriod) {
                         </p>
 
                         <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
-                            <a href="{{ ('/order/' ~ category_slug)|url ~ '?product=' ~ p.id }}"
+                            <a href="{{ ('/order/' ~ p.slug)|url }}"
                                class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if _is_popular %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
                                 {{ _is_popular ? 'Deploy Now' : 'Select Plan' }}
                             </a>
@@ -1340,7 +1122,7 @@ function orderProduct(productId, defaultPeriod) {
 
         {# ══ HERO ══ #}
         <div class="relative">
-            <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(circle at top right, rgba(99,102,241,0.05), transparent), radial-gradient(circle at bottom left, rgba(168,85,247,0.05), transparent);"></div>
+            <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(circle at top right, rgba(var(--color-primary-rgb),0.05), transparent), radial-gradient(circle at bottom left, rgba(168,85,247,0.05), transparent);"></div>
             <div class="relative max-w-5xl mx-auto text-center mb-16 pt-8 px-4">
 
                 <div class="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold mb-6">
@@ -1364,7 +1146,7 @@ function orderProduct(productId, defaultPeriod) {
 
                 <div class="relative max-w-3xl mx-auto">
                     <div class="flex items-center p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl shadow-primary/5 border border-slate-200 dark:border-slate-700">
-                        <span class="material-symbols-outlined text-slate-400 ml-4">search</span>
+                        <svg class="w-5 h-5 text-slate-400 ml-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
                         <input type="text" class="flex-1 border-none focus:ring-0 bg-transparent text-lg px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400" placeholder="Search for a domain (e.g. example.com)" />
                         <a href="#dom-all-extensions" class="bg-primary text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center gap-2">Search</a>
                     </div>
@@ -1504,7 +1286,7 @@ function orderProduct(productId, defaultPeriod) {
                             <div class="text-2xl font-bold text-emerald-600 mb-6">Free</div>
                         </template>
 
-                        <a href="{{ ('/order/' ~ category_slug)|url ~ '?product=' ~ p.id }}"
+                        <a href="{{ ('/order/' ~ p.slug)|url }}"
                            class="w-full py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-primary hover:text-white transition-all rounded-lg font-semibold text-primary dark:text-primary inline-flex items-center justify-center gap-2">
                             Register <span class="material-symbols-outlined text-[18px]">chevron_right</span>
                         </a>
@@ -1582,7 +1364,7 @@ function orderProduct(productId, defaultPeriod) {
                                     </template>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <a href="{{ ('/order/' ~ category_slug)|url ~ '?product=' ~ p.id }}"
+                                    <a href="{{ ('/order/' ~ p.slug)|url }}"
                                        class="px-4 py-1.5 border border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-semibold transition-all inline-flex items-center justify-center">Register</a>
                                 </td>
                             </tr>
@@ -1843,7 +1625,7 @@ function orderProduct(productId, defaultPeriod) {
 
                         {# ── CTA ── #}
                         <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
-                            <a href="{{ ('/order/' ~ category_slug)|url ~ '?product=' ~ p.id }}"
+                            <a href="{{ ('/order/' ~ p.slug)|url }}"
                                class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if _cust_is_popular %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
                                 {{ _cust_is_popular ? 'Get Started' : 'Choose Plan' }}
                             </a>
@@ -1928,7 +1710,7 @@ function orderProduct(productId, defaultPeriod) {
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-[1100px] mx-auto px-4 pb-10">
             {% for p in cat_products %}
             {% set desc_short = p.description|striptags|trim|slice(0, 160) %}
-            <a href="{{ ('/order/' ~ category_slug)|url ~ '?product=' ~ p.id }}"
+            <a href="{{ ('/order/' ~ p.slug)|url }}"
                class="group flex flex-col rounded-2xl border border-outline-variant bg-surface-container-low hover:border-primary/40 hover:shadow-md transition-all duration-200 p-6 no-underline">
                 <h3 class="text-base font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">{{ p.title }}</h3>
                 {% if p.pricing.type == 'free' %}

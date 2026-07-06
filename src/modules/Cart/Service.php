@@ -137,7 +137,12 @@ class Service implements InjectionAwareInterface
             }
         }
 
-        if (!empty($domainsBeingAdded)) {
+        // Skip the duplicate-domain check when the caller explicitly keeps multiple
+        // items in the cart (multiple=1). In that flow the cart was not reset before
+        // this call, so a previous item for the same domain may legitimately exist
+        // (e.g. the customer went back and re-submitted the same product, or is
+        // adding a second service that shares the same domain).
+        if (!empty($domainsBeingAdded) && empty($data['multiple'])) {
             $existingItems = $this->di['db']->find('CartProduct', 'cart_id = ?', [$cart->id]);
             foreach ($existingItems as $item) {
                 $itemConfig = json_decode((string) $item->config, true);
@@ -814,6 +819,18 @@ class Service implements InjectionAwareInterface
         $setup = $productView['setup_price'];
         $price = $productView['price'];
         $qty = $productView['quantity'];
+
+        // Partner pricing: silently override price when the logged-in client's group has a rule.
+        try {
+            $cartConfig = json_decode((string) $model->config, true) ?? [];
+            $partnerPrice = $this->di['mod_service']('partnership')
+                ->getPartnerPriceForCartItem((int) $model->product_id, $productView['type'] ?? '', $cartConfig);
+            if ($partnerPrice !== null) {
+                $price = $partnerPrice;
+            }
+        } catch (\Exception) {
+            // Partnership module not installed or inactive — use regular price.
+        }
 
         [$discount_price, $discount_setup] = $this->getProductDiscount($model, $setup);
 

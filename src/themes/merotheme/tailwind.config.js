@@ -21,10 +21,39 @@ module.exports = {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
-        primary: 'var(--color-primary)',
+        primary: 'rgb(var(--brand-500) / <alpha-value>)',
         'primary-container': 'var(--color-primary-container)',
         'on-primary-container': 'var(--color-on-primary-container)',
-        secondary: 'var(--color-secondary)',
+        secondary: 'rgb(var(--brand2-600) / <alpha-value>)',
+        // ── Brand-mapped palettes ──
+        // indigo/violet are remapped onto the admin-configured primary/secondary
+        // colors (channel vars emitted by partials/theme_colors.html.twig).
+        // Every indigo-*/violet-* utility — including opacity modifiers like
+        // bg-indigo-500/10 — therefore follows the theme settings.
+        indigo: {
+          50:  'rgb(var(--brand-50) / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          800: 'rgb(var(--brand-800) / <alpha-value>)',
+          900: 'rgb(var(--brand-900) / <alpha-value>)',
+          950: 'rgb(var(--brand-950) / <alpha-value>)',
+        },
+        violet: {
+          50:  'rgb(var(--brand2-50) / <alpha-value>)',
+          100: 'rgb(var(--brand2-100) / <alpha-value>)',
+          200: 'rgb(var(--brand2-200) / <alpha-value>)',
+          300: 'rgb(var(--brand2-300) / <alpha-value>)',
+          400: 'rgb(var(--brand2-400) / <alpha-value>)',
+          500: 'rgb(var(--brand2-500) / <alpha-value>)',
+          600: 'rgb(var(--brand2-600) / <alpha-value>)',
+          700: 'rgb(var(--brand2-700) / <alpha-value>)',
+          900: 'rgb(var(--brand2-900) / <alpha-value>)',
+        },
         // ── Stitch design system ──
         'background':                  '#f8f9ff',
         'surface':                     '#ffffff',

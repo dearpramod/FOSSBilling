@@ -5,7 +5,7 @@
 
 {% set cart      = guest.cart_get %}
 {% set gateways  = guest.invoice_gateways %}
-{% set _rc       = guest.extension_is_on({'mod': 'spamchecker'}) ? guest.spamchecker_recaptcha : {} %}
+{% set _rc       = guest.extension_is_on({'mod': 'antispam'}) ? guest.antispam_recaptcha : {} %}
 {% set r         = guest.client_required %}
 {% set social    = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
 {% set countries = client ? {} : guest.system_countries %}
@@ -267,11 +267,9 @@ function orderCheckout() {
             );
             };
 
-            {% if _rc.enabled and _rc.publickey and _rc.pages.checkout %}
-            {% if _rc.version == 3 %}
-            const self = this;
-            grecaptcha.enterprise.ready(function () {
-                grecaptcha.enterprise.execute('{{ _rc.publickey }}', { action: 'CHECKOUT' }).then(function (token) {
+            {% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+            grecaptcha.ready(function () {
+                grecaptcha.execute('{{ _rc.publickey }}', { action: 'CHECKOUT' }).then(function (token) {
                     data['g-recaptcha-response'] = token;
                     doCheckout();
                 });
@@ -279,9 +277,6 @@ function orderCheckout() {
             {% else %}
             var rcResp = (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse) ? grecaptcha.getResponse() : '';
             if (rcResp) data['g-recaptcha-response'] = rcResp;
-            doCheckout();
-            {% endif %}
-            {% else %}
             doCheckout();
             {% endif %}
         }
@@ -1102,11 +1097,18 @@ function orderCheckout() {
             </div>
 
             {# reCAPTCHA #}
-            {% if _rc.enabled and _rc.publickey and _rc.pages.checkout %}
+            {% if _rc.enabled %}
             <div class="px-6 pb-4">
-                {% if _rc.version == 3 %}
-                <script src="https://www.google.com/recaptcha/enterprise.js?render={{ _rc.publickey }}" async defer></script>
-                {% else %}
+                {% set _provider = _rc.captcha_provider|default('recaptcha_v2') %}
+                {% if _provider == 'turnstile' and _rc.turnstile_site_key %}
+                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                <div class="cf-turnstile" data-sitekey="{{ _rc.turnstile_site_key }}"></div>
+                {% elseif _provider == 'hcaptcha' and _rc.hcaptcha_site_key %}
+                <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+                <div class="h-captcha" data-sitekey="{{ _rc.hcaptcha_site_key }}"></div>
+                {% elseif _provider == 'recaptcha_v3' and _rc.publickey %}
+                <script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
+                {% elseif _rc.publickey %}
                 <div id="checkout-recaptcha">
                     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
                     <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}"></div>
