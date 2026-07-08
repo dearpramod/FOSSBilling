@@ -1,0 +1,26 @@
+# Files and directories excluded from cPanel rsync deployment.
+# Patterns are relative to the rsync source root (./src/).
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Local / server-specific configuration — never overwrite the live config
+config.php
+
+# Runtime data that lives on the server, not in the repo
+data/cache/
+data/log/
+data/logs/
+data/uploads/
+data/tmp/
+data/pending_boot_config/
+
+# Development & build artifacts
+node_modules/
+*.map
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

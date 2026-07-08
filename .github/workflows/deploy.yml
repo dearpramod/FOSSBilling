@@ -1,0 +1,83 @@
+# ==============================================================================
+# Deploy to cPanel
+# ==============================================================================
+#
+# Manually deploys the application to a cPanel server via rsync over SSH.
+# Configure the following under Settings -> Environments:
+#
+# Secrets:
+# - SSH_PRIVATE_KEY : Private SSH key for the server.
+# - SSH_REMOTE_HOST : Server hostname or IP address.
+# - SSH_REMOTE_USER : SSH username.
+#
+# Variables:
+# - SSH_REMOTE_PATH : Destination path (e.g. /home/user/public_html/).
+#
+# ==============================================================================
+
+name: Deploy to cPanel
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'beta-manage.yoho.cloud'
+        type: choice
+        options:
+          - beta-manage.yoho.cloud
+
+jobs:
+  deploy-cpanel:
+    name: Deploy to cPanel via rsync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment || 'beta-manage.yoho.cloud' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure SSH credentials
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Write private key and set permissions
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Add the deployment host key to known_hosts and keep strict checking enabled
+          ssh-keyscan -H "${{ secrets.SSH_REMOTE_HOST }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          cat >> ~/.ssh/config <<EOL
+          Host ${{ secrets.SSH_REMOTE_HOST }}
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            IdentityFile ~/.ssh/deploy_key
+          EOL
+          chmod 600 ~/.ssh/config
+
+      - name: Verify SSH connection
+        run: |
+          ssh -o BatchMode=yes \
+            ${{ secrets.SSH_REMOTE_USER }}@${{ secrets.SSH_REMOTE_HOST }} "echo 'SSH connection successful'"
+
+      - name: Sync files to server
+        run: |
+          # -a : archive mode (preserve permissions/timestamps)
+          # -v : verbose
+          # -z : compress data in transit
+          # -c : compare files by content checksum, not mtime. A fresh CI
+          #      checkout rewrites every file's timestamp, so without this
+          #      rsync would re-upload the entire tree each run. With -c only
+          #      files whose *content* actually changed are transferred.
+          #
+          # Add --delete to remove remote files that no longer exist locally.
+          echo "Deploying ./src/ -> ${{ secrets.SSH_REMOTE_USER }}@${{ secrets.SSH_REMOTE_HOST }}:${{ vars.SSH_REMOTE_PATH }}"
+          rsync -avzc \
+            --exclude-from='.rsyncignore' \
+            -e "ssh" \
+            ./src/ ${{ secrets.SSH_REMOTE_USER }}@${{ secrets.SSH_REMOTE_HOST }}:${{ vars.SSH_REMOTE_PATH }}
