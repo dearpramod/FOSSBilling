@@ -10,6 +10,21 @@
     {% if settings.meta_author|default(false) %}<meta name="author" content="{{ settings.meta_author }}">{% endif %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ CSRFToken }}">
+    {# Prevent browser HTTP cache from storing authenticated pages #}
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, private">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    {# bfcache guard: fires when browser restores page from Back-Forward Cache without a new HTTP request.
+       Validates the client session via API and redirects to login if it has been destroyed (e.g. after logout). #}
+    <script>
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;
+        fetch('/api/client/profile/get', { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { if (d && d.error) window.location.replace('/login'); })
+            .catch(function () {});
+    });
+    </script>
 
     {# ── Theme color custom properties (shared partial: full brand scale) ── #}
     {% include 'partials/theme_colors.html.twig' %}
