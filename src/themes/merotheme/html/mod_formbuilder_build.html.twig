@@ -56,11 +56,22 @@ html[data-theme="light"] .fb-field-affix {
     border-color: rgba(var(--color-primary-rgb),0.15) !important;
     color: #475569 !important;
 }
+
+/* ── Light mode: configuration card wrapper ── */
+html[data-theme="light"] .fb-config-card {
+    border-color: rgba(0,0,0,0.09) !important;
+    background: rgba(255,255,255,0.70) !important;
+    backdrop-filter: blur(8px);
+}
+html[data-theme="light"] .fb-config-card > div:first-child {
+    border-color: rgba(0,0,0,0.06) !important;
+    background: rgba(248,250,252,0.60) !important;
+}
 </style>
 {% if form is defined and form.fields is defined %}
 <div class="space-y-5">
 
-    {% if form.style.show_title is defined and form.style.show_title != "0" %}
+    {% if (hide_form_title is not defined or not hide_form_title) and form.style.show_title is defined and form.style.show_title != "0" %}
     <div class="flex items-center gap-4 p-4 rounded-xl border mb-1"
          style="background:rgba(var(--color-primary-rgb),0.06); border-color:rgba(var(--color-primary-rgb),0.18);">
         <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -70,7 +81,7 @@ html[data-theme="light"] .fb-field-affix {
             </svg>
         </div>
         <div>
-            <p class="text-sm font-bold text-gray-700">{{ form.name }}</p>
+            <p class="text-sm font-bold text-gray-700 dark:text-white">{{ form.name }}</p>
             <p class="text-xs text-gray-500 mt-0.5">Fill in the details below to configure your order</p>
         </div>
     </div>
@@ -84,7 +95,7 @@ html[data-theme="light"] .fb-field-affix {
 
         {# ── Label ── #}
         {% if field.hide_label is not defined or field.hide_label != 1 %}
-        <label for="ff_{{ field.name }}" class="block text-sm font-medium text-gray-300 {% if is_horizontal %}pt-2.5{% else %}mb-1.5{% endif %}">
+        <label for="ff_{{ field.name }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 {% if is_horizontal %}pt-2.5{% else %}mb-1.5{% endif %}">
             {{ field.label }}
             {% if field.required == 1 %}<span class="text-red-400/80 ml-0.5">*</span>{% endif %}
         </label>

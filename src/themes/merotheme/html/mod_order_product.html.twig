@@ -1272,7 +1272,7 @@
                                     <div class="flex items-center gap-3">
                                         <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0"
                                              :class="selectedPeriod === '{{ code }}' ? '' : 'border-white/30'"
-                                             :style="selectedPeriod === '{{ code }}' ? 'border-color:var(--color-secondary);' : ''"
+                                             :style="selectedPeriod === '{{ code }}' ? 'border-color:var(--color-secondary);' : ''">
                                             <div class="w-1.5 h-1.5 rounded-full transition-transform" style="background:var(--color-secondary);"
                                                  :class="selectedPeriod === '{{ code }}' ? 'scale-100' : 'scale-0'"></div>
                                         </div>
@@ -1312,19 +1312,18 @@
                         {% endif %}
 
                         {# ── 2. Configuration form — shown SECOND ── #}
-                        <div class="rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.02);">
+                        <div class="fb-config-card rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.02);">
                             <div class="px-5 py-3.5 border-b border-white/[0.05] flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
-                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                <div class="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style="background:rgba(var(--color-primary-rgb),0.10);border:1px solid rgba(var(--color-primary-rgb),0.18);">
+                                    <svg class="w-4 h-4" style="color:var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-semibold text-white">{{ product.type }}</p>
+                                    <p class="text-sm font-semibold text-white">{{ (form is defined and form.name is defined) ? form.name : product.title }}</p>
                                     <p class="text-xs text-gray-500 mt-0.5">Fill in the details below to configure your order</p>
                                 </div>
-                                <svg class="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                             </div>
                             <div class="p-5">
-                                {{ include('mod_formbuilder_build.html.twig', ignore_missing: true) }}
+                                {% include 'mod_formbuilder_build.html.twig' ignore missing with {'hide_form_title': true} %}
                             </div>
                         </div>
 
