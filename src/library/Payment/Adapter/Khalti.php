@@ -360,7 +360,10 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         }
 
         $restoreToken = FOSSBilling\Tools::createSessionRestoreToken(session_id());
-        $returnUrl = ($this->config['notify_url'] ?? '') . '&redirect=1&restore_token=' . urlencode($restoreToken);
+        $returnUrl = ($this->config['notify_url'] ?? '')
+            . '&redirect=1'
+            . '&invoice_hash=' . urlencode($invoice->hash)
+            . '&restore_token=' . urlencode($restoreToken);
 
         $systemService = $this->di['mod_service']('System');
         $websiteUrl = rtrim((string) ($systemService->getParamValue('url') ?: ''), '/');
