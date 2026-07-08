@@ -41,7 +41,7 @@
 {% endif %}
 {% endif %}
 
-{% block meta_title %}{% if settings.category_title_in_tab != '0' and _hero_cat and _hero_cat.title %}{{ _hero_cat.title }}{% else %}Server Plans{% endif %}{% endblock %}
+{% block meta_title %}{% if settings.category_title_in_tab|default('1') != '0' and _hero_cat and _hero_cat.title %}{{ _hero_cat.title }}{% else %}Server Plans{% endif %}{% endblock %}
 {% block page_header %}Servers{% endblock %}
 
 {% block content %}
@@ -450,7 +450,7 @@
                     allPricings: {{ all_pricings|json_encode }},
                     currencyFormat: {{ currency_fmt_js|json_encode }},
                     currencyRate: {{ currency.conversion_rate|default(1) }},
-                    currencyPriceFormat: {{ currency.price_format|json_encode }},
+                    currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
                     fmt(price) {
                         const converted = parseFloat(price) * this.currencyRate;
                         let num;

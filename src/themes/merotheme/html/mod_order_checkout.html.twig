@@ -26,7 +26,7 @@ function billingPage() {
     return {
         activeTab: '{{ request.auth_tab|default(request.auth_error ? "login" : "register") }}',
         loading: false,
-        error: '',
+        error: {{ request.auth_error|default('')|json_encode }},
 
         // Login fields
         loginEmail: '',
@@ -314,27 +314,7 @@ function orderCheckout() {
 
     <h1 class="text-xl font-bold text-white mb-6">Review &amp; Checkout</h1>
 
-    {# Error banner (server-side auth errors) #}
-    {% if request.auth_error %}
-    <div class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
-         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;">
-        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span>{{ request.auth_error }}</span>
-    </div>
-    {% endif %}
-
-    {# Error banner (client-side validation errors) #}
-    <div x-show="error" x-transition
-         role="alert" aria-live="assertive"
-         class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
-         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
-        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span x-text="error"></span>
-    </div>
+    {# Error banners moved inside each tab section, near submit buttons #}
 
     {# ── Two-column grid — matches order form (.order-two-col = 1fr 360px) ── #}
     <div class="order-two-col">
@@ -429,7 +409,7 @@ function orderCheckout() {
                     <form id="co-login-form" method="POST" action="{{ "/order/checkout/login"|url }}">
                     <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
                     {# Google sign-in — shown only after expanding this panel #}
-                    {% if social.google_enabled %}
+                    {% if social.google_enabled|default(false) %}
                     <div class="px-6 pt-4 pb-2 space-y-3">
                         <a href="{{ ('sociallogin/google?context=login&return_to=/order/checkout')|url }}"
                            class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-200 text-sm font-semibold hover:bg-white/[0.08] transition-all"
@@ -464,6 +444,17 @@ function orderCheckout() {
                                    @keydown.enter="submitLogin()">
                         </div>
                     </div>
+                    {# Inline error (validation / server-side login errors) #}
+                    <div x-show="activeTab === 'login' && error" x-transition
+                         role="alert" aria-live="assertive"
+                         class="mx-6 mb-4 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+                         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
+                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span x-text="error"></span>
+                    </div>
+
                     {# Footer row — full-width border matching card pattern #}
                     <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-between gap-3 rounded-b-2xl" style="background:rgba(255,255,255,0.02);">
                         <a href="{{ '/password-reset'|url }}"
@@ -507,7 +498,7 @@ function orderCheckout() {
                     <div class="px-6 pt-2 pb-5 space-y-6">
 
                     {# Social login #}
-                    {% if social.google_enabled %}
+                    {% if social.google_enabled|default(false) %}
                     <div>
                         <a href="{{ ('sociallogin/google?context=register&return_to=/order/checkout')|url }}"
                            class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-300 text-sm font-semibold hover:bg-white/[0.08] transition-all"
@@ -652,6 +643,17 @@ function orderCheckout() {
                     </div>
 
                     </div>{# end form fields #}
+
+                    {# Inline error (validation / server-side registration errors) #}
+                    <div x-show="activeTab === 'register' && error" x-transition
+                         role="alert" aria-live="assertive"
+                         class="mx-6 mb-4 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+                         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
+                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span x-text="error"></span>
+                    </div>
 
                     {# Footer row — full-width, matching card pattern #}
                     <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-end rounded-b-2xl" style="background:rgba(255,255,255,0.02);">

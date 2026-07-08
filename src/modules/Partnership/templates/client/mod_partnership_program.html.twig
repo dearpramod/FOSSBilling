@@ -1,0 +1,472 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}{{ 'Partnership Program'|trans }}{% endblock %}
+{% block page_header %}{{ 'Partnership Program'|trans }}{% endblock %}
+
+{% block breadcrumb %}
+    <li class="breadcrumb-item"><a href="{{ '/'|link }}">{{ 'Home'|trans }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ 'Partnership Program'|trans }}</li>
+{% endblock %}
+
+{% block head %}
+<style>
+/* ── Partnership Program — Stitch-inspired redesign ────────────────────── */
+
+/* Plan card */
+.pp-plan-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    padding: 1.75rem;
+}
+.pp-plan-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    margin-bottom: 0.25rem;
+}
+.pp-plan-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0b1c30;
+    margin: 0 0 0.35rem;
+    line-height: 1.2;
+}
+.pp-plan-desc { color: #6b7280; font-size: 0.875rem; margin: 0; }
+.pp-plan-stat-val { font-size: 1.75rem; font-weight: 800; color: #0b1c30; line-height: 1; }
+.pp-plan-stat-lbl { font-size: 0.7rem; color: #9ca3af; margin-top: 0.15rem; }
+.pp-progress-track {
+    height: 0.5rem;
+    background: #e5eeff;
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+.pp-progress-fill {
+    height: 100%;
+    width: 75%;
+    background: var(--color-primary);
+    border-radius: 9999px;
+}
+.pp-progress-lbl-primary { font-size: 0.72rem; font-weight: 600; color: var(--color-primary); }
+.pp-progress-lbl-meta    { font-size: 0.72rem; font-weight: 500; color: #9ca3af; }
+
+[data-theme="dark"] .pp-plan-card  { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.10); }
+[data-theme="dark"] .pp-plan-title { color: rgba(255,255,255,0.92); }
+[data-theme="dark"] .pp-plan-desc  { color: rgba(255,255,255,0.55); }
+[data-theme="dark"] .pp-plan-stat-val { color: rgba(255,255,255,0.92); }
+[data-theme="dark"] .pp-plan-stat-lbl { color: rgba(255,255,255,0.40); }
+[data-theme="dark"] .pp-progress-track { background: rgba(255,255,255,0.08); }
+[data-theme="dark"] .pp-progress-lbl-meta { color: rgba(255,255,255,0.40); }
+
+/* Section headings */
+.pp-section-h {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: #0b1c30;
+    margin: 0 0 0.2rem;
+}
+.pp-section-sub { font-size: 0.875rem; color: #6b7280; margin: 0 0 1rem; }
+[data-theme="dark"] .pp-section-h   { color: rgba(255,255,255,0.90); }
+[data-theme="dark"] .pp-section-sub { color: rgba(255,255,255,0.50); }
+
+/* Feature cards */
+.pp-feature-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    background: #eff4ff;
+    padding: 1rem;
+    transition: border-color 0.15s;
+    cursor: default;
+}
+.pp-feature-card:hover { border-color: var(--color-primary); }
+.pp-feature-icon {
+    color: var(--color-primary);
+    transition: transform 0.15s;
+    font-size: 24px;
+    line-height: 1;
+}
+.pp-feature-card:hover .pp-feature-icon { transform: scale(1.10); }
+.pp-feature-title { font-size: 0.9rem; font-weight: 700; color: #0b1c30; margin: 0 0 0.2rem; }
+.pp-feature-desc  { font-size: 0.8rem; color: #6b7280; margin: 0; line-height: 1.5; }
+
+[data-theme="dark"] .pp-feature-card  { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.10); }
+[data-theme="dark"] .pp-feature-card:hover { border-color: rgba(255,255,255,0.28); }
+[data-theme="dark"] .pp-feature-icon  { color: rgba(255,255,255,0.65); }
+[data-theme="dark"] .pp-feature-title { color: rgba(255,255,255,0.90); }
+[data-theme="dark"] .pp-feature-desc  { color: rgba(255,255,255,0.50); }
+
+/* Tutorial */
+.pp-tutorial-card {
+    background: #eff4ff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+[data-theme="dark"] .pp-tutorial-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.10); }
+
+.pp-video-thumb {
+    position: relative;
+    aspect-ratio: 16/9;
+    background: #5f41e8 no-repeat center/cover;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+}
+.pp-play-btn {
+    width: 5rem; height: 5rem;
+    background: rgba(0,0,0,0.40);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #ffffff;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.50);
+    transition: background 0.15s, transform 0.15s;
+    position: relative; z-index: 1;
+}
+.pp-video-thumb:hover .pp-play-btn { background: var(--color-primary); transform: scale(1.10); }
+.pp-play-icon { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 32; font-size: 32px; }
+
+.pp-video-overlay {
+    position: absolute; inset-inline: 0; bottom: 0;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.60), transparent);
+}
+.pp-video-progress { display: flex; align-items: center; gap: 0; margin-bottom: 0.5rem; }
+.pp-vp-filled   { height: 0.25rem; flex: 1; background: var(--color-primary); border-radius: 9999px; }
+.pp-vp-dot      { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--color-primary); border: 2px solid #fff; margin: 0 -0.375rem; z-index: 1; flex-shrink: 0; }
+.pp-vp-rest     { height: 0.25rem; flex: 2; background: rgba(255,255,255,0.40); border-radius: 9999px; }
+
+.pp-step-num {
+    flex-shrink: 0;
+    width: 1.5rem; height: 1.5rem;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.7rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.pp-step-text { font-size: 0.875rem; color: #484555; margin: 0; line-height: 1.5; }
+.pp-tutorial-body { font-size: 0.875rem; color: #374151; line-height: 1.6; margin: 0 0 1.25rem; }
+
+[data-theme="dark"] .pp-step-num    { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.90); }
+[data-theme="dark"] .pp-step-text   { color: rgba(255,255,255,0.65); }
+[data-theme="dark"] .pp-tutorial-body { color: rgba(255,255,255,0.65); }
+
+/* Table cards */
+.pp-table-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+[data-theme="dark"] .pp-table-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.10); }
+
+.pp-thead th {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: #6b7280;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+[data-theme="dark"] .pp-thead th { color: rgba(255,255,255,0.40); background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+
+.pp-tbody td {
+    padding: 0.8rem 1.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+.pp-tbody tr:last-child td { border-bottom: none; }
+.pp-tbody tr:hover td { background: #f9fafb; }
+[data-theme="dark"] .pp-tbody td { color: rgba(255,255,255,0.75); border-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .pp-tbody tr:hover td { background: rgba(255,255,255,0.03); }
+
+.pp-product-name { font-weight: 600; color: #0b1c30; font-size: 0.875rem; }
+.pp-product-type { font-size: 0.72rem; color: #9ca3af; }
+.pp-regular-price { text-decoration: line-through; color: #9ca3af; font-size: 0.85rem; }
+.pp-partner-price { font-weight: 700; color: var(--color-primary); font-size: 0.9rem; }
+[data-theme="dark"] .pp-product-name  { color: rgba(255,255,255,0.90); }
+[data-theme="dark"] .pp-product-type  { color: rgba(255,255,255,0.40); }
+[data-theme="dark"] .pp-regular-price { color: rgba(255,255,255,0.35); }
+[data-theme="dark"] .pp-partner-price { color: rgba(255,255,255,0.95); }
+
+.pp-badge-discount {
+    display: inline-block;
+    background: #dcfce7; color: #15803d;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.7rem; font-weight: 700;
+}
+[data-theme="dark"] .pp-badge-discount { background: rgba(22,163,74,0.15); color: #4ade80; border: 1px solid rgba(22,163,74,0.30); }
+
+.pp-na { font-size: 0.8rem; color: #9ca3af; }
+[data-theme="dark"] .pp-na { color: rgba(255,255,255,0.35); }
+
+.pp-tld-icon { color: var(--color-primary); font-size: 1rem; line-height: 1; }
+[data-theme="dark"] .pp-tld-icon { color: rgba(255,255,255,0.55); }
+
+.pp-table-note {
+    padding: 0.75rem 1.5rem;
+    background: rgba(249,250,251,0.50);
+    font-size: 0.72rem; color: #9ca3af; font-style: italic;
+    border-top: 1px solid #f3f4f6;
+}
+[data-theme="dark"] .pp-table-note { background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.40); border-color: rgba(255,255,255,0.06); }
+
+.pp-empty { padding: 2.5rem 1.5rem; text-align: center; }
+.pp-empty-title { font-size: 0.9rem; font-weight: 600; color: #374151; margin: 0 0 0.35rem; }
+.pp-empty-text  { font-size: 0.825rem; color: #9ca3af; margin: 0; }
+[data-theme="dark"] .pp-empty-title { color: rgba(255,255,255,0.60); }
+[data-theme="dark"] .pp-empty-text  { color: rgba(255,255,255,0.40); }
+
+/* Material Symbols reset */
+.pp-ms { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-8 w-full">
+
+    {# ── 1. Active Plan ────────────────────────────────────────────────── #}
+    <section class="pp-plan-card">
+        <div class="flex justify-between items-end flex-wrap gap-4 mb-4">
+            <div>
+                <div class="pp-plan-badge">{{ 'Active Plan'|trans }}</div>
+                <h1 class="pp-plan-title">{{ group_title }}</h1>
+                <p class="pp-plan-desc">{{ 'Your current tier includes exclusive wholesale pricing and priority support.'|trans }}</p>
+            </div>
+            <div class="flex gap-6">
+                <div style="text-align:right;">
+                    <div class="pp-plan-stat-val">{{ products|length }}</div>
+                    <div class="pp-plan-stat-lbl">{{ 'product rules'|trans }}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="pp-plan-stat-val">{{ tld_prices|length }}</div>
+                    <div class="pp-plan-stat-lbl">{{ 'TLD rules'|trans }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="pp-progress-track">
+            <div class="pp-progress-fill"></div>
+        </div>
+        <div class="flex justify-between">
+            <span class="pp-progress-lbl-primary">{{ 'Partner Access Active'|trans }}</span>
+            <span class="pp-progress-lbl-meta">{{ products|length + tld_prices|length }} {{ 'custom pricing rules'|trans }}</span>
+        </div>
+    </section>
+
+    {# ── 2. Partnership Features ───────────────────────────────────────── #}
+    <section>
+        <h2 class="pp-section-h">{{ 'Partnership Features'|trans }}</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:0.75rem;">
+            <div class="pp-feature-card">
+                <div class="pp-feature-icon">
+                    <span class="material-symbols-outlined pp-ms">sell</span>
+                </div>
+                <div>
+                    <h3 class="pp-feature-title">{{ 'Wholesale Pricing'|trans }}</h3>
+                    <p class="pp-feature-desc">{{ 'Get exclusive bulk rates for your inventory'|trans }}</p>
+                </div>
+            </div>
+            <div class="pp-feature-card">
+                <div class="pp-feature-icon">
+                    <span class="material-symbols-outlined pp-ms">headset_mic</span>
+                </div>
+                <div>
+                    <h3 class="pp-feature-title">{{ 'Priority Support'|trans }}</h3>
+                    <p class="pp-feature-desc">{{ '24/7 access to our premium technical help desk'|trans }}</p>
+                </div>
+            </div>
+            <div class="pp-feature-card">
+                <div class="pp-feature-icon">
+                    <span class="material-symbols-outlined pp-ms">manage_accounts</span>
+                </div>
+                <div>
+                    <h3 class="pp-feature-title">{{ 'Dedicated Account Manager'|trans }}</h3>
+                    <p class="pp-feature-desc">{{ 'Direct contact for strategy and scaling'|trans }}</p>
+                </div>
+            </div>
+            <div class="pp-feature-card">
+                <div class="pp-feature-icon">
+                    <span class="material-symbols-outlined pp-ms">terminal</span>
+                </div>
+                <div>
+                    <h3 class="pp-feature-title">{{ 'Full API Access'|trans }}</h3>
+                    <p class="pp-feature-desc">{{ 'Seamless integration with your existing stack'|trans }}</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# ── 3. Tutorial ───────────────────────────────────────────────────── #}
+    <section>
+        <h2 class="pp-section-h">{{ 'How to use Partner Discounts'|trans }}</h2>
+        <div class="pp-tutorial-card">
+            <div style="padding:1rem;">
+                <div class="pp-video-thumb" style="background-image:url('https://lh3.googleusercontent.com/aida-public/AB6AXuD-93wKHSu3pBAhT7NFnSY78aCPgHDTb_hjStWj_SP6ZGlRPUGnW2HvkngvzOzRBvh3X5s08cfHcYefx8m2NfeBoD8mvKLWIbuU6Yg3yZ134YpHYEz1t_M3D4vLTAlpFpRJajJtN2WWlF1IXWXHP9ZkQm1Fvpn8V5TmSveO7Q4oPQQlYmhi754xnQO72CrRiOoaXM7FsPPXCkXS1FpVyet7JbOOx6z-KZ60R48_wXVBAP-CBEOyJ2nsdw');">
+                    <div class="pp-play-btn" role="img" aria-label="{{ 'Play tutorial video'|trans }}">
+                        <span class="material-symbols-outlined pp-play-icon">play_arrow</span>
+                    </div>
+                    <div class="pp-video-overlay">
+                        <div class="pp-video-progress">
+                            <div class="pp-vp-filled"></div>
+                            <div class="pp-vp-dot"></div>
+                            <div class="pp-vp-rest"></div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span style="color:#fff;font-size:0.7rem;font-weight:600;letter-spacing:0.015em;">0:45 / 3:12</span>
+                            <div class="flex gap-3">
+                                <span class="material-symbols-outlined" style="color:#fff;font-size:18px;">settings</span>
+                                <span class="material-symbols-outlined" style="color:#fff;font-size:18px;">fullscreen</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="padding:0 1.5rem 1.5rem;">
+                <p class="pp-tutorial-body">
+                    {{ 'Follow these simple steps to apply your partnership discounts and optimize your operational costs:'|trans }}
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex gap-2">
+                        <div class="pp-step-num" aria-hidden="true">1</div>
+                        <p class="pp-step-text">{{ 'Log in to your Partner Dashboard and verify your account is approved.'|trans }}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="pp-step-num" aria-hidden="true">2</div>
+                        <p class="pp-step-text">{{ 'Navigate to the Orders section and select any hosting or domain service.'|trans }}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="pp-step-num" aria-hidden="true">3</div>
+                        <p class="pp-step-text">{{ 'Your partner rates are applied automatically during checkout — no code needed.'|trans }}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="pp-step-num" aria-hidden="true">4</div>
+                        <p class="pp-step-text">{{ 'Complete payment at the discounted wholesale rate. Your service activates instantly.'|trans }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# ── 4. Product Pricing ────────────────────────────────────────────── #}
+    <section>
+        <h2 class="pp-section-h">{{ 'Product Pricing'|trans }}</h2>
+        <p class="pp-section-sub">{{ 'Grouped by service and billing cycle'|trans }}</p>
+        <div class="pp-table-card">
+            {% if products %}
+                <div class="overflow-x-auto">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead class="pp-thead">
+                            <tr>
+                                <th>{{ 'Product'|trans }}</th>
+                                <th>{{ 'Billing Cycle'|trans }}</th>
+                                <th>{{ 'Regular Price'|trans }}</th>
+                                <th>{{ 'Partner Price'|trans }}</th>
+                                <th>{{ 'Discount'|trans }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="pp-tbody">
+                            {% for product in products %}
+                                {% for row in product.rows %}
+                                <tr>
+                                    <td>
+                                        <div class="pp-product-name">{{ product.title }}</div>
+                                        {% if product.type %}<div class="pp-product-type">{{ product.type|title }}</div>{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if row.period %}{{ row.period|period_title }}{% else %}{{ 'All periods'|trans }}{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if row.regular_price is not null %}
+                                            <span class="pp-regular-price">{{ row.regular_price|money_convert }}</span>
+                                        {% else %}
+                                            <span class="pp-na">{{ 'N/A'|trans }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="pp-partner-price">{{ row.price|money_convert }}</span>
+                                    </td>
+                                    <td>
+                                        {% if row.discount_percent is not null and row.discount_percent > 0 %}
+                                            <span class="pp-badge-discount">{{ row.discount_percent|number_format(2, '.', ',') }}% OFF</span>
+                                        {% else %}
+                                            <span class="pp-na">{{ 'N/A'|trans }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="pp-empty">
+                    <p class="pp-empty-title">{{ 'No custom product pricing yet'|trans }}</p>
+                    <p class="pp-empty-text">{{ 'Your account currently follows standard product pricing. Contact support if you believe partner rates should be active.'|trans }}</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    {# ── 5. Domain Pricing ─────────────────────────────────────────────── #}
+    <section>
+        <h2 class="pp-section-h">{{ 'Domain Pricing'|trans }}</h2>
+        <p class="pp-section-sub">{{ 'Registration, renewal, and transfer rates by TLD'|trans }}</p>
+        <div class="pp-table-card">
+            {% if tld_prices %}
+                <div class="overflow-x-auto">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead class="pp-thead">
+                            <tr>
+                                <th>{{ 'TLD'|trans }}</th>
+                                <th>{{ 'Registration'|trans }}</th>
+                                <th>{{ 'Renewal'|trans }}</th>
+                                <th>{{ 'Transfer'|trans }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="pp-tbody">
+                            {% for row in tld_prices %}
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined pp-ms pp-tld-icon">public</span>
+                                        <span class="pp-product-name">{{ row.tld }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ row.price_registration|money_convert }}</td>
+                                <td>{{ row.price_renew|money_convert }}</td>
+                                <td>{{ row.price_transfer|money_convert }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pp-table-note">
+                    {{ 'Prices are exclusive of applicable taxes. Rates may be updated periodically.'|trans }}
+                </div>
+            {% else %}
+                <div class="pp-empty">
+                    <p class="pp-empty-title">{{ 'No custom domain pricing yet'|trans }}</p>
+                    <p class="pp-empty-text">{{ 'Standard domain rates are currently in use for your account.'|trans }}</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+</div>
+{% endblock %}

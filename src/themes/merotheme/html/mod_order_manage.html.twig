@@ -501,73 +501,73 @@
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_first_name">First Name <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_first_name" name="{{ contact_key }}[first_name]" value="{{ data.first_name ?: clientProfile.first_name }}" required
+                                    <input type="text" id="{{ id_prefix }}_first_name" name="{{ contact_key }}[first_name]" value="{{ data.first_name|default(clientProfile.first_name) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_last_name">Last Name <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_last_name" name="{{ contact_key }}[last_name]" value="{{ data.last_name ?: clientProfile.last_name }}" required
+                                    <input type="text" id="{{ id_prefix }}_last_name" name="{{ contact_key }}[last_name]" value="{{ data.last_name|default(clientProfile.last_name) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_email">Email <span class="text-red-400">*</span></label>
-                                    <input type="email" id="{{ id_prefix }}_email" name="{{ contact_key }}[email]" value="{{ data.email ?: clientProfile.email }}" required
+                                    <input type="email" id="{{ id_prefix }}_email" name="{{ contact_key }}[email]" value="{{ data.email|default(clientProfile.email) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_company">Company</label>
-                                    <input type="text" id="{{ id_prefix }}_company" name="{{ contact_key }}[company]" value="{{ data.company ?: clientProfile.company }}"
+                                    <input type="text" id="{{ id_prefix }}_company" name="{{ contact_key }}[company]" value="{{ data.company|default(clientProfile.company) }}"
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_address1">Address Line 1 <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_address1" name="{{ contact_key }}[address1]" value="{{ data.address1 ?: clientProfile.address_1 }}" required
+                                    <input type="text" id="{{ id_prefix }}_address1" name="{{ contact_key }}[address1]" value="{{ data.address1|default(clientProfile.address_1) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_address2">Address Line 2</label>
-                                    <input type="text" id="{{ id_prefix }}_address2" name="{{ contact_key }}[address2]" value="{{ data.address2 ?: clientProfile.address_2 }}"
+                                    <input type="text" id="{{ id_prefix }}_address2" name="{{ contact_key }}[address2]" value="{{ data.address2|default(clientProfile.address_2) }}"
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_city">City <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_city" name="{{ contact_key }}[city]" value="{{ data.city ?: clientProfile.city }}" required
+                                    <input type="text" id="{{ id_prefix }}_city" name="{{ contact_key }}[city]" value="{{ data.city|default(clientProfile.city) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_state">State <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_state" name="{{ contact_key }}[state]" value="{{ data.state ?: clientProfile.state }}" required
+                                    <input type="text" id="{{ id_prefix }}_state" name="{{ contact_key }}[state]" value="{{ data.state|default(clientProfile.state) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_postcode">Zip / Postcode <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_postcode" name="{{ contact_key }}[postcode]" value="{{ data.postcode ?: clientProfile.postcode }}" required
+                                    <input type="text" id="{{ id_prefix }}_postcode" name="{{ contact_key }}[postcode]" value="{{ data.postcode|default(clientProfile.postcode) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_country">Country <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_country" name="{{ contact_key }}[country]" value="{{ data.country ?: clientProfile.country }}" required
+                                    <input type="text" id="{{ id_prefix }}_country" name="{{ contact_key }}[country]" value="{{ data.country|default(clientProfile.country) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_phone_cc">Phone Country Code <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_phone_cc" name="{{ contact_key }}[phone_cc]" value="{{ data.phone_cc ?: clientProfile.phone_cc }}" required placeholder="+1"
+                                    <input type="text" id="{{ id_prefix }}_phone_cc" name="{{ contact_key }}[phone_cc]" value="{{ data.phone_cc|default(clientProfile.phone_cc) }}" required placeholder="+1"
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_phone">Phone Number <span class="text-red-400">*</span></label>
-                                    <input type="text" id="{{ id_prefix }}_phone" name="{{ contact_key }}[phone]" value="{{ data.phone ?: clientProfile.phone }}" required
+                                    <input type="text" id="{{ id_prefix }}_phone" name="{{ contact_key }}[phone]" value="{{ data.phone|default(clientProfile.phone) }}" required
                                            {% if role != 'registrant' and not is_independent %}disabled{% endif %}
                                            class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                                 </div>
@@ -589,9 +589,9 @@
 
                     {% import _self as forms %}
                     {{ forms.contact_form('r', 'registrant', 'contact',        'Registrant Contact',     service.contact,         clientProfile, true) }}
-                    {{ forms.contact_form('a', 'admin',      'admin_contact',   'Administrative Contact', service.admin_contact,    clientProfile, service.admin_contact_is_independent) }}
-                    {{ forms.contact_form('t', 'tech',       'tech_contact',    'Technical Contact',      service.tech_contact,     clientProfile, service.tech_contact_is_independent) }}
-                    {{ forms.contact_form('b', 'billing',    'billing_contact', 'Billing Contact',        service.billing_contact,  clientProfile, service.billing_contact_is_independent) }}
+                    {{ forms.contact_form('a', 'admin',      'admin_contact',   'Administrative Contact', service.admin_contact|default({}),    clientProfile, service.admin_contact_is_independent|default(false)) }}
+                    {{ forms.contact_form('t', 'tech',       'tech_contact',    'Technical Contact',      service.tech_contact|default({}),     clientProfile, service.tech_contact_is_independent|default(false)) }}
+                    {{ forms.contact_form('b', 'billing',    'billing_contact', 'Billing Contact',        service.billing_contact|default({}),  clientProfile, service.billing_contact_is_independent|default(false)) }}
 
                     </div>{# /contact-form-wrapper #}
                     {% endif %}
@@ -1060,8 +1060,9 @@
 
                 {# Action row #}
                 <div class="flex flex-wrap items-center gap-3">
-                    {% if order.status in ['pending_setup', 'failed_setup', 'failed_renew'] and order.invoice_id %}
-                    <a href="{{ 'invoice'|url }}/{{ order.invoice_id }}"
+                    {% if order.status in ['pending_setup', 'failed_setup', 'failed_renew'] and order.unpaid_invoice_id|default(false) %}
+                    {% set _pay_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+                    <a href="{{ 'invoice'|url }}/{{ _pay_hash }}"
                        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all"
                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

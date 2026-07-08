@@ -153,7 +153,7 @@
 
             {# Mobile-only logo #}
             <div class="flex justify-start mb-10 lg:hidden">
-                {% if settings.logo_url %}
+                {% if settings.logo_url|default(false) %}
                     <img src="{{ settings.logo_url }}" alt="{{ company.name }}" class="h-9 w-auto">
                 {% else %}
                     <span class="text-gray-900 font-extrabold text-2xl">{{ company.name }}</span>
@@ -163,7 +163,7 @@
             {# Heading #}
             <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight mb-2">Login</h1>
             <p class="text-sm text-gray-400 mb-8">
-                {% if settings.login_show_register != '0' %}
+                {% if settings.login_show_register|default('1') != '0' %}
                 New to {{ company.name }}?
                 <a href="{{ 'signup'|url }}"
                    class="font-semibold hover:underline underline-offset-2 transition-colors"
@@ -278,7 +278,7 @@
                             </svg>
                         </button>
                     </div>
-                    {% if settings.login_show_reset != '0' %}
+                    {% if settings.login_show_reset|default('1') != '0' %}
                     <a href="{{ 'password-reset'|url }}"
                        class="inline-block mt-2 text-sm font-semibold hover:underline underline-offset-2 transition-colors"
                        style="color: var(--color-primary);">Forgot password?</a>
@@ -342,7 +342,7 @@
 
             </form>
 
-            {% if social.google_enabled %}
+            {% if social.google_enabled|default(false) %}
             <div class="mt-6">
                 <div class="relative flex items-center">
                     <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
@@ -381,13 +381,13 @@
 </div>
 {% endblock %}
 {% block js %}
-{% if social.google_enabled and social.google_client_id %}
+{% if social.google_enabled|default(false) and social.google_client_id|default(false) %}
 <script>
 (function () {
     'use strict';
 
     var clientId = '{{ social.google_client_id|e('js') }}';
-    var apiUrl   = window.location.origin + '/api/guest/sociallogin/handle_credential';
+    var apiUrl   = '{{ constant('SYSTEM_URL')|trim('/')|e('js') }}/api/guest/sociallogin/handle_credential';
     var loginUrl = '{{ 'login'|url|e('js') }}';
 
     function handleCredential(credentialResponse) {

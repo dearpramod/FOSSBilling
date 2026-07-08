@@ -1,0 +1,752 @@
+{% extends request.ajax ? 'layout_blank.html.twig' : 'layout_default.html.twig' %}
+
+{% set active_menu = 'extensions' %}
+{% set jobs = admin.bulkpricingupdater_job_get_list({ 'limit': 20 }) %}
+
+{% block meta_title %}{{ 'Bulk Pricing Updater'|trans }}{% endblock %}
+
+{% block breadcrumbs %}
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ ''|alink }}">{{ 'Home'|trans }}</a></li>
+        <li class="breadcrumb-item"><a href="{{ 'extension'|alink }}">{{ 'Extensions'|trans }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ 'Bulk Pricing Updater'|trans }}</li>
+    </ol>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <h2 class="h3 mb-2">{{ 'Bulk Pricing Updater'|trans }}</h2>
+        <p class="text-muted mb-0">{{ 'This utility can apply pricing changes to existing product/services and domain renewals.'|trans }}</p>
+    </div>
+</div>
+
+<div class="card mt-3" id="bpu-wizard-root">
+    <div class="card-body">
+        <div class="bpu-stepper mb-4">
+            <div class="bpu-step" data-step="1">
+                <span class="bpu-step-prefix">{{ 'Step 1'|trans }}</span>
+                <span class="bpu-step-name">{{ 'Choose Type'|trans }}</span>
+            </div>
+            <div class="bpu-step" data-step="2">
+                <span class="bpu-step-prefix">{{ 'Step 2'|trans }}</span>
+                <span class="bpu-step-name">{{ 'Set Criteria'|trans }}</span>
+            </div>
+            <div class="bpu-step" data-step="3">
+                <span class="bpu-step-prefix">{{ 'Step 3'|trans }}</span>
+                <span class="bpu-step-name">{{ 'Review'|trans }}</span>
+            </div>
+            <div class="bpu-step" data-step="4">
+                <span class="bpu-step-prefix">{{ 'Step 4'|trans }}</span>
+                <span class="bpu-step-name">{{ 'Perform Update'|trans }}</span>
+            </div>
+        </div>
+
+        <section class="bpu-panel" data-panel="1">
+            <h3 class="h4 mb-2">{{ 'Choose Type'|trans }}</h3>
+            <p class="text-muted">{{ 'Choose which service type you want to update pricing for.'|trans }}</p>
+            <div class="btn-list mt-3">
+                <button type="button" class="btn btn-outline-primary bpu-type-btn" data-type="product">{{ 'Products/Services'|trans }}</button>
+                <button type="button" class="btn btn-outline-primary bpu-type-btn" data-type="domain">{{ 'Domains'|trans }}</button>
+            </div>
+            <div class="mt-4 d-flex justify-content-end">
+                <button type="button" class="btn btn-primary" id="bpu-step1-continue" disabled>{{ 'Continue'|trans }}</button>
+            </div>
+        </section>
+
+        <section class="bpu-panel d-none" data-panel="2">
+            <div id="bpu-criteria-product" class="d-none">
+                <h3 class="h4 mb-2">{{ 'Products/Services Criteria'|trans }}</h3>
+                <p class="text-muted">{{ 'Select products, then choose billing cycle and update method.'|trans }}</p>
+
+                <form id="bpu-product-form" class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Product Name(s)'|trans }}</label>
+                        <select class="form-select" id="bpu-product-selector" multiple size="10" required></select>
+                        <div class="form-hint">{{ 'Hold Cmd/Ctrl to select multiple products.'|trans }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Billing Cycle'|trans }}</label>
+                        <select class="form-select" id="bpu-cycle-selector" size="10" required>
+                            <option value="">{{ 'Select product(s) first'|trans }}</option>
+                        </select>
+                        <input type="hidden" name="product_ids_csv" id="bpu-product-ids-csv">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Mode'|trans }}</label>
+                        <select class="form-select" name="mode" required>
+                            <option value="set">{{ 'New recurring price'|trans }}</option>
+                            <option value="percent">{{ 'Increase pricing by %'|trans }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Value'|trans }}</label>
+                        <input class="form-control" type="number" step="0.01" name="value" required>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Period to update'|trans }}</label>
+                        <select class="form-select" name="period" id="bpu-period-select" required>
+                            <option value="">{{ 'Select billing cycle first'|trans }}</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 d-flex align-items-end">
+                        <label class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" name="include_active_orders" value="1" checked>
+                            <span class="form-check-label">{{ 'Also update active recurring order renewal prices'|trans }}</span>
+                        </label>
+                    </div>
+                </form>
+
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm table-vcenter" id="bpu-product-price-table">
+                        <thead>
+                            <tr>
+                                <th>{{ 'Product'|trans }}</th>
+                                <th>{{ 'Billing Cycle'|trans }}</th>
+                                <th>{{ 'Status'|trans }}</th>
+                                <th>{{ 'Current Recurring Price'|trans }}</th>
+                                <th>{{ 'Setup Fee'|trans }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="text-muted">{{ 'Select product(s) to load current pricing.'|trans }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="bpu-criteria-domain" class="d-none">
+                <h3 class="h4 mb-2">{{ 'Domain Criteria'|trans }}</h3>
+                <p class="text-muted">{{ 'Choose TLD filters and update mode for renewal pricing.'|trans }}</p>
+
+                <form id="bpu-domain-form" class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Mode'|trans }}</label>
+                        <select class="form-select" name="mode" required>
+                            <option value="set">{{ 'New renewal price'|trans }}</option>
+                            <option value="percent">{{ 'Increase pricing by %'|trans }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Value'|trans }}</label>
+                        <input class="form-control" type="number" step="0.01" name="value" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'TLD (optional)'|trans }}</label>
+                        <input class="form-control" type="text" name="tld" placeholder=".com">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{{ 'Registrar ID (optional)'|trans }}</label>
+                        <input class="form-control" type="number" min="1" name="tld_registrar_id" placeholder="{{ 'All registrars'|trans }}">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" name="include_active_orders" value="1" checked>
+                            <span class="form-check-label">{{ 'Also update active domain order renewal prices'|trans }}</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary" id="bpu-step2-back">{{ 'Choose Different Type'|trans }}</button>
+                <button type="button" class="btn btn-primary" id="bpu-step2-continue">{{ 'Continue'|trans }}</button>
+            </div>
+        </section>
+
+        <section class="bpu-panel d-none" data-panel="3">
+            <h3 class="h4 mb-2">{{ 'Review'|trans }}</h3>
+            <p class="text-muted">{{ 'Please review criteria and preview impact before applying.'|trans }}</p>
+
+            <div class="card bg-body-tertiary border mt-3">
+                <div class="card-body">
+                    <h4 class="h5">{{ 'Criteria'|trans }}</h4>
+                    <div id="bpu-review-criteria" class="small"></div>
+                    <hr>
+                    <h4 class="h5">{{ 'Preview Impact'|trans }}</h4>
+                    <pre id="bpu-review-output" class="bg-dark-lt p-3 small mb-0" style="max-height: 300px; overflow:auto;">{{ 'Generating preview...'|trans }}</pre>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-center gap-2">
+                <button type="button" class="btn btn-outline-secondary" id="bpu-step3-back">{{ 'Edit Criteria'|trans }}</button>
+                <button type="button" class="btn btn-danger" id="bpu-step3-perform" data-bs-toggle="modal" data-bs-target="#bpu-confirm-modal">{{ 'Perform Update'|trans }}</button>
+            </div>
+            <p class="text-danger text-center mt-2 mb-0">{{ 'Warning: this action cannot be undone.'|trans }}</p>
+        </section>
+
+        <div class="modal modal-blur fade" id="bpu-confirm-modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content">
+                    <div class="modal-status bg-danger"></div>
+                    <div class="modal-body py-4 text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg text-danger mb-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.24 3.957l-8.422 14.06a1.989 1.989 0 0 0 1.7 2.983h16.845a1.989 1.989 0 0 0 1.7 -2.983l-8.423 -14.06a1.989 1.989 0 0 0 -3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
+                        <h3>{{ 'Apply Pricing Update?'|trans }}</h3>
+                        <p class="text-muted mb-0">{{ 'This will overwrite existing prices in the database. This action cannot be undone.'|trans }}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <div class="w-100 d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary flex-fill" data-bs-dismiss="modal">{{ 'Cancel'|trans }}</button>
+                            <button type="button" class="btn btn-danger flex-fill" id="bpu-confirm-apply">{{ 'Yes, Apply'|trans }}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section class="bpu-panel d-none" data-panel="4">
+            <h3 class="h4 mb-2">{{ 'Perform Update'|trans }}</h3>
+            <p class="text-muted">{{ 'Result of the pricing update is shown below.'|trans }}</p>
+
+            <div class="alert alert-success d-none" id="bpu-success-box">
+                <h4 class="alert-title mb-2">{{ 'Update Complete'|trans }}</h4>
+                <div id="bpu-success-summary"></div>
+            </div>
+
+            <pre id="bpu-final-output" class="bg-dark-lt p-3 small mb-0" style="max-height: 340px; overflow:auto;"></pre>
+
+            <div class="mt-4 d-flex justify-content-center gap-2">
+                <button type="button" class="btn btn-outline-secondary" id="bpu-step4-back">{{ 'Edit Criteria and Run Again'|trans }}</button>
+                <button type="button" class="btn btn-success" id="bpu-step4-reset">{{ 'Start Over'|trans }}</button>
+            </div>
+        </section>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h3 class="card-title">{{ 'Recent Jobs'|trans }}</h3>
+    </div>
+    <div class="table-responsive">
+        <table class="table card-table table-vcenter">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>{{ 'Scope'|trans }}</th>
+                    <th>{{ 'Mode'|trans }}</th>
+                    <th>{{ 'Value'|trans }}</th>
+                    <th>{{ 'Changes'|trans }}</th>
+                    <th>{{ 'Created At'|trans }}</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% if jobs|length > 0 %}
+                {% for job in jobs %}
+                    <tr>
+                        <td>{{ job.id }}</td>
+                        <td>{{ job.scope }}</td>
+                        <td>{{ job.mode }}</td>
+                        <td>{{ job.value }}</td>
+                        <td>{{ job.applied_changes }}</td>
+                        <td>{{ job.created_at|format_date }}</td>
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="6" class="text-muted">{{ 'No bulk pricing jobs yet.'|trans }}</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+/* ===== BPU Wizard Stepper ===== */
+.bpu-stepper {
+    display: flex;
+    margin: 0 0 1.75rem;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.bpu-step {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 11px 16px 11px 32px;
+    min-height: 56px;
+    background: #dee2e6;
+    color: #6c757d;
+    cursor: default;
+    user-select: none;
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%, 18px 50%);
+    margin-right: 2px;
+    overflow: hidden;
+    transition: background 0.15s, color 0.15s;
+}
+
+.bpu-step:first-child {
+    padding-left: 18px;
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
+    border-radius: 4px 0 0 4px;
+}
+
+.bpu-step:last-child {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 18px 50%);
+    margin-right: 0;
+    border-radius: 0 4px 4px 0;
+}
+
+.bpu-step-prefix {
+    font-size: 0.67rem;
+    font-weight: 700;
+    opacity: 0.65;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.bpu-step-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.bpu-step.is-active {
+    background: #1a3c6b;
+    color: #fff;
+    z-index: 4;
+}
+
+.bpu-step.is-active .bpu-step-prefix {
+    opacity: 0.75;
+}
+
+.bpu-step.is-done {
+    background: #3b6dbf;
+    color: #fff;
+    z-index: 3;
+}
+
+.bpu-step.is-done .bpu-step-prefix {
+    opacity: 0.75;
+}
+
+[data-bs-theme="dark"] .bpu-step {
+    background: #2c3343;
+    color: #8fa2be;
+}
+
+[data-bs-theme="dark"] .bpu-step.is-active {
+    background: #1e4d8c;
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .bpu-step.is-done {
+    background: #2d5fa0;
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .bpu-step {
+        padding: 8px 12px 8px 24px;
+        min-height: 44px;
+    }
+    .bpu-step:first-child {
+        padding-left: 12px;
+    }
+    .bpu-step-prefix {
+        display: none;
+    }
+    .bpu-step-name {
+        font-size: 0.78rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block js %}
+<script>
+(function () {
+    var state = {
+        step: 1,
+        type: null,
+        previewResult: null,
+        applyResult: null,
+        latestPricingRows: [],
+        latestCurrency: 'USD'
+    };
+
+    var productForm = document.getElementById('bpu-product-form');
+    var domainForm = document.getElementById('bpu-domain-form');
+    var productSelector = document.getElementById('bpu-product-selector');
+    var cycleSelector = document.getElementById('bpu-cycle-selector');
+    var periodSelect = document.getElementById('bpu-period-select');
+    var productIdsCsv = document.getElementById('bpu-product-ids-csv');
+    var priceTableBody = document.querySelector('#bpu-product-price-table tbody');
+
+    function escHtml(str) {
+        var d = document.createElement('div');
+        d.textContent = String(str == null ? '' : str);
+        return d.innerHTML;
+    }
+
+    function getSelectedValues(selectEl) {
+        return Array.from(selectEl.selectedOptions).map(function (option) {
+            return option.value;
+        }).filter(function (value) {
+            return value !== '';
+        });
+    }
+
+    function fillSelect(selectEl, options, selectedValue) {
+        selectEl.innerHTML = '';
+        options.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            if (selectedValue && item.value === selectedValue) {
+                option.selected = true;
+            }
+            selectEl.appendChild(option);
+        });
+    }
+
+    function printOutput(targetId, data) {
+        document.getElementById(targetId).textContent = JSON.stringify(data, null, 2);
+    }
+
+    function formToPayload(form) {
+        var payload = {};
+        var fields = new FormData(form);
+
+        fields.forEach(function (value, key) {
+            if (value !== '') {
+                payload[key] = value;
+            }
+        });
+
+        var includeCheckbox = form.querySelector('input[name="include_active_orders"]');
+        payload.include_active_orders = includeCheckbox && includeCheckbox.checked ? 1 : 0;
+
+        return payload;
+    }
+
+    function getActivePayload() {
+        if (state.type === 'product') {
+            syncSelectedProductsCsv();
+            return formToPayload(productForm);
+        }
+
+        return formToPayload(domainForm);
+    }
+
+    function getPreviewEndpoint() {
+        return state.type === 'product'
+            ? 'bulkpricingupdater/preview_product_renewal_update'
+            : 'bulkpricingupdater/preview_domain_renewal_update';
+    }
+
+    function getApplyEndpoint() {
+        return state.type === 'product'
+            ? 'bulkpricingupdater/apply_product_renewal_update'
+            : 'bulkpricingupdater/apply_domain_renewal_update';
+    }
+
+    function callApi(endpoint, payload, onSuccess, onError) {
+        FOSSBilling.api.admin.post(endpoint, payload, onSuccess, onError || function (error) {
+            printOutput('bpu-final-output', { error: error });
+        });
+    }
+
+    function renderStepper() {
+        var steps = document.querySelectorAll('.bpu-step');
+        steps.forEach(function (item) {
+            var itemStep = Number(item.getAttribute('data-step'));
+            item.classList.toggle('is-active', itemStep === state.step);
+            item.classList.toggle('is-done', itemStep < state.step);
+        });
+    }
+
+    function renderPanels() {
+        var panels = document.querySelectorAll('.bpu-panel');
+        panels.forEach(function (panel) {
+            var panelStep = Number(panel.getAttribute('data-panel'));
+            panel.classList.toggle('d-none', panelStep !== state.step);
+        });
+
+        var productPanel = document.getElementById('bpu-criteria-product');
+        var domainPanel = document.getElementById('bpu-criteria-domain');
+        productPanel.classList.toggle('d-none', state.type !== 'product');
+        domainPanel.classList.toggle('d-none', state.type !== 'domain');
+    }
+
+    function goToStep(step) {
+        state.step = step;
+        renderStepper();
+        renderPanels();
+    }
+
+    function syncSelectedProductsCsv() {
+        productIdsCsv.value = getSelectedValues(productSelector).join(',');
+    }
+
+    function renderProductPricingTable(rows, currency, selectedPeriod) {
+        priceTableBody.innerHTML = '';
+
+        var filteredRows = selectedPeriod
+            ? rows.filter(function (row) { return row.period === selectedPeriod; })
+            : rows;
+
+        if (!filteredRows.length) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" class="text-muted">{{ 'No pricing rows found for the current selection.'|trans|e('js') }}</td>';
+            priceTableBody.appendChild(tr);
+            return;
+        }
+
+        filteredRows.forEach(function (row) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = [
+                '<td>' + escHtml(row.product_title) + '</td>',
+                '<td>' + escHtml(row.period_label) + ' (' + escHtml(row.period) + ')' + '</td>',
+                '<td>' + (row.enabled ? '<span class="badge bg-green">{{ 'Enabled'|trans|e('js') }}</span>' : '<span class="badge bg-secondary">{{ 'Disabled'|trans|e('js') }}</span>') + '</td>',
+                '<td>' + escHtml(currency) + ' ' + Number(row.price).toFixed(2) + '</td>',
+                '<td>' + escHtml(currency) + ' ' + Number(row.setup_price).toFixed(2) + '</td>'
+            ].join('');
+            priceTableBody.appendChild(tr);
+        });
+    }
+
+    function loadProductList() {
+        callApi('bulkpricingupdater/product_get_list', {}, function (result) {
+            productSelector.innerHTML = '';
+
+            if (!Array.isArray(result) || !result.length) {
+                var empty = document.createElement('option');
+                empty.value = '';
+                empty.textContent = '{{ 'No products available'|trans|e('js') }}';
+                productSelector.appendChild(empty);
+                return;
+            }
+
+            result.forEach(function (item) {
+                var option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = item.title + ' (#' + item.id + ')';
+                productSelector.appendChild(option);
+            });
+        });
+    }
+
+    function loadSelectedProductPricing() {
+        var selectedProductIds = getSelectedValues(productSelector);
+        syncSelectedProductsCsv();
+
+        if (!selectedProductIds.length) {
+            fillSelect(cycleSelector, [{ value: '', label: '{{ 'Select product(s) first'|trans|e('js') }}' }]);
+            fillSelect(periodSelect, [{ value: '', label: '{{ 'Select billing cycle first'|trans|e('js') }}' }]);
+            state.latestPricingRows = [];
+            renderProductPricingTable([], state.latestCurrency, '');
+            return;
+        }
+
+        callApi('bulkpricingupdater/product_period_pricing_get', { product_ids: selectedProductIds }, function (result) {
+            state.latestPricingRows = Array.isArray(result.rows) ? result.rows : [];
+            state.latestCurrency = result.currency || 'USD';
+
+            var cycleOptions = (result.billing_cycles || []).map(function (cycle) {
+                return { value: cycle.code, label: cycle.label + ' (' + cycle.code + ')' };
+            });
+
+            if (!cycleOptions.length) {
+                cycleOptions.push({ value: '', label: '{{ 'No enabled billing cycles found'|trans|e('js') }}' });
+            }
+
+            fillSelect(cycleSelector, cycleOptions, cycleOptions[0].value || '');
+            fillSelect(periodSelect, cycleOptions, cycleOptions[0].value || '');
+            renderProductPricingTable(state.latestPricingRows, state.latestCurrency, periodSelect.value);
+        }, function (error) {
+            printOutput('bpu-review-output', { error: error });
+        });
+    }
+
+    function renderReviewCriteria() {
+        var review = document.getElementById('bpu-review-criteria');
+        var payload = getActivePayload();
+        var rows = [];
+
+        rows.push('<div><strong>{{ 'Scope'|trans|e('js') }}:</strong> ' + (state.type === 'product' ? '{{ 'Products/Services'|trans|e('js') }}' : '{{ 'Domains'|trans|e('js') }}') + '</div>');
+
+        if (state.type === 'product') {
+            var names = getSelectedValues(productSelector).map(function (id) {
+                var option = productSelector.querySelector('option[value="' + id + '"]');
+                return escHtml(option ? option.textContent : id);
+            });
+            rows.push('<div><strong>{{ 'Product Names'|trans|e('js') }}:</strong> ' + (names.join(', ') || '-') + '</div>');
+            rows.push('<div><strong>{{ 'Billing Cycle'|trans|e('js') }}:</strong> ' + escHtml(payload.period || '-') + '</div>');
+        } else {
+            rows.push('<div><strong>{{ 'TLD'|trans|e('js') }}:</strong> ' + escHtml(payload.tld || '{{ 'All'|trans|e('js') }}') + '</div>');
+            rows.push('<div><strong>{{ 'Registrar ID'|trans|e('js') }}:</strong> ' + escHtml(payload.tld_registrar_id || '{{ 'All'|trans|e('js') }}') + '</div>');
+        }
+
+        rows.push('<div><strong>{{ 'Mode'|trans|e('js') }}:</strong> ' + escHtml(payload.mode) + '</div>');
+        rows.push('<div><strong>{{ 'Value'|trans|e('js') }}:</strong> ' + escHtml(payload.value) + '</div>');
+        rows.push('<div><strong>{{ 'Include Active Orders'|trans|e('js') }}:</strong> ' + (payload.include_active_orders ? '{{ 'Yes'|trans|e('js') }}' : '{{ 'No'|trans|e('js') }}') + '</div>');
+
+        review.innerHTML = rows.join('');
+    }
+
+    function isStep2Valid() {
+        var form = state.type === 'product' ? productForm : domainForm;
+        if (!form) {
+            return false;
+        }
+
+        if (!form.reportValidity()) {
+            return false;
+        }
+
+        if (state.type === 'product' && !getSelectedValues(productSelector).length) {
+            alert('{{ 'Please select at least one product.'|trans|e('js') }}');
+            return false;
+        }
+
+        return true;
+    }
+
+    function generatePreviewAndMoveToReview() {
+        renderReviewCriteria();
+        printOutput('bpu-review-output', { loading: true });
+
+        callApi(getPreviewEndpoint(), getActivePayload(), function (result) {
+            state.previewResult = result;
+            printOutput('bpu-review-output', result);
+            goToStep(3);
+        }, function (error) {
+            state.previewResult = null;
+            printOutput('bpu-review-output', { error: error });
+            goToStep(3);
+        });
+    }
+
+    function performUpdate() {
+        callApi(getApplyEndpoint(), getActivePayload(), function (result) {
+            state.applyResult = result;
+            printOutput('bpu-final-output', result);
+
+            var successBox = document.getElementById('bpu-success-box');
+            var successSummary = document.getElementById('bpu-success-summary');
+            successBox.classList.remove('d-none');
+
+            var changes = (result.applied_products || 0)
+                + (result.applied_tlds || 0)
+                + (result.applied_active_orders || 0);
+
+            successSummary.textContent = '{{ 'Database records updated:'|trans|e('js') }} ' + changes;
+            goToStep(4);
+        }, function (error) {
+            printOutput('bpu-final-output', { error: error });
+            goToStep(4);
+        });
+    }
+
+    function bindEvents() {
+        document.querySelectorAll('.bpu-type-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                state.type = btn.getAttribute('data-type');
+                document.querySelectorAll('.bpu-type-btn').forEach(function (other) {
+                    other.classList.remove('btn-primary');
+                    other.classList.add('btn-outline-primary');
+                });
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+                document.getElementById('bpu-step1-continue').disabled = false;
+            });
+        });
+
+        document.getElementById('bpu-step1-continue').addEventListener('click', function () {
+            goToStep(2);
+        });
+
+        document.getElementById('bpu-step2-back').addEventListener('click', function () {
+            goToStep(1);
+        });
+
+        document.getElementById('bpu-step2-continue').addEventListener('click', function () {
+            if (!isStep2Valid()) {
+                return;
+            }
+
+            generatePreviewAndMoveToReview();
+        });
+
+        document.getElementById('bpu-step3-back').addEventListener('click', function () {
+            goToStep(2);
+        });
+
+        document.getElementById('bpu-confirm-apply').addEventListener('click', function () {
+            var modal = bootstrap.Modal.getInstance(document.getElementById('bpu-confirm-modal'));
+            if (modal) { modal.hide(); }
+            performUpdate();
+        });
+
+        document.getElementById('bpu-step4-back').addEventListener('click', function () {
+            goToStep(2);
+        });
+
+        document.getElementById('bpu-step4-reset').addEventListener('click', function () {
+            state.step = 1;
+            state.type = null;
+            state.previewResult = null;
+            state.applyResult = null;
+            state.latestPricingRows = [];
+            state.latestCurrency = 'USD';
+
+            productForm.reset();
+            domainForm.reset();
+            fillSelect(cycleSelector, [{ value: '', label: '{{ 'Select product(s) first'|trans|e('js') }}' }]);
+            fillSelect(periodSelect, [{ value: '', label: '{{ 'Select billing cycle first'|trans|e('js') }}' }]);
+            renderProductPricingTable([], state.latestCurrency, '');
+
+            document.querySelectorAll('.bpu-type-btn').forEach(function (btn) {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-primary');
+            });
+
+            document.getElementById('bpu-step1-continue').disabled = true;
+            document.getElementById('bpu-success-box').classList.add('d-none');
+            document.getElementById('bpu-success-summary').textContent = '';
+            document.getElementById('bpu-final-output').textContent = '';
+            goToStep(1);
+        });
+
+        productSelector.addEventListener('change', loadSelectedProductPricing);
+
+        cycleSelector.addEventListener('change', function () {
+            periodSelect.value = cycleSelector.value;
+            renderProductPricingTable(state.latestPricingRows, state.latestCurrency, cycleSelector.value);
+        });
+
+        periodSelect.addEventListener('change', function () {
+            if (cycleSelector.querySelector('option[value="' + periodSelect.value + '"]')) {
+                cycleSelector.value = periodSelect.value;
+            }
+            renderProductPricingTable(state.latestPricingRows, state.latestCurrency, periodSelect.value);
+        });
+    }
+
+    bindEvents();
+    loadProductList();
+    goToStep(1);
+})();
+</script>
+{% endblock %}

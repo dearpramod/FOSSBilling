@@ -42,7 +42,8 @@
       </a>
       {% endif %}
       {% if order.unpaid_invoice_id %}
-      <a href="{{ 'invoice'|url }}/{{ order.unpaid_invoice_hash }}"
+      {% set _unpaid_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+      <a href="{{ 'invoice'|url }}/{{ _unpaid_hash }}"
          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
          style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -247,14 +248,14 @@
       </div>{# /Account + Server 2-col #}
 
       {# Account Management section #}
-      {% if settings.show_account_management != '0' %}
+      {% if settings.show_account_management|default('1') != '0' %}
       <div class="hm-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="hm-card-hdr px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
             <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Account Management
           </h3>
-          {% if settings.acct_show_cancel != '0' %}
+          {% if settings.acct_show_cancel|default('1') != '0' %}
           <button type="button" @click="cancelModal = true"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 border border-red-200 hover:border-red-300 hover:bg-red-50 transition-all">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
@@ -264,7 +265,7 @@
         </div>
         <div class="divide-y divide-slate-100">
 
-          {% if settings.acct_show_password != '0' %}
+          {% if settings.acct_show_password|default('1') != '0' %}
           <div>
             <button @click="toggle('password')"
                     class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
@@ -312,7 +313,7 @@
           </div>
           {% endif %}
 
-          {% if settings.acct_show_domain != '0' %}
+          {% if settings.acct_show_domain|default('1') != '0' %}
           <div>
             <button @click="toggle('domain')"
                     class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
@@ -360,7 +361,7 @@
           </div>
           {% endif %}
 
-          {% if settings.acct_show_username != '0' %}
+          {% if settings.acct_show_username|default('1') != '0' %}
           <div>
             <button @click="toggle('username')"
                     class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
@@ -479,7 +480,7 @@
     </div>{# /left 2/3 #}
 
     {# Right 1/3: Resource Usage sidebar #}
-    {% if settings.show_resource_usage != '0' %}
+    {% if settings.show_resource_usage|default('1') != '0' %}
     <div>
       <div class="hm-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-24">
         <div class="hm-card-hdr px-5 py-4 border-b border-slate-100 bg-slate-50/50">

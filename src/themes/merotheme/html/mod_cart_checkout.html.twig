@@ -146,7 +146,7 @@
                      class="px-6 pb-6 space-y-4"
                      style="display:none;">
 
-                    {% if social.google_enabled %}
+                    {% if social.google_enabled|default(false) %}
                     <div>
                         <a href="{{ 'sociallogin/google'|url }}"
                            class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-all"
@@ -204,7 +204,7 @@
                      style="display:none;">
 
                     {# Social login #}
-                    {% if social.google_enabled %}
+                    {% if social.google_enabled|default(false) %}
                     <div>
                         <a href="{{ ('sociallogin/google?context=register')|url }}"
                            class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-all"

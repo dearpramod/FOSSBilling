@@ -371,7 +371,7 @@
             allPricings: {{ all_pricings|json_encode }},
             currencyFormat: {{ currency_fmt_js|json_encode }},
             currencyRate: {{ currency.conversion_rate|default(1) }},
-            currencyPriceFormat: {{ currency.price_format|json_encode }},
+            currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
             fmt(price) {
                 const converted = parseFloat(price) * this.currencyRate;
                 if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
@@ -500,8 +500,8 @@
                 {% set shown_features = normalized_features|slice(0, initial_feature_count) %}
                 {# Backend-driven free domain flags from product config #}
                 {% set product_free_domain = p.config.free_domain ?? false %}
-                {% set product_free_tlds = p.config.free_tlds is iterable ? p.config.free_tlds : [] %}
-                {% set product_free_periods = p.config.free_domain_periods is iterable ? p.config.free_domain_periods : ['1Y'] %}
+                {% set product_free_tlds = p.config.free_tlds ?? [] %}
+                {% set product_free_periods = p.config.free_domain_periods ?? ['1Y'] %}
                 {% set product_has_free_com = false %}
                 {% if product_free_domain %}
                     {% if product_free_tlds|length == 0 %}
@@ -750,7 +750,7 @@
                     period: '{{ _vps_default_period }}',
                     currencyFormat: {{ currency_fmt_js|json_encode }},
                     currencyRate: {{ currency.conversion_rate|default(1) }},
-                    currencyPriceFormat: {{ currency.price_format|json_encode }},
+                    currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
                     fmt(price) {
                         const converted = parseFloat(price) * this.currencyRate;
                         if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
@@ -1187,7 +1187,7 @@
                 period: '{{ _dom_default_period }}',
                 currencyFormat: {{ currency_fmt_js|json_encode }},
                 currencyRate: {{ currency.conversion_rate|default(1) }},
-                currencyPriceFormat: {{ currency.price_format|json_encode }},
+                currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
                 fmt(price) {
                     const converted = parseFloat(price) * this.currencyRate;
                     if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
@@ -1417,7 +1417,7 @@
             showAllFeaturesGlobal: false,
             currencyFormat: {{ currency_fmt_js|json_encode }},
             currencyRate: {{ currency.conversion_rate|default(1) }},
-            currencyPriceFormat: {{ currency.price_format|json_encode }},
+            currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
             fmt(price) {
                 const converted = parseFloat(price) * this.currencyRate;
                 if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');

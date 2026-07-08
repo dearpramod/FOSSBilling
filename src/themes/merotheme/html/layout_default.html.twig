@@ -4,22 +4,22 @@
 <head>
     <meta charset="utf-8">
     <title>{% block meta_title %}Dashboard{% endblock %} — {{ guest.system_company.name }}</title>
-    <meta name="description" content="{% block meta_description %}{% if settings.meta_description %}{{ settings.meta_description }}{% else %}{{ guest.system_company.name }} Client Portal{% endif %}{% endblock %}">
-    {% if settings.meta_keywords %}<meta name="keywords" content="{{ settings.meta_keywords }}">{% endif %}
-    {% if settings.meta_robots %}<meta name="robots" content="{{ settings.meta_robots }}">{% endif %}
-    {% if settings.meta_author %}<meta name="author" content="{{ settings.meta_author }}">{% endif %}
+    <meta name="description" content="{% block meta_description %}{% if settings.meta_description|default(false) %}{{ settings.meta_description }}{% else %}{{ guest.system_company.name }} Client Portal{% endif %}{% endblock %}">
+    {% if settings.meta_keywords|default(false) %}<meta name="keywords" content="{{ settings.meta_keywords }}">{% endif %}
+    {% if settings.meta_robots|default(false) %}<meta name="robots" content="{{ settings.meta_robots }}">{% endif %}
+    {% if settings.meta_author|default(false) %}<meta name="author" content="{{ settings.meta_author }}">{% endif %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ CSRFToken }}">
 
     {# ── Theme color custom properties (shared partial: full brand scale) ── #}
     {% include 'partials/theme_colors.html.twig' %}
     <link rel="shortcut icon" href="{{ guest.system_company.favicon_url }}">
-    <link rel="canonical" href="{% block canonical_url %}{{ constant('SYSTEM_URL') ~ current_path|trim('/') }}{% endblock %}">
+    <link rel="canonical" href="{% block canonical_url %}{{ constant('SYSTEM_URL') ~ request_path|trim('/') }}{% endblock %}">
     {% block opengraph %}
     <meta property="og:title" content="{{ (settings.meta_title_prefix|default('') ~ ' ' ~ block('meta_title') ~ ' ' ~ settings.meta_title_suffix|default(''))|trim }}">
     <meta property="og:type" content="website">
     <meta property="og:description" content="{{ block('meta_description') }}">
-    <meta property="og:url" content="{{ constant('SYSTEM_URL') ~ current_path|trim('/') }}">
+    <meta property="og:url" content="{{ constant('SYSTEM_URL') ~ request_path|trim('/') }}">
     {% if guest.system_company.logo_url %}<meta property="og:image" content="{{ guest.system_company.logo_url }}">{% endif %}
     {% endblock %}
 
@@ -178,7 +178,7 @@
 </head>
 
 {% set orderServicesActive = 'order/domain-registration' in request.uri or (request.uri starts with '/order' and 'service' not in request.uri and 'checkout' not in request.uri) %}
-{% set normalizedPath = (current_path|default(request.uri|default('/')))|trim('/')|lower %}
+{% set normalizedPath = (request_path|default(request.uri|default('/')))|trim('/')|lower %}
 {% set isDashboardRoute = normalizedPath == '' or normalizedPath starts with 'dashboard' %}
 <body class="bg-[#f8f9ff] text-[#0b1c30] font-sans h-full {% block body_class %}{% endblock %}" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sb_collapsed') === '1', helpOpen: false, orderServicesOpen: {{ orderServicesActive ? 'true' : 'false' }}, darkMode: localStorage.getItem('merovps_theme') === 'dark' }" x-init="document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light'); $watch('sidebarCollapsed', function(v){ localStorage.setItem('sb_collapsed', v ? '1' : '0'); document.documentElement.setAttribute('data-sb', v ? 'collapsed' : 'expanded'); }); $watch('darkMode', function(v){ var t = v ? 'dark' : 'light'; localStorage.setItem('merovps_theme', t); document.documentElement.setAttribute('data-theme', t); });">
 <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-white focus:text-indigo-600 focus:rounded-lg focus:ring-2 focus:ring-indigo-500 focus:shadow-lg">{{ 'Skip to main content'|trans }}</a>
@@ -240,15 +240,15 @@
                :class="sidebarCollapsed ? 'justify-center px-0' : 'flex-col justify-center gap-1 px-4 py-3 text-center'">
             <!-- Collapsed: favicon icon -->
             <a x-show="sidebarCollapsed" href="{{ '/'|url }}" class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                {% if settings.logo_favicon %}
+                {% if settings.logo_favicon|default(false) %}
                 <img src="{{ settings.logo_favicon }}" alt="{{ company.name }}" class="w-6 h-6 object-contain">
                 {% else %}
-                <img src="{{ guest.system_company.favicon_url }}" alt="{{ company.name }}" class="w-6 h-6 object-contain">
+                <img src="{{ guest.system_company.favicon_url|default('branding/favicon.ico'|public_asset_url) }}" alt="{{ company.name }}" class="w-6 h-6 object-contain">
                 {% endif %}
             </a>
             <!-- Expanded: logo or brand text, with dashboard label below -->
             <div x-show="!sidebarCollapsed" class="flex flex-col items-center min-w-0 flex-1 overflow-hidden">
-                {% if settings.logo_url %}
+                {% if settings.logo_url|default(false) %}
                     <a href="{{ '/'|url }}" class="flex-shrink-0 overflow-hidden">
                         <img src="{{ settings.logo_url }}" alt="{{ company.name }}" class="h-7 w-auto logo-img mx-auto">
                     </a>
@@ -292,7 +292,7 @@
             </div>
             {% endif %}
 
-            {% if settings.nav_dashboard != '0' %}
+            {% if settings.nav_dashboard|default('1') != '0' %}
             <a href="{{ '/dashboard'|url }}" title="Home"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if request.uri == '/' or request.uri == '/dashboard' %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
@@ -305,7 +305,7 @@
             {% endif %}
 
             {# ===== My Services (simple link) ===== #}
-            {% if settings.nav_services != '0' %}
+            {% if settings.nav_services|default('1') != '0' %}
             <a href="{{ '/order/service'|url }}" title="My Services"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if 'order/service' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
@@ -319,7 +319,7 @@
             {% endif %}
 
             {# ===== Order Services (collapsible group) ===== #}
-            {% if settings.nav_order != '0' %}
+            {% if settings.nav_order|default('1') != '0' %}
             {# Collapsed sidebar: single icon link #}
             <a x-show="sidebarCollapsed"
                href="{{ '/order'|url }}" title="Order Services"
@@ -390,7 +390,7 @@
 
             {% endif %}{# /nav_order #}
 
-            {% if settings.nav_support != '0' %}
+            {% if settings.nav_support|default('1') != '0' %}
             <a href="{{ (client ? '/support' : '/support/contact-us')|url }}" title="Support"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if 'support' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
@@ -430,7 +430,7 @@
                 <div class="border-t border-slate-100"></div>
             </div>
 
-            {% if settings.nav_invoices != '0' %}
+            {% if settings.nav_invoices|default('1') != '0' %}
             <a href="{{ '/invoice'|url }}" title="Invoices"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if 'invoice' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
@@ -442,7 +442,7 @@
             </a>
             {% endif %}
 
-            {% if settings.nav_balance != '0' %}
+            {% if settings.nav_balance|default('1') != '0' %}
             <a href="{{ '/client/balance'|url }}" title="Credits &amp; Balance"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if 'client/balance' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
@@ -454,7 +454,7 @@
             </a>
             {% endif %}
 
-            {% if settings.nav_profile != '0' %}
+            {% if settings.nav_profile|default('1') != '0' %}
             <a href="{{ '/client/profile'|url }}" title="Profile"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if 'client/profile' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
@@ -688,7 +688,7 @@
                     {% endif %}
 
                     {# Phone #}
-                    {% set _support_phone = settings.support_phone|default(company.tel)|default('') %}
+                    {% set _support_phone = settings.support_phone|default(company.tel|default(''))|default('') %}
                     {% if _support_phone and settings.support_show_phone|default('1') != '0' %}
                     <a href="tel:{{ _support_phone|replace({' ': ''}) }}"
                        class="flex items-center gap-3 px-4 py-3 text-sm text-gray-400 hover:text-white hover:bg-white/[0.04] transition-all">
@@ -890,7 +890,7 @@
                                         Profile
                                     </a>
                                 </div>
-                                {% if settings.top_menu_signout != '0' %}<div class="py-1 border-t border-slate-100 dark:border-slate-700">
+                                {% if settings.top_menu_signout|default('1') != '0' %}<div class="py-1 border-t border-slate-100 dark:border-slate-700">
                                     <a href="{{ 'client/logout'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
                                         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                                         Sign Out
@@ -1047,7 +1047,7 @@
                                     Profile
                                 </a>
                             </div>
-                            {% if settings.top_menu_signout != '0' %}<div class="py-1 border-t border-slate-100 dark:border-slate-700">
+                            {% if settings.top_menu_signout|default('1') != '0' %}<div class="py-1 border-t border-slate-100 dark:border-slate-700">
                                 <a href="{{ 'client/logout'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
                                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                                     Sign Out
@@ -1126,7 +1126,7 @@
 
 {% block js %}{% endblock %}
 
-{% if settings.inject_javascript %}
+{% if settings.inject_javascript|default(false) %}
 {{ settings.inject_javascript|raw }}
 {% endif %}
 

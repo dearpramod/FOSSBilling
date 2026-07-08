@@ -1,0 +1,11 @@
+{
+  "id": "bulkpricingupdater",
+  "type": "mod",
+  "name": "Bulk Pricing Updater",
+  "description": "Bulk update product and TLD renewal pricing with dry-run preview and active-order renewal repricing.",
+  "version": "1.0.0",
+  "author": "MeroVPS",
+  "author_url": "https://merovps.com",
+  "license": "Apache-2.0",
+  "icon_url": "icon.svg"
+}

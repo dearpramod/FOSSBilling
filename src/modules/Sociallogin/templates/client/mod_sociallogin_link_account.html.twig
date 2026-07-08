@@ -1,0 +1,153 @@
+{% extends "layout_public.html.twig" %}
+
+{% set company = guest.system_company %}
+
+{% block meta_title %}Link Google Account{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-md">
+
+        {# Brand header #}
+        <div class="text-center mb-8">
+            <div class="w-14 h-14 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <svg class="w-7 h-7" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-white">Authorise Google Sign-In</h1>
+            <p class="text-sm text-gray-500 mt-1">One-time confirmation to link your Google account</p>
+        </div>
+
+        {# Error banner — hidden by default, shown via JS on failure #}
+        <div id="link-error"
+             class="hidden mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+             role="alert"></div>
+
+        {# Confirmation card #}
+        <div class="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-8 shadow-2xl shadow-black/50 backdrop-blur-sm space-y-6">
+
+            {# What's happening explanation #}
+            <div class="flex items-start gap-4 p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                <svg class="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="text-sm text-gray-300 leading-relaxed">
+                    We found an existing {{ company.name }} account for
+                    <span class="font-semibold text-white">{{ masked_email }}</span>.
+                    Click <strong>Link &amp; Sign In</strong> to authorise Google sign-in for this account.
+                    You'll be able to use Google to log in from now on.
+                </div>
+            </div>
+
+            {# What gets linked #}
+            <div class="space-y-2 text-sm text-gray-400">
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    Your Google identity has been verified by Google.
+                </div>
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    Your existing account data and password are kept intact.
+                </div>
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    Future Google sign-ins will not require this confirmation.
+                </div>
+            </div>
+
+            {# Action buttons #}
+            <div class="space-y-3 pt-1">
+                <button id="link-btn" type="button"
+                        class="w-full py-3 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 015.656 0l4-4a4 4 0 01-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    <span id="link-label">Link &amp; Sign In</span>
+                    <svg id="link-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                </button>
+
+                <a href="{{ 'login'|link }}"
+                   class="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-400 hover:text-white text-sm font-medium transition-all flex items-center justify-center">
+                    Cancel — go back to sign in
+                </a>
+            </div>
+
+        </div>
+
+        <div class="text-center mt-6">
+            <a href="{{ '/'|link }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+(function () {
+    'use strict';
+
+    var btn     = document.getElementById('link-btn');
+    var label   = document.getElementById('link-label');
+    var spinner = document.getElementById('link-spinner');
+    var errBox  = document.getElementById('link-error');
+    var token   = '{{ token|e('js') }}';
+    var apiUrl  = window.location.origin + '/api/guest/sociallogin/confirm_account_link';
+    var dashUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|link|e('js') }}{% endif %}';
+
+    function showError(msg) {
+        errBox.textContent = msg;
+        errBox.classList.remove('hidden');
+        errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function setLoading(loading) {
+        btn.disabled = loading;
+        label.textContent = loading ? 'Linking…' : 'Link & Sign In';
+        spinner.classList.toggle('hidden', !loading);
+    }
+
+    btn.addEventListener('click', function () {
+        errBox.classList.add('hidden');
+        setLoading(true);
+
+        fetch(apiUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'token=' + encodeURIComponent(token)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data && data.result === true) {
+                window.location.replace(dashUrl);
+            } else {
+                var msg = (data && data.error && data.error.message)
+                    ? data.error.message
+                    : 'Could not link your account. Please try signing in again.';
+                showError(msg);
+                setLoading(false);
+            }
+        })
+        .catch(function () {
+            showError('Could not connect to the server. Please try again.');
+            setLoading(false);
+        });
+    });
+}());
+</script>
+{% endblock %}

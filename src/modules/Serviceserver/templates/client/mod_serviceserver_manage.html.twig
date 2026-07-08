@@ -1,0 +1,555 @@
+{% set srv = client.serviceserver_get({'order_id': order.id}) %}
+{% set addons = client.order_addons({'id': order.id}) %}
+{% set daysUntilDue = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
+{% set _unpaid_hash = order.unpaid_invoice_id ? client.invoice_renewal_invoice({'order_id': order.id}) : null %}
+
+{% if srv is empty or (srv.status == 'pending' and not srv.hostname) %}
+{# Pending / not provisioned yet #}
+<div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+  <div class="px-6 py-14 flex flex-col items-center text-center gap-5">
+    <div class="relative">
+      <div class="w-20 h-20 rounded-2xl flex items-center justify-center"
+           style="background:linear-gradient(135deg,rgba(var(--color-primary-rgb),0.18),rgba(var(--color-secondary-rgb),0.12)); border:1px solid rgba(var(--color-primary-rgb),0.28);">
+        <svg class="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </div>
+      <span class="absolute -top-1 -right-1 flex h-4 w-4">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60"></span>
+        <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-400"></span>
+      </span>
+    </div>
+    <div>
+      <h4 class="text-base font-bold text-white mb-2">{{ 'Server Being Configured'|trans }}</h4>
+      <p class="text-sm text-gray-500 max-w-sm leading-relaxed">
+        {{ 'Your server is being set up. Credentials and access details will appear here once provisioning is complete.'|trans }}
+      </p>
+    </div>
+    <a href="{{ '/support'|link }}"
+       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-sm text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+      </svg>
+      {{ 'Contact Support'|trans }}
+    </a>
+  </div>
+</div>
+
+{% else %}
+{# VPS Dashboard #}
+<div class="space-y-4">
+
+  {# Hero card #}
+  <div class="rounded-2xl overflow-hidden border border-white/[0.08]"
+       style="background:linear-gradient(135deg, rgba(55,48,163,0.55) 0%, rgba(var(--color-primary-rgb),0.28) 60%, rgba(var(--color-secondary-rgb),0.18) 100%);">
+
+    <div class="px-6 py-5 flex flex-wrap items-start justify-between gap-4">
+      <div class="flex items-start gap-4 min-w-0">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+             style="background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.18);">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-base font-bold text-white truncate">{{ order.title }}</h2>
+            <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full
+              {% if srv.status == 'active' %}bg-green-500/25 border border-green-400/40 text-green-300
+              {% elseif srv.status == 'suspended' %}bg-amber-500/25 border border-amber-400/40 text-amber-300
+              {% elseif srv.status == 'cancelled' %}bg-red-500/25 border border-red-400/40 text-red-300
+              {% else %}bg-white/10 border border-white/20 text-gray-300{% endif %}">
+              <span class="w-1.5 h-1.5 rounded-full
+                {% if srv.status == 'active' %}bg-green-400 animate-pulse
+                {% elseif srv.status == 'suspended' %}bg-amber-400
+                {% elseif srv.status == 'cancelled' %}bg-red-400
+                {% else %}bg-gray-400{% endif %}"></span>
+              {{ srv.status|capitalize }}
+            </span>
+          </div>
+          {% if srv.hostname %}
+          <p class="text-sm text-indigo-300 font-mono mt-0.5 truncate">{{ srv.hostname }}</p>
+          {% endif %}
+          {% if srv.location %}
+          <div class="flex items-center gap-1.5 mt-1">
+            <svg class="w-3.5 h-3.5 text-white/50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <span class="text-xs text-white/60">{{ srv.location }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="flex flex-col items-end gap-2 flex-shrink-0">
+        {% if order.expires_at %}
+        <div class="text-right">
+          <p class="text-[10px] text-white/50 uppercase tracking-wider">{{ 'Next Due'|trans }}</p>
+          <p class="text-sm font-semibold {% if daysUntilDue is not null and daysUntilDue <= 7 %}text-red-300{% elseif daysUntilDue is not null and daysUntilDue <= 14 %}text-amber-300{% else %}text-white{% endif %}">
+            {{ order.expires_at|format_date }}
+          </p>
+          {% if daysUntilDue is not null and daysUntilDue >= 0 and daysUntilDue <= 30 %}
+          <p class="text-[10px] {% if daysUntilDue <= 7 %}text-red-400{% else %}text-amber-400{% endif %} mt-0.5">
+            {{ daysUntilDue }} {{ 'day'|trans }}{% if daysUntilDue != 1 %}s{% endif %} {{ 'left'|trans }}
+          </p>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if order.unpaid_invoice_id %}
+        <a href="{{ 'invoice'|link }}/{{ _unpaid_hash }}"
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-xs font-semibold transition-all hover:opacity-90"
+           style="background:linear-gradient(135deg,#f59e0b,#d97706); box-shadow:0 4px 14px rgba(245,158,11,0.35);">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+          {{ 'Pay Invoice'|trans }}
+        </a>
+        {% endif %}
+        {% if srv.ip %}
+        <a href="#cp-access"
+           onclick="document.getElementById('cp-access').scrollIntoView({behavior:'smooth'}); return false;"
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.15]
+                  text-white text-xs font-semibold transition-all hover:border-indigo-400/50
+                  hover:bg-indigo-500/10 hover:text-indigo-300">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          {{ 'Control Panel'|trans }}
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Spec pills #}
+    <div class="px-6 pb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+      <div class="flex items-center gap-2.5 px-3.5 py-3 rounded-xl" style="background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.10);">
+        <svg class="w-[18px] h-[18px] text-indigo-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+        </svg>
+        <div>
+          <p class="text-[9px] font-semibold uppercase tracking-widest text-white/40 leading-none mb-0.5">vCPU</p>
+          <p class="text-sm font-bold text-white leading-none">{{ srv.cpu_cores ?: '---' }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2.5 px-3.5 py-3 rounded-xl" style="background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.10);">
+        <svg class="w-[18px] h-[18px] text-violet-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+        </svg>
+        <div>
+          <p class="text-[9px] font-semibold uppercase tracking-widest text-white/40 leading-none mb-0.5">RAM</p>
+          <p class="text-sm font-bold text-white leading-none">
+            {% if srv.ram_mb %}{{ (srv.ram_mb / 1024)|round(1) }} GB{% else %}---{% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2.5 px-3.5 py-3 rounded-xl" style="background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.10);">
+        <svg class="w-[18px] h-[18px] text-sky-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+        </svg>
+        <div>
+          <p class="text-[9px] font-semibold uppercase tracking-widest text-white/40 leading-none mb-0.5">Disk</p>
+          <p class="text-sm font-bold text-white leading-none">{% if srv.disk_gb %}{{ srv.disk_gb }} GB{% else %}---{% endif %}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2.5 px-3.5 py-3 rounded-xl" style="background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.10);">
+        <svg class="w-[18px] h-[18px] text-emerald-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+        </svg>
+        <div>
+          <p class="text-[9px] font-semibold uppercase tracking-widest text-white/40 leading-none mb-0.5">Traffic</p>
+          <p class="text-sm font-bold text-white leading-none">{% if srv.bandwidth_gb %}{{ srv.bandwidth_gb }} GB{% else %}Unltd{% endif %}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2.5 px-3.5 py-3 rounded-xl" style="background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.10);">
+        <svg class="w-[18px] h-[18px] text-amber-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <div>
+          <p class="text-[9px] font-semibold uppercase tracking-widest text-white/40 leading-none mb-0.5">Price</p>
+          <p class="text-sm font-bold text-white leading-none">
+            {% if order.price %}{{ order.price|money(order.currency) }}<span class="text-[10px] font-normal text-white/50">/{{ order.period|period_title }}</span>{% else %}---{% endif %}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Main grid #}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    {# Left column (2/3) #}
+    <div class="lg:col-span-2 space-y-4">
+
+      {# SSH Access #}
+      <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+        <div class="px-5 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between gap-3">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+            {{ 'SSH Access'|trans }}
+          </h3>
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Port 22</span>
+        </div>
+        <div class="p-5 space-y-3.5">
+
+          {% if srv.ip %}
+          <div>
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-2">{{ 'Quick Connect'|trans }}</p>
+            <div class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-white/[0.07]"
+                 style="background:rgba(0,0,0,0.18);">
+              <span class="text-[11px] font-mono text-indigo-300 flex-1 min-w-0 truncate select-all">ssh root@{{ srv.ip }}</span>
+              <button onclick="(function(b){navigator.clipboard.writeText(b.previousElementSibling.textContent).then(function(){var s=b.querySelector('span');var o=s.textContent;s.textContent='Copied!';setTimeout(function(){s.textContent=o;},1600);})})(this)"
+                      class="flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-white px-2.5 py-1 rounded-lg hover:bg-white/[0.08] transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                <span>{{ 'Copy'|trans }}</span>
+              </button>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1.5">{{ 'IP Address'|trans }}</p>
+              {% if srv.ip %}
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-mono font-semibold text-white">{{ srv.ip }}</span>
+                <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent)" title="{{ 'Copy IP'|trans }}"
+                        class="p-1 rounded-lg text-gray-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  </svg>
+                </button>
+              </div>
+              {% else %}<span class="text-sm text-gray-600">{{ 'Not assigned'|trans }}</span>{% endif %}
+            </div>
+            {% if srv.hostname %}
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1.5">{{ 'Hostname'|trans }}</p>
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-mono font-semibold text-white truncate">{{ srv.hostname }}</span>
+                <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent)" title="{{ 'Copy hostname'|trans }}"
+                        class="p-1 rounded-lg text-gray-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all flex-shrink-0">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="flex items-start gap-3 px-4 py-3 rounded-xl border border-indigo-500/20"
+               style="background:rgba(var(--color-primary-rgb),0.07);">
+            <svg class="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-xs text-indigo-300 leading-relaxed">
+              {{ 'Your root password and full credentials were sent to your registered email at provisioning. Check your inbox or'|trans }}
+              <a href="{{ '/support'|link }}" class="underline underline-offset-2 hover:text-white transition-colors">{{ 'contact support'|trans }}</a>
+              {{ 'if you need a password reset.'|trans }}
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+      {# Control Panel Access #}
+      {% if srv.ip %}
+      <div id="cp-access" class="rounded-2xl border border-white/[0.07] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+        <div class="px-5 pt-5 pb-3.5 border-b border-white/[0.06] flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center"
+               style="background:rgba(var(--color-primary-rgb),0.15);">
+            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3 class="text-sm font-bold text-white">{{ 'Control Panel Access'|trans }}</h3>
+          <span class="ml-auto text-xs text-gray-600">{{ 'Opens in new tab'|trans }}</span>
+        </div>
+        <div class="p-5">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {% set panels = [
+              { name: 'cPanel',      port: '2083',  color: 'rgba(var(--color-primary-rgb),0.15)',  tcolor: 'text-indigo-400',  icon: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9' },
+              { name: 'WHM',         port: '2087',  color: 'rgba(59,130,246,0.15)',  tcolor: 'text-blue-400',    icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+              { name: 'Plesk',       port: '8443',  color: 'rgba(16,185,129,0.15)',  tcolor: 'text-emerald-400', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+              { name: 'DirectAdmin', port: '2222',  color: 'rgba(245,158,11,0.15)',  tcolor: 'text-amber-400',   icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+              { name: 'Webmin',      port: '10000', color: 'rgba(var(--color-secondary-rgb),0.15)',  tcolor: 'text-violet-400',  icon: 'M5 12h14M12 5l7 7-7 7' },
+              { name: 'Proxmox VE',  port: '8006',  color: 'rgba(239,68,68,0.15)',   tcolor: 'text-red-400',     icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' }
+            ] %}
+            {% for panel in panels %}
+            <a href="https://{{ srv.ip }}:{{ panel.port }}" target="_blank" rel="noopener"
+               class="group flex items-center gap-3 px-4 py-3.5 rounded-xl border border-white/[0.06]
+                      hover:border-white/[0.12] transition-all"
+               style="background:rgba(255,255,255,0.02);">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all
+                          group-hover:scale-105"
+                   style="background:{{ panel.color }};">
+                <svg class="w-4 h-4 {{ panel.tcolor }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ panel.icon }}"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors leading-tight truncate">{{ panel.name }}</p>
+                <p class="text-[10px] text-gray-600 font-mono mt-0.5">:{{ panel.port }}</p>
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+          <p class="mt-3.5 flex items-start gap-1.5 text-xs text-gray-600">
+            <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {{ 'Direct links to your server IP'|trans }} ({{ srv.ip }}). {{ 'Only works if the corresponding control panel is installed on your VPS.'|trans }}
+          </p>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Server Information #}
+      <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+        <div class="px-5 pt-5 pb-4 border-b border-white/[0.06]">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {{ 'Server Information'|trans }}
+          </h3>
+        </div>
+        <div class="p-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">{{ 'Plan'|trans }}</p>
+              <p class="text-sm font-semibold text-white">{{ order.title }}</p>
+            </div>
+
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">{{ 'Operating System'|trans }}</p>
+              <div class="flex items-center gap-2">
+                <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                <p class="text-sm font-semibold text-white">{{ srv.os ?: 'Not set' }}</p>
+              </div>
+            </div>
+
+            {% if srv.location %}
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">{{ 'Datacenter Location'|trans }}</p>
+              <div class="flex items-center gap-2">
+                <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <p class="text-sm font-semibold text-white">{{ srv.location }}</p>
+              </div>
+            </div>
+            {% endif %}
+
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">{{ 'Order ID'|trans }}</p>
+              <p class="text-sm font-mono font-semibold text-white">#{{ order.id }}</p>
+            </div>
+
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">{{ 'Since'|trans }}</p>
+              <p class="text-sm font-semibold text-white">
+                {{ (srv.created_at and srv.created_at != '---') ? srv.created_at|format_date : (order.created_at ? order.created_at|format_date : 'Unknown') }}
+              </p>
+            </div>
+
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1">{{ 'Next Due Date'|trans }}</p>
+              <p class="text-sm font-semibold {% if daysUntilDue is not null and daysUntilDue <= 14 %}text-amber-400{% else %}text-white{% endif %}">
+                {{ order.expires_at ? order.expires_at|format_date : 'Not set' }}
+                {% if daysUntilDue is not null and daysUntilDue >= 0 and daysUntilDue <= 30 %}
+                <span class="block text-[11px] font-normal mt-0.5 {% if daysUntilDue <= 7 %}text-red-400{% else %}text-amber-400{% endif %}">
+                  {{ daysUntilDue }} {{ 'day'|trans }}{% if daysUntilDue != 1 %}s{% endif %} {{ 'remaining'|trans }}
+                </span>
+                {% endif %}
+              </p>
+            </div>
+
+            {% if srv.notes %}
+            <div class="sm:col-span-2 pt-4 border-t border-white/[0.06]">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1.5">{{ 'Admin Notes'|trans }}</p>
+              <p class="text-sm text-gray-300 leading-relaxed">{{ srv.notes }}</p>
+            </div>
+            {% endif %}
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {# Right sidebar (1/3) #}
+    <div class="space-y-4">
+
+      {# Billing Summary #}
+      <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+        <div class="px-5 pt-5 pb-3 border-b border-white/[0.06]">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            {{ 'Billing'|trans }}
+          </h3>
+        </div>
+        <div class="p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-500">{{ 'Status'|trans }}</span>
+            <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full
+              {% if srv.status == 'active' %}border border-green-500/30 bg-green-500/10 text-green-400
+              {% elseif srv.status == 'suspended' %}border border-amber-500/30 bg-amber-500/10 text-amber-400
+              {% else %}border border-red-500/30 bg-red-500/10 text-red-400{% endif %}">
+              <span class="w-1.5 h-1.5 rounded-full
+                {% if srv.status == 'active' %}bg-green-400
+                {% elseif srv.status == 'suspended' %}bg-amber-400
+                {% else %}bg-red-400{% endif %}"></span>
+              {{ srv.status|capitalize }}
+            </span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-500">{{ 'Plan'|trans }}</span>
+            <span class="text-xs text-gray-300 text-right max-w-[60%] truncate" title="{{ order.title }}">{{ order.title }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-500">{{ 'Billing cycle'|trans }}</span>
+            <span class="text-xs text-gray-300">{% if order.price %}{{ order.price|money(order.currency) }}/{{ order.period|period_title }}{% else %}N/A{% endif %}</span>
+          </div>
+          {% if order.expires_at %}
+          <div class="flex items-center justify-between pt-2 border-t border-white/[0.06]">
+            <span class="text-xs text-gray-500">{{ 'Next due'|trans }}</span>
+            <span class="text-xs font-semibold {% if daysUntilDue is not null and daysUntilDue <= 7 %}text-red-400{% elseif daysUntilDue is not null and daysUntilDue <= 14 %}text-amber-400{% else %}text-gray-300{% endif %}">
+              {{ order.expires_at|format_date }}
+            </span>
+          </div>
+          {% endif %}
+          {% if order.unpaid_invoice_id %}
+          <div class="pt-2">
+            <a href="{{ 'invoice'|link }}/{{ _unpaid_hash }}"
+               class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 12px rgba(245,158,11,0.28);">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+              {{ 'Pay Invoice'|trans }}
+            </a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Quick Actions #}
+      <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+        <div class="px-5 pt-5 pb-3 border-b border-white/[0.06]">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            {{ 'Quick Actions'|trans }}
+          </h3>
+        </div>
+        <nav class="py-1.5">
+          <a href="{{ '/support'|link }}"
+             class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all group">
+            <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/[0.06] group-hover:border-indigo-500/30 group-hover:bg-indigo-500/10 transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+              </svg>
+            </span>
+            {{ 'Open Support Ticket'|trans }}
+          </a>
+          <a href="{{ '/order/service'|link }}"
+             class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all group">
+            <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/[0.06] group-hover:border-indigo-500/30 group-hover:bg-indigo-500/10 transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+              </svg>
+            </span>
+            {{ 'All My Services'|trans }}
+          </a>
+          <a href="{{ '/order'|link }}"
+             class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all group">
+            <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/[0.06] group-hover:border-indigo-500/30 group-hover:bg-indigo-500/10 transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              </svg>
+            </span>
+            {{ 'Upgrade / Add-ons'|trans }}
+          </a>
+        </nav>
+      </div>
+
+    </div>
+  </div>
+
+  {# Addons (only shown if present) #}
+  {% if addons|length > 0 %}
+  <div class="rounded-2xl border border-white/[0.08] overflow-hidden" style="background:rgba(255,255,255,0.025);">
+    <div class="px-5 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between gap-3">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        {{ 'Addons & Options'|trans }}
+      </h3>
+      <span class="text-[11px] font-medium px-2.5 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-400">
+        {{ addons|length }} {{ 'addon'|trans }}{% if addons|length != 1 %}s{% endif %}
+      </span>
+    </div>
+    <div class="hidden sm:grid grid-cols-12 px-5 py-2.5 border-b border-white/[0.04]">
+      <p class="col-span-5 text-[10px] font-semibold uppercase tracking-widest text-gray-600">{{ 'Addon'|trans }}</p>
+      <p class="col-span-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">{{ 'Billing'|trans }}</p>
+      <p class="col-span-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600">{{ 'Renews'|trans }}</p>
+      <p class="col-span-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 text-right">{{ 'Status'|trans }}</p>
+    </div>
+    <div class="divide-y divide-white/[0.04]">
+      {% for addon in addons %}
+      <div class="grid grid-cols-12 items-center px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
+        <div class="col-span-12 sm:col-span-5 min-w-0 mb-2 sm:mb-0">
+          <p class="text-sm font-medium text-white truncate">{{ addon.title }}</p>
+        </div>
+        <div class="col-span-6 sm:col-span-3">
+          <p class="text-sm text-gray-300">{% if addon.price %}{{ addon.price|money(addon.currency) }}/{{ addon.period|period_title }}{% else %}N/A{% endif %}</p>
+        </div>
+        <div class="col-span-6 sm:col-span-2">
+          <p class="text-sm text-gray-400">{{ addon.expires_at ? addon.expires_at|format_date : 'N/A' }}</p>
+        </div>
+        <div class="col-span-10 sm:col-span-1 sm:flex sm:justify-end">
+          <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full
+            {% if addon.status == 'active' %}border border-green-500/30 bg-green-500/10 text-green-400
+            {% elseif addon.status == 'suspended' %}border border-amber-500/30 bg-amber-500/10 text-amber-400
+            {% else %}border border-white/10 bg-white/5 text-gray-400{% endif %}">
+            <span class="w-1.5 h-1.5 rounded-full
+              {% if addon.status == 'active' %}bg-green-400
+              {% elseif addon.status == 'suspended' %}bg-amber-400
+              {% else %}bg-gray-500{% endif %}"></span>
+            {{ addon.status|capitalize }}
+          </span>
+        </div>
+        <div class="col-span-2 sm:col-span-1 flex justify-end">
+          <a href="{{ '/order/service/manage'|link }}/{{ addon.id }}"
+             class="text-xs px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all">
+            {{ 'Manage'|trans }}
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}

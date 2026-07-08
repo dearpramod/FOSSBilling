@@ -1,0 +1,162 @@
+{% extends request.ajax ? 'layout_blank.html.twig' : 'layout_default.html.twig' %}
+
+{% import 'macro_functions.html.twig' as mf %}
+
+{% set active_menu = 'clients' %}
+
+{% block meta_title %}{{ 'Support PIN Lookup'|trans }}{% endblock %}
+
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item">
+        <a href="{{ ''|alink }}"><svg class="icon"><use xlink:href="#home"/></svg></a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ 'Support PIN Lookup'|trans }}</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <h2 class="page-title">{{ 'Support PIN Lookup'|trans }}</h2>
+                <div class="text-muted mt-1">{{ "Enter a client's 6-digit Support PIN to identify their account."|trans }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row row-cards">
+
+        {# ── PIN Lookup form ── #}
+        <div class="col-md-6 col-lg-5">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <svg class="icon me-2 text-primary"><use xlink:href="#search"/></svg>
+                        {{ 'Look Up Client by PIN'|trans }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">{{ 'Ask the client for their 6-digit Support PIN visible in their client portal.'|trans }}</p>
+                    <div class="mb-3">
+                        <label class="form-label" for="pin-input">{{ 'Support PIN'|trans }}</label>
+                        <input type="text" id="pin-input" maxlength="6" pattern="\d{6}"
+                               inputmode="numeric"
+                               class="form-control form-control-lg text-center font-monospace"
+                               placeholder="000000" autocomplete="off">
+                    </div>
+                    <button id="btn-lookup" class="btn btn-primary w-100">
+                        <svg class="icon me-1"><use xlink:href="#search"/></svg>
+                        {{ 'Find Client'|trans }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {# ── Result panel ── #}
+        <div class="col-md-6 col-lg-7">
+            <div class="card" id="result-card" style="display:none">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <svg class="icon me-2 text-success"><use xlink:href="#circle-check"/></svg>
+                        {{ 'Client Found'|trans }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <table class="table table-vcenter card-table">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted w-40">{{ 'Name'|trans }}</td>
+                                <td id="res-name" class="fw-bold"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">{{ 'Email'|trans }}</td>
+                                <td id="res-email"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">{{ 'Status'|trans }}</td>
+                                <td id="res-status"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">{{ 'Client ID'|trans }}</td>
+                                <td id="res-id" class="font-monospace"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <a id="res-link" href="#" class="btn btn-outline-primary btn-sm">
+                        {{ 'Open Client Profile'|trans }} &rarr;
+                    </a>
+                </div>
+            </div>
+            <div class="alert alert-danger mt-3" id="lookup-error" style="display:none">
+                <svg class="icon alert-icon"><use xlink:href="#alert-triangle"/></svg>
+                <span id="lookup-error-msg"></span>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+(function () {
+    'use strict';
+
+    const adminBase = {{ ''|alink|json_encode }};
+    const input = document.getElementById('pin-input');
+    const btn = document.getElementById('btn-lookup');
+    const resultCard = document.getElementById('result-card');
+    const errBox = document.getElementById('lookup-error');
+    const errMsg = document.getElementById('lookup-error-msg');
+
+    btn.addEventListener('click', doLookup);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLookup(); });
+    input.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 6);
+    });
+
+    function doLookup() {
+        const pin = input.value.trim();
+        if (!/^\d{6}$/.test(pin)) {
+            showError('{{ 'Please enter a valid 6-digit PIN.'|trans|e('js') }}');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>{{ 'Searching…'|trans|e('js') }}';
+
+        FOSSBilling.api.admin.get('supportpin/lookup', { pin: pin }, function (result) {
+            resetBtn();
+            resultCard.style.display = '';
+            errBox.style.display = 'none';
+
+            document.getElementById('res-name').textContent = result.first_name + ' ' + result.last_name;
+            document.getElementById('res-email').textContent = result.email;
+            document.getElementById('res-status').innerHTML = result.status === 'active'
+                ? '<span class="badge bg-success-lt">Active</span>'
+                : '<span class="badge bg-warning-lt">' + result.status + '</span>';
+            document.getElementById('res-id').textContent = '#' + result.client_id;
+            document.getElementById('res-link').href = adminBase + 'client/manage/' + result.client_id;
+        }, function (err) {
+            resetBtn();
+            showError(err.message || '{{ 'No client found for this PIN.'|trans|e('js') }}');
+        });
+    }
+
+    function resetBtn() {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="icon me-1"><use xlink:href="#search"/></svg> {{ 'Find Client'|trans|e('js') }}';
+    }
+
+    function showError(msg) {
+        resultCard.style.display = 'none';
+        errBox.style.display = '';
+        errMsg.textContent = msg;
+    }
+})();
+</script>
+{% endblock %}

@@ -10,7 +10,7 @@
     <meta property="og:description" content="{{ post.description }}" />
     <meta property="og:url" content="{{ guest.system_current_url }}" />
     <meta property="og:image" content="{{ post.image }}" />
-    <meta property="article:author" content="{{ post.author.name }}" />
+    <meta property="article:author" content="{{ post.author.name|default('') }}" />
     {% if post.published_at %}<meta property="article:published_time" content="{{ post.published_at }}" />{% endif %}
     {% if post.updated_at %}<meta property="article:modified_time" content="{{ post.updated_at }}" />{% endif %}
     {% if post.expires_at %}<meta property="article:expiration_time" content="{{ post.expires_at }}" />{% endif %}
@@ -65,7 +65,7 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ post.author.name ?: 'Platform Team' }}</p>
+                        <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ post.author.name|default('Platform Team') }}</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">{{ 'Announcement'|trans }}</p>
                     </div>
                 </div>

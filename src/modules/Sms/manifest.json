@@ -1,0 +1,12 @@
+{
+    "id": "sms",
+    "type": "mod",
+    "name": "SMS Notifications",
+    "description": "Send SMS notifications to clients via Aakash SMS API when key billing events occur (invoices, orders, support tickets).",
+    "homepage_url": "https://aakashsms.com",
+    "author": "MeroVPS",
+    "author_url": "https://merovps.com",
+    "license": "Apache-2.0",
+    "version": "1.0.0",
+    "icon_url": "icon.svg"
+}

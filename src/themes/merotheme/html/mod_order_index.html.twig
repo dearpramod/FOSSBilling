@@ -128,7 +128,7 @@
                             allPricings: {{ all_pricings|json_encode }},
                             currencyFormat: {{ currency_fmt_js|json_encode }},
                             currencyRate: {{ currency.conversion_rate|default(1) }},
-                            currencyPriceFormat: {{ currency.price_format|json_encode }},
+                            currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
                             fmt(price) {
                                 const converted = parseFloat(price) * this.currencyRate;
                                 let num;

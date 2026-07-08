@@ -98,9 +98,9 @@
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Bill From</p>
                 <h3 class="text-lg font-semibold mb-1" style="color: var(--color-primary);">{{ company.name }}</h3>
                 <div class="text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
-                    {% if company.address %}<p>{{ company.address }}</p>{% endif %}
-                    {% if company.email %}<p>{{ company.email }}</p>{% endif %}
-                    {% if company.tel %}<p>{{ company.tel }}</p>{% endif %}
+                    {% if company.address|default(false) %}<p>{{ company.address }}</p>{% endif %}
+                    {% if company.email|default(false) %}<p>{{ company.email }}</p>{% endif %}
+                    {% if company.tel|default(false) %}<p>{{ company.tel }}</p>{% endif %}
                 </div>
             </div>
             {# Bill To #}
@@ -158,7 +158,7 @@
                         <span>{{ invoice.tax|money(invoice.currency) }}</span>
                     </div>
                     {% endif %}
-                    {% if invoice.discount > 0 %}
+                    {% if invoice.discount|default(0) > 0 %}
                     <div class="flex justify-between text-sm">
                         <span class="text-slate-600 dark:text-slate-400">Discount</span>
                         <span class="text-emerald-600 dark:text-emerald-400 font-medium">−{{ invoice.discount|money(invoice.currency) }}</span>

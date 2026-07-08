@@ -1,0 +1,8 @@
+{
+  "id": "dashboard",
+  "type": "mod",
+  "name": "Dashboard",
+  "description": "Client dashboard module.",
+  "version": "1.0.0",
+  "icon_url": "icon.svg"
+}

@@ -136,7 +136,7 @@
             <div class="rounded-2xl bg-white/[0.03] border border-white/[0.08] p-6 space-y-4">
                 <h3 class="text-sm font-semibold text-white">{{ company.name }}</h3>
 
-                {% if company.address_1 %}
+                {% if company.address_1|default(false) %}
                 <div class="flex items-start gap-3">
                     <div class="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
                         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,12 +145,12 @@
                         </svg>
                     </div>
                     <div class="text-sm text-gray-400 leading-relaxed">
-                        {{ company.address_1 }}{% if company.address_2 %}<br>{{ company.address_2 }}{% endif %}{% if company.address_3 %}<br>{{ company.address_3 }}{% endif %}
+                        {{ company.address_1|default('') }}{% if company.address_2|default(false) %}<br>{{ company.address_2 }}{% endif %}{% if company.address_3|default(false) %}<br>{{ company.address_3 }}{% endif %}
                     </div>
                 </div>
                 {% endif %}
 
-                {% if company.tel %}
+                {% if company.tel|default(false) %}
                 <div class="flex items-center gap-3">
                     <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
                         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,7 +161,7 @@
                 </div>
                 {% endif %}
 
-                {% if company.email %}
+                {% if company.email|default(false) %}
                 <div class="flex items-center gap-3">
                     <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
                         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +172,7 @@
                 </div>
                 {% endif %}
 
-                {% if company.www %}
+                {% if company.www|default(false) %}
                 <div class="flex items-center gap-3">
                     <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
                         <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

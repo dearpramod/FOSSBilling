@@ -1,9 +1,7 @@
-{% set flash = app.get_flash_messages() %}
-{% if flash %}
+{% if flashes %}
     <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-2" x-data="{ visible: true }" x-show="visible">
-        {% for msg in flash %}
-            {% set type = msg.0 %}
-            {% set text = msg.1 %}
+        {% for type, messages in flashes %}
+        {% for text in messages %}
             {% if type == 'error' or type == 'danger' %}
                 <div class="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                     <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,6 +51,7 @@
                     </button>
                 </div>
             {% endif %}
+        {% endfor %}
         {% endfor %}
     </div>
 {% endif %}

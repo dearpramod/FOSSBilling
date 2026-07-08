@@ -1,4 +1,4 @@
-{% if settings.side_menu_dashboard %}
+{% if settings.side_menu_dashboard|default(false) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'dashboard' %} active{% endif %}" href="{{ '/'|url }}"{% if current_active_menu == 'dashboard' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#layout-grid" /></svg>
@@ -7,7 +7,7 @@
     </li>
 {% endif %}
 
-{% if settings.side_menu_order %}
+{% if settings.side_menu_order|default(false) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'order' %} active{% endif %}" href="{{ 'order'|url }}"{% if current_active_menu == 'order' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#shopping-cart" /></svg>
@@ -16,9 +16,9 @@
     </li>
 {% endif %}
 
-{% if client or not settings.hide_menu %}
+{% if client or not settings.hide_menu|default(false) %}
 
-{% if settings.side_menu_support %}
+{% if settings.side_menu_support|default(false) %}
     <li class="nav-item">
                     <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'support' %} active{% endif %}" href="{{ support_url }}"{% if current_active_menu == 'support' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#lifebuoy" /></svg>
@@ -27,7 +27,7 @@
     </li>
 {% endif %}
 
-{% if settings.side_menu_services %}
+{% if settings.side_menu_services|default(false) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'services' %} active{% endif %}" href="{{ 'order/service'|url }}"{% if current_active_menu == 'services' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#apps" /></svg>
@@ -36,7 +36,7 @@
     </li>
 {% endif %}
 
-{% if settings.side_menu_invoices %}
+{% if settings.side_menu_invoices|default(false) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'invoices' %} active{% endif %}" href="{{ 'invoice'|url }}"{% if current_active_menu == 'invoices' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#receipt" /></svg>
@@ -45,7 +45,7 @@
     </li>
 {% endif %}
 
-{% if settings.side_menu_emails %}
+{% if settings.side_menu_emails|default(false) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'emails' %} active{% endif %}" href="{{ 'email'|url}}"{% if current_active_menu == 'emails' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#mail" /></svg>
@@ -54,7 +54,7 @@
     </li>
 {% endif %}
 
-{% if settings.side_menu_payments %}
+{% if settings.side_menu_payments|default(false) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'payments' %} active{% endif %}" href="{{ 'client/balance'|url }}"{% if current_active_menu == 'payments' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#wallet" /></svg>
@@ -63,7 +63,7 @@
     </li>
 {% endif %}
 
-{% if (guest.extension_is_on({"mod":"news"}) and settings.side_menu_news) %}
+{% if (guest.extension_is_on({"mod":"news"}) and settings.side_menu_news|default(false)) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'news' %} active{% endif %}" href="{{ 'news'|url }}"{% if current_active_menu == 'news' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#news" /></svg>
@@ -72,7 +72,7 @@
     </li>
 {% endif %}
 
-{% if (guest.support_kb_enabled() and settings.side_menu_kb) %}
+{% if (guest.support_kb_enabled() and settings.side_menu_kb|default(false)) %}
     <li class="nav-item">
         <a class="nav-link d-flex align-items-center gap-2{% if current_active_menu == 'kb' %} active{% endif %}" href="{{ 'support/kb'|url }}"{% if current_active_menu == 'kb' %} aria-current="page"{% endif %}>
             <svg class="icon"><use href="#book" /></svg>
@@ -81,7 +81,7 @@
     </li>
 {% endif %}
 
-{% if settings.sidebar_balance_enabled and client %}
+{% if settings.sidebar_balance_enabled|default(false) and client %}
     <li class="pt-3 ps-3">
         <h5 class="text-secondary d-block pb-1">{{ 'Account Balance'|trans }}</h5>
         {% if profile.currency is not null %}
@@ -92,16 +92,16 @@
     </li>
 {% endif %}
 
-{% if settings.sidebar_note_enabled %}
+{% if settings.sidebar_note_enabled|default(false) %}
     <li class="pt-3 ps-3">
-        <h5 class="text-secondary d-block pb-1">{{ settings.sidebar_note_title }}</h5>
-        <span>{{ settings.sidebar_note_content }}</span>
+        <h5 class="text-secondary d-block pb-1">{{ settings.sidebar_note_title|default('') }}</h5>
+        <span>{{ settings.sidebar_note_content|default('') }}</span>
     </li>
 {% endif %}
 
 {% endif %}
 
-{% if settings.top_menu_signout %}
+{% if settings.top_menu_signout|default(false) %}
     <li class="nav-item">
         {% if client %}
             <div class="dropdown">

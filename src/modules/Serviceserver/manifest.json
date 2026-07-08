@@ -1,0 +1,8 @@
+{
+  "id": "serviceserver",
+  "type": "mod",
+  "name": "Server product type",
+  "description": "Server / VPS product type for FOSSBilling",
+  "version": "1.0.0",
+  "icon_url": "icon.svg"
+}

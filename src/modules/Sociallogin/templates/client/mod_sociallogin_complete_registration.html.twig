@@ -1,0 +1,379 @@
+{% extends "layout_public.html.twig" %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% set company  = guest.system_company %}
+{% set r        = guest.client_required %}
+{% set custom_fields = guest.client_custom_fields %}
+
+{% block meta_title %}Complete Your Registration{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-lg">
+
+        {# Brand header #}
+        <div class="text-center mb-8">
+            {# Google branding badge #}
+            <div class="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <svg class="w-6 h-6" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-white">Complete your registration</h1>
+            <p class="text-sm text-gray-500 mt-1">You're signing up with Google. Fill in the remaining details to continue.</p>
+        </div>
+
+        {# Error banner — hidden by default, shown via JS #}
+        <div id="reg-error"
+             class="hidden mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+             role="alert"></div>
+
+        {# Registration card #}
+        <div class="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-8 shadow-2xl shadow-black/50 backdrop-blur-sm">
+            <form id="complete-reg-form" novalidate>
+
+                {# Hidden token — proves Google-verified email #}
+                <input type="hidden" name="token" value="{{ token|e('html_attr') }}">
+
+                <div class="space-y-4">
+
+                    {# ── Name row (pre-filled from Google, editable) ── #}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label for="first_name" class="block text-xs font-medium text-gray-400">First Name <span class="text-red-400">*</span></label>
+                            <input id="first_name" type="text" name="first_name"
+                                   value="{{ first_name|e('html_attr') }}" required autofocus
+                                   autocomplete="given-name"
+                                   maxlength="100"
+                                   placeholder="First name"
+                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label for="last_name" class="block text-xs font-medium text-gray-400">
+                                Last Name{% if 'last_name' in r %} <span class="text-red-400">*</span>{% endif %}
+                            </label>
+                            <input id="last_name" type="text" name="last_name"
+                                   value="{{ last_name|e('html_attr') }}"
+                                   {% if 'last_name' in r %}required{% endif %}
+                                   autocomplete="family-name"
+                                   maxlength="100"
+                                   placeholder="Last name"
+                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        </div>
+                    </div>
+
+                    {# ── Email (locked — provided by Google) ── #}
+                    <div class="space-y-1.5">
+                        <label for="email" class="block text-xs font-medium text-gray-400">
+                            Email Address
+                            <span class="ml-2 inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 rounded-full px-2 py-0.5">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                Verified by Google
+                            </span>
+                        </label>
+                        <input id="email" type="email" name="_email_display"
+                               value="{{ email|e('html_attr') }}" readonly
+                               autocomplete="off"
+                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-gray-400 text-sm cursor-not-allowed select-none"
+                               tabindex="-1">
+                        {# actual value sent with the token, not via input #}
+                    </div>
+
+                    {# ── Company ── #}
+                    {% if 'company' in r %}
+                    <div class="space-y-1.5">
+                        <label for="company" class="block text-xs font-medium text-gray-400">Company <span class="text-red-400">*</span></label>
+                        <input id="company" type="text" name="company"
+                               value="" required
+                               autocomplete="organization"
+                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+                    {% endif %}
+
+                    {# ── Gender ── #}
+                    {% if 'gender' in r %}
+                    <div class="space-y-1.5">
+                        <label for="gender" class="block text-xs font-medium text-gray-400">Gender <span class="text-red-400">*</span></label>
+                        <select id="gender" name="gender" required
+                                class="w-full px-4 py-2.5 rounded-xl bg-[#0a0f1e] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <option value="">Select…</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="nonbinary">Non-binary</option>
+                            <option value="other">Other / Prefer not to say</option>
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    {# ── Birthday ── #}
+                    {% if 'birthday' in r %}
+                    <div class="space-y-1.5">
+                        <label for="birthday" class="block text-xs font-medium text-gray-400">Date of Birth <span class="text-red-400">*</span></label>
+                        <input id="birthday" type="date" name="birthday"
+                               required
+                               autocomplete="bday"
+                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+                    {% endif %}
+
+                    {# ── Phone ── #}
+                    {% if 'phone' in r %}
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-medium text-gray-400">Phone Number <span class="text-red-400">*</span></label>
+                        <div class="flex gap-2">
+                            <div class="flex-shrink-0 w-24">
+                                <input id="phone_cc" type="text" name="phone_cc"
+                                       placeholder="+1"
+                                       maxlength="5"
+                                       inputmode="numeric"
+                                       autocomplete="tel-country-code"
+                                       class="w-full px-3 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-center">
+                            </div>
+                            <div class="flex-1">
+                                <input id="phone" type="tel" name="phone"
+                                       required
+                                       placeholder="555 000 0000"
+                                       inputmode="tel"
+                                       maxlength="30"
+                                       autocomplete="tel-national"
+                                       class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-600">Country code in left box (e.g. +977), number in right.</p>
+                    </div>
+                    {% endif %}
+
+                    {# ── Address ── #}
+                    {% if 'address_1' in r %}
+                    <div class="space-y-1.5">
+                        <label for="address_1" class="block text-xs font-medium text-gray-400">Address Line 1 <span class="text-red-400">*</span></label>
+                        <input id="address_1" type="text" name="address_1"
+                               required
+                               placeholder="Street address"
+                               autocomplete="address-line1"
+                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+                    {% endif %}
+                    {% if 'address_2' in r %}
+                    <div class="space-y-1.5">
+                        <label for="address_2" class="block text-xs font-medium text-gray-400">Address Line 2</label>
+                        <input id="address_2" type="text" name="address_2"
+                               placeholder="Apartment, suite, unit (optional)"
+                               autocomplete="address-line2"
+                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+                    {% endif %}
+
+                    {# ── City + State ── #}
+                    {% if 'city' in r or 'state' in r %}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {% if 'city' in r %}
+                        <div class="space-y-1.5">
+                            <label for="city" class="block text-xs font-medium text-gray-400">City <span class="text-red-400">*</span></label>
+                            <input id="city" type="text" name="city"
+                                   required
+                                   autocomplete="address-level2"
+                                   maxlength="100"
+                                   placeholder="City name"
+                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        </div>
+                        {% endif %}
+                        {% if 'state' in r %}
+                        <div class="space-y-1.5">
+                            <label for="state" class="block text-xs font-medium text-gray-400">State / Province <span class="text-red-400">*</span></label>
+                            <input id="state" type="text" name="state"
+                                   required
+                                   autocomplete="address-level1"
+                                   maxlength="100"
+                                   placeholder="State / Province / Region"
+                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {# ── Postcode + Country ── #}
+                    {% if 'postcode' in r or 'country' in r %}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {% if 'postcode' in r %}
+                        <div class="space-y-1.5 {% if 'country' not in r %}sm:col-span-2{% endif %}">
+                            <label for="postcode" class="block text-xs font-medium text-gray-400">Postcode / ZIP <span class="text-red-400">*</span></label>
+                            <input id="postcode" type="text" name="postcode"
+                                   required
+                                   autocomplete="postal-code"
+                                   maxlength="20"
+                                   placeholder="Postcode / ZIP"
+                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        </div>
+                        {% endif %}
+                        {% if 'country' in r %}
+                        <div class="space-y-1.5 {% if 'postcode' not in r %}sm:col-span-2{% endif %}">
+                            <label for="country" class="block text-xs font-medium text-gray-400">Country <span class="text-red-400">*</span></label>
+                            <select id="country" name="country" required
+                                    autocomplete="country"
+                                    class="w-full px-4 py-2.5 rounded-xl bg-[#0a0f1e] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                                <option value="">Select country…</option>
+                                {% for val, label in guest.system_countries %}
+                                    <option value="{{ val }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {# ── Custom fields ── #}
+                    {% for field_name, field in custom_fields %}
+                        {% if field.active %}
+                        <div class="space-y-1.5">
+                            <label for="{{ field_name }}" class="block text-xs font-medium text-gray-400">
+                                {{ field.title is not empty ? field.title : field_name|capitalize }}
+                                {% if field.required %}<span class="text-red-400">*</span>{% endif %}
+                            </label>
+                            <input id="{{ field_name }}" type="text" name="{{ field_name }}"
+                                   {% if field.required %}required{% endif %}
+                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+
+                    {# ── Currency ── #}
+                    <div class="space-y-1.5">
+                        <label for="currency" class="block text-xs font-medium text-gray-400">Billing Currency <span class="text-red-400">*</span></label>
+                        {% set avail_currencies = guest.currency_get_pairs %}
+                        {% set default_currency = guest.currency_get %}
+                        <select id="currency" name="currency" required
+                                class="w-full px-4 py-2.5 rounded-xl bg-[#0a0f1e] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            {% for code, title in avail_currencies %}
+                                <option value="{{ code }}" {% if default_currency.code == code %}selected{% endif %}>{{ code }} — {{ title }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-[11px] text-gray-600">All invoices and balances will use this currency. Cannot be changed later.</p>
+                    </div>
+
+                    {# ── TOS agreement ── #}
+                    {% if settings.tos %}
+                    <div class="flex items-start gap-3 pt-1">
+                        <input type="checkbox" id="tos" name="agree_tos" value="1" required
+                               class="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0">
+                        <label for="tos" class="text-xs text-gray-400 leading-relaxed">
+                            I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|link }}" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Terms of Service</a>
+                        </label>
+                    </div>
+                    {% endif %}
+
+                    <button id="submit-btn" type="submit"
+                            class="w-full py-3 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 mt-2 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                        <span id="submit-label">Continue to Dashboard</span>
+                        <svg id="submit-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                    </button>
+
+                </div>
+            </form>
+
+            <div class="mt-6 text-center border-t border-white/5 pt-5">
+                <p class="text-sm text-gray-500">
+                    Already have an account?
+                    <a href="{{ 'login'|link }}" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Sign in</a>
+                </p>
+            </div>
+        </div>
+
+        <div class="text-center mt-6">
+            <a href="{{ '/'|link }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+(function () {
+    'use strict';
+
+    var form     = document.getElementById('complete-reg-form');
+    var btn      = document.getElementById('submit-btn');
+    var label    = document.getElementById('submit-label');
+    var spinner  = document.getElementById('submit-spinner');
+    var errBox   = document.getElementById('reg-error');
+
+    // Set birthday limits
+    var bday = form ? form.querySelector('[name="birthday"]') : null;
+    if (bday) {
+        bday.max = new Date().toISOString().split('T')[0];
+        bday.min = '1900-01-01';
+    }
+
+    function showError(msg) {
+        errBox.textContent = msg;
+        errBox.classList.remove('hidden');
+        errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideError() {
+        errBox.classList.add('hidden');
+        errBox.textContent = '';
+    }
+
+    var afterUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|link|e('js') }}{% endif %}';
+
+    function setLoading(loading) {
+        btn.disabled = loading;
+        label.textContent = loading ? 'Creating account…' : (afterUrl.indexOf('/order/checkout') !== -1 ? 'Continue to Checkout' : 'Continue to Dashboard');
+        spinner.classList.toggle('hidden', !loading);
+    }
+
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        hideError();
+
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        setLoading(true);
+
+        // Collect all named form fields except the display-only email copy
+        var formData = new FormData(form);
+        formData.delete('_email_display');
+
+        var body = new URLSearchParams();
+        formData.forEach(function (val, key) { body.append(key, val); });
+
+        fetch(window.location.origin + '/api/guest/sociallogin/complete_registration', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data && data.result === true) {
+                window.location.replace(afterUrl);
+            } else {
+                var msg = (data && data.error && data.error.message)
+                    ? data.error.message
+                    : 'Registration failed. Please try again.';
+                showError(msg);
+                setLoading(false);
+            }
+        })
+        .catch(function () {
+            showError('Could not connect to the server. Please try again.');
+            setLoading(false);
+        });
+    });
+}());
+</script>
+{% endblock %}

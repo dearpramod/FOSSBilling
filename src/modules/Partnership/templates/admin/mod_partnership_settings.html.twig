@@ -1,0 +1,321 @@
+{% extends request.ajax ? 'layout_blank.html.twig' : 'layout_default.html.twig' %}
+
+{% import 'macro_functions.html.twig' as mf %}
+
+{% set active_menu = 'extensions' %}
+
+{% set product_rules = admin.partnership_product_pricing_get_list({}) %}
+{% set tld_rules     = admin.partnership_tld_pricing_get_list({}) %}
+{% set group_pairs   = admin.client_group_get_pairs({}) %}
+{% set products      = admin.product_get_list({ 'per_page': 200 }).list %}
+
+{% block meta_title %}{{ 'Partnership Pricing'|trans }}{% endblock %}
+
+{% block breadcrumbs %}
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ '/'|alink }}">{{ 'Home'|trans }}</a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{{ 'extension'|alink }}">{{ 'Extensions'|trans }}</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">{{ 'Partnership Pricing'|trans }}</li>
+    </ol>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" data-bs-toggle="tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <a href="#tab-products" class="nav-link active" data-bs-toggle="tab" role="tab">
+                    <svg class="icon me-1"><use xlink:href="#orders" /></svg>
+                    {{ 'Product Pricing'|trans }}
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a href="#tab-tlds" class="nav-link" data-bs-toggle="tab" role="tab">
+                    <svg class="icon me-1"><use xlink:href="#link" /></svg>
+                    {{ 'Domain (TLD) Pricing'|trans }}
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card-body">
+        <div class="tab-content">
+
+            {# ── PRODUCT PRICING TAB ─────────────────────────────────── #}
+            <div class="tab-pane active show" id="tab-products" role="tabpanel">
+
+                {# Add rule form #}
+                <h4 class="mb-3">{{ 'Add Product Pricing Rule'|trans }}</h4>
+                <form method="post" action="{{ 'partnership/product_pricing_create'|api_url }}" {{ fb_api_form({reload: true}) }}>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">{{ 'Client Group'|trans }}</label>
+                            <select name="client_group_id" class="form-select" required>
+                                <option value="">{{ '— Select group —'|trans }}</option>
+                                {% for id, title in group_pairs %}
+                                    <option value="{{ id }}">{{ title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">{{ 'Product'|trans }}</label>
+                            <select name="product_id" class="form-select" required>
+                                <option value="">{{ '— Select product —'|trans }}</option>
+                                {% for p in products %}
+                                    <option value="{{ p.id }}">{{ p.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'Period'|trans }}</label>
+                            <select name="period" class="form-select">
+                                <option value="">{{ 'All periods'|trans }}</option>
+                                <option value="1W">Weekly</option>
+                                <option value="1M">Monthly</option>
+                                <option value="3M">Quarterly</option>
+                                <option value="6M">Semi-Annual</option>
+                                <option value="1Y">Annual</option>
+                                <option value="2Y">Biennial</option>
+                                <option value="3Y">Triennial</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'Partner Price'|trans }}</label>
+                            <input type="number" name="price" class="form-control" step="0.01" min="0" required placeholder="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <svg class="icon me-1"><use xlink:href="#plus" /></svg>
+                                {{ 'Add Rule'|trans }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                {# Existing rules #}
+                <h4 class="mb-2 mt-4">{{ 'Existing Rules'|trans }}</h4>
+                {% if product_rules|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-vcenter table-hover card-table">
+                        <thead>
+                            <tr>
+                                <th>{{ 'Client Group'|trans }}</th>
+                                <th>{{ 'Product'|trans }}</th>
+                                <th>{{ 'Period'|trans }}</th>
+                                <th>{{ 'Partner Price'|trans }}</th>
+                                <th>{{ 'Created'|trans }}</th>
+                                <th class="w-1">{{ 'Actions'|trans }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% set period_labels = {'1W': 'Weekly', '1M': 'Monthly', '3M': 'Quarterly', '6M': 'Semi-Annual', '1Y': 'Annual', '2Y': 'Biennial', '3Y': 'Triennial'} %}
+                        {% for rule in product_rules %}
+                            <tr>
+                                <td>{{ rule.group_title }}</td>
+                                <td>{{ rule.product_title }}</td>
+                                <td>
+                                    {% if rule.period %}
+                                        {{ period_labels[rule.period]|default(rule.period) }}
+                                    {% else %}
+                                        <span class="text-muted">{{ 'All periods'|trans }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><strong>{{ rule.price|number_format(2) }}</strong></td>
+                                <td>{{ rule.created_at|date('Y-m-d') }}</td>
+                                <td class="text-nowrap">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-primary me-1"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#edit-prod-{{ rule.id }}"
+                                            title="{{ 'Edit'|trans }}">
+                                        <svg class="icon"><use xlink:href="#edit" /></svg>
+                                    </button>
+                                    <a class="btn btn-sm btn-outline-danger"
+                                       href="#"
+                                       {{ fb_api_link({href: 'partnership/product_pricing_delete'|api_url(query: {id: rule.id}), modal: {type: 'confirm', title: 'Are you sure?'|trans}, reload: true}) }}
+                                       title="{{ 'Delete'|trans }}">
+                                        <svg class="icon"><use xlink:href="#delete" /></svg>
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr class="collapse" id="edit-prod-{{ rule.id }}">
+                                <td colspan="6" class="bg-light py-3">
+                                    <form method="post"
+                                          action="{{ 'partnership/product_pricing_update'|api_url }}"
+                                          {{ fb_api_form({reload: true}) }}>
+                                        <input type="hidden" name="id" value="{{ rule.id }}">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-3">
+                                                <label class="form-label form-label-sm">{{ 'Period'|trans }}</label>
+                                                <select name="period" class="form-select form-select-sm">
+                                                    <option value="">{{ 'All periods'|trans }}</option>
+                                                    {% for code, label in period_labels %}
+                                                        <option value="{{ code }}"{% if rule.period == code %} selected{% endif %}>{{ label }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label form-label-sm">{{ 'Partner Price'|trans }}</label>
+                                                <input type="number" name="price" class="form-control form-control-sm"
+                                                       value="{{ rule.price }}" step="0.01" min="0" required>
+                                            </div>
+                                            <div class="col-auto">
+                                                <button type="submit" class="btn btn-sm btn-success">
+                                                    <svg class="icon me-1"><use xlink:href="#check" /></svg>
+                                                    {{ 'Save'|trans }}
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-secondary ms-1"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#edit-prod-{{ rule.id }}">
+                                                    {{ 'Cancel'|trans }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p class="text-muted">{{ 'No product pricing rules defined yet.'|trans }}</p>
+                {% endif %}
+            </div>
+
+            {# ── TLD PRICING TAB ─────────────────────────────────────── #}
+            <div class="tab-pane" id="tab-tlds" role="tabpanel">
+
+                {# Add rule form #}
+                <h4 class="mb-3">{{ 'Add Domain TLD Pricing Rule'|trans }}</h4>
+                <form method="post" action="{{ 'partnership/tld_pricing_create'|api_url }}" {{ fb_api_form({reload: true}) }}>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'Client Group'|trans }}</label>
+                            <select name="client_group_id" class="form-select" required>
+                                <option value="">{{ '— Select group —'|trans }}</option>
+                                {% for id, title in group_pairs %}
+                                    <option value="{{ id }}">{{ title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'TLD'|trans }}</label>
+                            <input type="text" name="tld" class="form-control" required placeholder=".com">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'Register Price'|trans }}</label>
+                            <input type="number" name="price_registration" class="form-control" step="0.01" min="0" value="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'Renew Price'|trans }}</label>
+                            <input type="number" name="price_renew" class="form-control" step="0.01" min="0" value="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">{{ 'Transfer Price'|trans }}</label>
+                            <input type="number" name="price_transfer" class="form-control" step="0.01" min="0" value="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <svg class="icon me-1"><use xlink:href="#plus" /></svg>
+                                {{ 'Add Rule'|trans }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                {# Existing rules #}
+                <h4 class="mb-2 mt-4">{{ 'Existing Rules'|trans }}</h4>
+                {% if tld_rules|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-vcenter table-hover card-table">
+                        <thead>
+                            <tr>
+                                <th>{{ 'Client Group'|trans }}</th>
+                                <th>{{ 'TLD'|trans }}</th>
+                                <th>{{ 'Register'|trans }}</th>
+                                <th>{{ 'Renew'|trans }}</th>
+                                <th>{{ 'Transfer'|trans }}</th>
+                                <th>{{ 'Created'|trans }}</th>
+                                <th class="w-1">{{ 'Actions'|trans }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for rule in tld_rules %}
+                            <tr>
+                                <td>{{ rule.group_title }}</td>
+                                <td><code>{{ rule.tld }}</code></td>
+                                <td>{{ rule.price_registration|number_format(2) }}</td>
+                                <td>{{ rule.price_renew|number_format(2) }}</td>
+                                <td>{{ rule.price_transfer|number_format(2) }}</td>
+                                <td>{{ rule.created_at|date('Y-m-d') }}</td>
+                                <td class="text-nowrap">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-primary me-1"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#edit-tld-{{ rule.id }}"
+                                            title="{{ 'Edit'|trans }}">
+                                        <svg class="icon"><use xlink:href="#edit" /></svg>
+                                    </button>
+                                    <a class="btn btn-sm btn-outline-danger"
+                                       href="#"
+                                       {{ fb_api_link({href: 'partnership/tld_pricing_delete'|api_url(query: {id: rule.id}), modal: {type: 'confirm', title: 'Are you sure?'|trans}, reload: true}) }}
+                                       title="{{ 'Delete'|trans }}">
+                                        <svg class="icon"><use xlink:href="#delete" /></svg>
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr class="collapse" id="edit-tld-{{ rule.id }}">
+                                <td colspan="7" class="bg-light py-3">
+                                    <form method="post"
+                                          action="{{ 'partnership/tld_pricing_update'|api_url }}"
+                                          {{ fb_api_form({reload: true}) }}>
+                                        <input type="hidden" name="id" value="{{ rule.id }}">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-2">
+                                                <label class="form-label form-label-sm">{{ 'Register Price'|trans }}</label>
+                                                <input type="number" name="price_registration" class="form-control form-control-sm"
+                                                       value="{{ rule.price_registration }}" step="0.01" min="0">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label form-label-sm">{{ 'Renew Price'|trans }}</label>
+                                                <input type="number" name="price_renew" class="form-control form-control-sm"
+                                                       value="{{ rule.price_renew }}" step="0.01" min="0">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label form-label-sm">{{ 'Transfer Price'|trans }}</label>
+                                                <input type="number" name="price_transfer" class="form-control form-control-sm"
+                                                       value="{{ rule.price_transfer }}" step="0.01" min="0">
+                                            </div>
+                                            <div class="col-auto">
+                                                <button type="submit" class="btn btn-sm btn-success">
+                                                    <svg class="icon me-1"><use xlink:href="#check" /></svg>
+                                                    {{ 'Save'|trans }}
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-secondary ms-1"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#edit-tld-{{ rule.id }}">
+                                                    {{ 'Cancel'|trans }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p class="text-muted">{{ 'No domain TLD pricing rules defined yet.'|trans }}</p>
+                {% endif %}
+            </div>
+
+        </div>{# .tab-content #}
+    </div>{# .card-body #}
+</div>{# .card #}
+{% endblock %}

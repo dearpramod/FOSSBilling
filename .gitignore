@@ -30,3 +30,6 @@ output.log
 
 ### Cypress ###
 tests/E2E/Cypress/artifacts
+
+### Release zips ###
+*.zip

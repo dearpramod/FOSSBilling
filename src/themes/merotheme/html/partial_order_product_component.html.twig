@@ -1,0 +1,318 @@
+{# ═══════════════════════════════════════════════════════════════════════════
+   Shared orderProduct() Alpine component — single source of truth.
+
+   Superset of every order page's needs: period helpers, addon carousel,
+   domain price listener, coupon validation, add-to-cart with domain +
+   formbuilder field collection.
+
+   Usage (product must be set in the including template's context):
+       {% include 'partial_order_product_component.html.twig' %}
+       <div x-data="orderProduct({{ product.id }}, '{{ first_period }}')"> …
+
+   Must be included INSIDE the content block, BEFORE the x-data element,
+   because Alpine (deferred in <head>) boots right after DOM parse.
+═══════════════════════════════════════════════════════════════════════════ #}
+{% if product %}
+{% set _op_currency = guest.cart_get_currency %}
+<script>
+function orderProduct(productId, defaultPeriod) {
+    return {
+        productId: productId,
+        selectedPeriod: defaultPeriod || null,
+        loading: false,
+        errorMsg: null,
+        domainInCart: false,
+        addons: {},
+        addonIndex: 0,
+        addonCount: {{ product.addons|length }},
+
+        // Coupon state
+        couponDiscount: 0,
+        couponOpen: false,
+        couponCode: '',
+        couponLoading: false,
+        couponError: null,
+        couponApplied: false,
+        promoType: null,
+        promoValue: 0,
+        promoPeriods: [],
+
+        // Period metadata
+        periodMonthsMap: { '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 },
+        periodLabelMap: { '1W': 'Every week', '1M': 'Monthly', '3M': 'Quarterly', '6M': 'Every 6 months', '1Y': 'Every year', '2Y': 'Every 2 years', '3Y': 'Every 3 years' },
+        periodLabels: { '1W': 'Weekly', '1M': 'Monthly', '3M': '3-Month', '6M': '6-Month', '1Y': 'Annual', '2Y': '2-Year', '3Y': '3-Year' },
+        addonPeriodLabels: { '1W': 'week', '1M': 'mo', '3M': 'qtr', '6M': '6mo', '1Y': 'yr', '2Y': '2yr', '3Y': '3yr' },
+
+        // Twig-injected pricing data
+        addonPrices: {
+            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
+            '{{ addon.id }}': { {% set _pf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _pf %}, {% endif %}'{{ code }}': '{{ prices.price|money_convert }}'{% set _pf = false %}{% endif %}{% endfor %} },
+            {% endif %}{% endfor %}
+        },
+        addonPricingTypes: { {% for addon in product.addons %}'{{ addon.id }}': '{{ addon.pricing.type }}', {% endfor %} },
+        addonRawPrices: {
+            {% for addon in product.addons %}{% if addon.pricing.type == 'recurrent' %}
+            '{{ addon.id }}': { {% set _rf = true %}{% for code, prices in addon.pricing.recurrent %}{% if prices.enabled %}{% if not _rf %}, {% endif %}'{{ code }}': {{ prices.price|default(0) }}{% set _rf = false %}{% endif %}{% endfor %} },
+            {% endif %}{% endfor %}
+        },
+        addonOnceRawPrices: { {% for addon in product.addons %}{% if addon.pricing.type == 'once' %}'{{ addon.id }}': {{ addon.pricing.once.price|default(0) }}, {% endif %}{% endfor %} },
+        productRawPrices: {
+            {% if product.pricing.type == 'recurrent' %}{% for code, prices in product.pricing.recurrent %}{% if prices.enabled %}'{{ code }}': {{ prices.price|default(0) }}, {% endif %}{% endfor %}{% endif %}
+        },
+        productOnceRawPrice: {% if product.pricing.type == 'once' %}{{ product.pricing.once.price|default(0) }}{% else %}0{% endif %},
+        domainRawPrice: 0,
+        domainName: '',
+
+        // Currency
+        currencyRate: {{ _op_currency.conversion_rate|default(1) }},
+        currencyCode: {{ _op_currency.code|default('USD')|json_encode|raw }},
+        currencyPriceFormat: {{ _op_currency.price_format|default(2)|json_encode|raw }},
+        currencyFormat: {{ (_op_currency.symbol|default(_op_currency.code|default('')) ~ '__PRICE__')|json_encode|raw }},
+
+        formatMoney(rawPrice) {
+            const p = parseFloat(rawPrice) * this.currencyRate;
+            const tpl = this.currencyFormat;
+            if (tpl && tpl.includes('__PRICE__')) {
+                const fmt = parseInt(this.currencyPriceFormat);
+                let s;
+                const th = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+                if (fmt === 1) { s = p.toFixed(2); }
+                else if (fmt === 3) { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], '.'); s = pts.join(','); }
+                else if (fmt === 4) { s = th(Math.round(p).toString(), ','); }
+                else if (fmt === 5) { s = Math.round(p).toString(); }
+                else { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], ','); s = pts.join('.'); }
+                return tpl.replace('__PRICE__', s);
+            }
+            return new Intl.NumberFormat(undefined, {
+                style: 'currency', currency: this.currencyCode, currencyDisplay: 'narrowSymbol',
+            }).format(p);
+        },
+
+        getPeriodMonthly(p) {
+            const m = this.periodMonthsMap[p] || 1;
+            return m > 0 ? (this.productRawPrices[p] || 0) / m : (this.productRawPrices[p] || 0);
+        },
+        getPeriodSavingsRaw(p) {
+            const base = this.productRawPrices['1M'] || 0;
+            if (!base || !p) return 0;
+            const m = this.periodMonthsMap[p] || 1;
+            if (m <= 1) return 0;
+            return Math.max(0, base * m - (this.productRawPrices[p] || 0));
+        },
+        getPeriodLabel(p) {
+            return this.periodLabelMap[p] || p || '';
+        },
+        getOriginalTotal(period) {
+            if (!period) return '';
+            const base = this.productRawPrices['1M'] || 0;
+            if (!base) return '';
+            const m = this.periodMonthsMap[period] || 1;
+            if (m <= 1) return '';
+            return this.formatMoney(base * m + this.domainRawPrice);
+        },
+
+        calcTotal(period) {
+            if (!period) return '';
+            let base = 0;
+            if (period === 'once') { base = this.productOnceRawPrice; }
+            else if (period === 'free') { base = 0; }
+            else if (this.productRawPrices[period] !== undefined) { base = this.productRawPrices[period]; }
+            base += this.domainRawPrice;
+            Object.entries(this.addons).forEach(([id, state]) => {
+                if (!state.selected) return;
+                const type = this.addonPricingTypes[id];
+                if (type === 'recurrent') {
+                    const ap = state.period || period;
+                    if (this.addonRawPrices[id] && this.addonRawPrices[id][ap] !== undefined) base += this.addonRawPrices[id][ap];
+                } else if (type === 'once' && this.addonOnceRawPrices[id] !== undefined) {
+                    base += this.addonOnceRawPrices[id];
+                }
+            });
+            let discount = 0;
+            if (this.couponApplied && this.promoType && base > 0) {
+                const periodOk = this.promoPeriods.length === 0 || period === 'once' || this.promoPeriods.includes(period);
+                if (periodOk) {
+                    if (this.promoType === 'percentage') discount = Math.round(base * this.promoValue / 100 * 100) / 100;
+                    else if (this.promoType === 'absolute') discount = Math.min(this.promoValue, base);
+                }
+            }
+            this.couponDiscount = discount;
+            return this.formatMoney(Math.max(0, base - discount));
+        },
+
+        prevAddon() { if (this.addonIndex > 0) this.addonIndex--; },
+        nextAddon() { if (this.addonIndex < this.addonCount - 1) this.addonIndex++; },
+
+        init() {
+            if (!this.selectedPeriod) {
+                const el = this.$el.querySelector('select[name="period"], input[name="period"]');
+                if (el && el.value) this.selectedPeriod = el.value;
+                else {
+                    const keys = Object.keys(this.productRawPrices);
+                    if (keys.length) this.selectedPeriod = keys[0];
+                }
+            }
+            const addonIds = Object.keys(this.addonPricingTypes);
+            const resolveFor = (id, p) => {
+                const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
+                return (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
+            };
+            addonIds.forEach(id => {
+                if (!this.addons[id]) this.addons[id] = { selected: false, period: resolveFor(id, this.selectedPeriod || '') };
+            });
+            this.$watch('selectedPeriod', v => {
+                addonIds.forEach(id => {
+                    if (this.addons[id]) this.addons[id].period = resolveFor(id, v || '');
+                });
+            });
+            document.addEventListener('domainPriceUpdated', e => {
+                this.domainRawPrice = parseFloat(e.detail.rawPrice) || 0;
+            });
+            document.addEventListener('domainSelected', e => {
+                this.domainName = (e.detail && e.detail.domain) || '';
+            });
+        },
+
+        applyCoupon() {
+            const code = this.couponCode.trim();
+            if (!code || this.couponLoading || this.couponApplied) return;
+            this.couponLoading = true;
+            this.couponError = null;
+            API.guest.post('cart/validate_promo', { promocode: code, product_id: this.productId, period: this.selectedPeriod || '' },
+                (promo) => {
+                    this.couponLoading = false;
+                    this.couponApplied = true;
+                    this.promoType    = promo.type    || null;
+                    this.promoValue   = promo.value   || 0;
+                    this.promoPeriods = promo.periods || [];
+                },
+                (err) => {
+                    this.couponLoading = false;
+                    this.couponApplied = false;
+                    this.couponError = (err && err.message) || 'Invalid promo code.';
+                }
+            );
+        },
+
+        toggleAddon(addonId, pricingType) {
+            const key = String(addonId);
+            if (!this.addons[key]) {
+                let addonPeriod = '';
+                if (pricingType === 'recurrent' || this.addonPricingTypes[key] === 'recurrent') {
+                    const ep = this.addonPrices[key] ? Object.keys(this.addonPrices[key]) : [];
+                    if (this.selectedPeriod && ep.includes(this.selectedPeriod)) addonPeriod = this.selectedPeriod;
+                    else if (ep.length > 0) addonPeriod = ep[0];
+                }
+                this.addons[key] = { selected: false, period: addonPeriod };
+            }
+            this.addons[key].selected = !this.addons[key].selected;
+        },
+
+        addToCart(period) {
+            if (!period) return;
+            this.loading = true;
+            this.errorMsg = null;
+            this.domainInCart = false;
+
+            const data = { id: this.productId, multiple: 1 };
+            if (period !== 'once' && period !== 'free') data.period = period;
+
+            // Domain fields (hosting order form) — build nested domain:{} object.
+            // JSON transport means PHP won't expand "domain[action]" bracket notation.
+            // Search the domain card directly (by stable ID) rather than this.$el
+            // to avoid any Alpine scope / $el quirks on nested x-data pages.
+            const _domainRoot = document.getElementById('domain-config-card') || this.$el;
+            const domainData = {};
+            _domainRoot.querySelectorAll('input[name^="domain["], select[name^="domain["]').forEach(el => {
+                if (el.type === 'radio' && !el.checked) return;
+                const match = el.name.match(/^domain\[([^\]]+)\]$/);
+                if (match) domainData[match[1]] = el.value;
+            });
+            // Also pick up the hidden action input (may be outside the card on some page layouts)
+            if (!domainData.action) {
+                const actionEl = document.getElementById('domain-action-input');
+                if (actionEl) domainData.action = actionEl.value;
+            }
+            if (Object.keys(domainData).length > 0) data.domain = domainData;
+
+            // Formbuilder fields if present
+            const fbSection = this.$refs.formbuilderSection;
+            if (fbSection) {
+                fbSection.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
+                    if (el.name === 'form_id' || el.name === 'id') {
+                        data[el.name] = el.value;
+                    } else if (el.type === 'checkbox') {
+                        if (!data[el.name]) data[el.name] = [];
+                        if (el.checked) data[el.name].push(el.value);
+                    } else if (el.type === 'radio') {
+                        if (el.checked) data[el.name] = el.value;
+                    } else {
+                        data[el.name] = el.value;
+                    }
+                });
+                const required = fbSection.querySelectorAll('[required]');
+                for (const el of required) {
+                    if (!el.value || !el.value.trim()) {
+                        this.loading = false;
+                        this.errorMsg = 'Please fill in all required fields.';
+                        el.focus();
+                        return;
+                    }
+                }
+            }
+
+            // Selected add-ons — recurrent ones always need a valid period
+            const addonPayload = {};
+            let hasAddons = false;
+            let addonPeriodError = false;
+            Object.entries(this.addons).forEach(([id, state]) => {
+                addonPayload[id] = { selected: state.selected };
+                if (state.selected) {
+                    if (this.addonPricingTypes[id] === 'recurrent') {
+                        let ap = state.period;
+                        if (!ap) {
+                            const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
+                            ap = (period && ep.includes(period)) ? period : (ep[0] || '');
+                        }
+                        if (!ap) { addonPeriodError = true; return; }
+                        addonPayload[id].period = ap;
+                    } else if (state.period) {
+                        addonPayload[id].period = state.period;
+                    }
+                }
+                hasAddons = true;
+            });
+            if (addonPeriodError) {
+                this.loading = false;
+                this.errorMsg = 'Selected add-on has no valid billing period. Please deselect it or contact support.';
+                return;
+            }
+            if (hasAddons) data.addons = addonPayload;
+
+            const goCheckout = () => { window.location.href = '{{ "/order/checkout"|url }}'; };
+
+            API.guest.post('cart/add_item', data,
+                () => {
+                    document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
+                    if (this.couponApplied && this.couponCode.trim()) {
+                        // Only apply a promo that was pre-validated; failure is non-blocking
+                        API.guest.post('cart/apply_promo', { promocode: this.couponCode.trim() },
+                            goCheckout,
+                            goCheckout
+                        );
+                    } else {
+                        goCheckout();
+                    }
+                },
+                (error) => {
+                    this.loading = false;
+                    const msg = (error && error.message) || 'Failed to add to cart. Please try again.';
+                    this.errorMsg = msg;
+                    this.domainInCart = /already in the cart/i.test(msg);
+                }
+            );
+        }
+    };
+}
+</script>
+{% endif %}

@@ -389,8 +389,8 @@
                     {% if seller.address_1 %}{{ seller.address_1 }}<br>{% endif %}
                     {% if seller.address_2 %}{{ seller.address_2 }}<br>{% endif %}
                     {% if seller.address_3 %}{{ seller.address_3 }}<br>{% endif %}
-                    {% if company.vat_number %}VAT: {{ company.vat_number }}<br>{% endif %}
-                    {% if company.number %}Reg: {{ company.number }}<br>{% endif %}
+                    {% if company.vat_number|default(false) %}VAT: {{ company.vat_number }}<br>{% endif %}
+                    {% if company.number|default(false) %}Reg: {{ company.number }}<br>{% endif %}
                     {% if seller.bank_name %}Bank: {{ seller.bank_name }}<br>{% endif %}
                     {% if seller.account_number %}A/C: {{ seller.account_number }}<br>{% endif %}
                     {% if seller.bic %}SWIFT: {{ seller.bic }}{% endif %}
@@ -519,11 +519,11 @@
         <div class="inv-footer-name">{{ company.name }}</div>
         <div class="inv-footer-tagline">Reliable Hosting &amp; Billing Solutions</div>
         <hr>
-        {% if company.email or company.tel or company.www %}
+        {% if company.email|default(false) or company.tel|default(false) or company.www|default(false) %}
         <div class="inv-footer-contact">
-            {% if company.email %}<span><a href="mailto:{{ company.email }}">{{ company.email }}</a></span>{% endif %}
-            {% if company.tel %}<span>{{ company.tel }}</span>{% endif %}
-            {% if company.www %}<span><a href="{{ company.www }}" target="_blank">{{ company.www }}</a></span>{% endif %}
+            {% if company.email|default(false) %}<span><a href="mailto:{{ company.email }}">{{ company.email }}</a></span>{% endif %}
+            {% if company.tel|default(false) %}<span>{{ company.tel }}</span>{% endif %}
+            {% if company.www|default(false) %}<span><a href="{{ company.www }}" target="_blank">{{ company.www }}</a></span>{% endif %}
         </div>
         {% endif %}
         <div class="inv-footer-copy">Copyright &copy; {{ "now"|date("Y") }} {{ company.name }}. All rights reserved.</div>

@@ -3,10 +3,10 @@
 {% block meta_title %}Order{% endblock %}
 
 {% block content %}
-{% if settings.homepage_mode == 'store' %}
+{% if settings.homepage_mode|default('') == 'store' %}
 <script>window.location.replace('{{ '/order'|url }}');</script>
-{% elseif settings.homepage_mode == 'custom' and settings.homepage_custom_url is not empty %}
-<script>window.location.replace('{{ settings.homepage_custom_url|url }}');</script>
+{% elseif settings.homepage_mode|default('') == 'custom' and settings.homepage_custom_url|default('') is not empty %}
+<script>window.location.replace('{{ settings.homepage_custom_url|default('')|url }}');</script>
 {% endif %}
 
 {# ═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,13 @@
+{
+    "id": "partnership",
+    "type": "mod",
+    "name": "Partnership Pricing",
+    "description": "Assign custom per-product and per-domain-TLD pricing to specific client groups (partners/resellers). Partner prices are applied silently at checkout and displayed on the partnership program page when the partner is logged in.",
+    "homepage_url": "https://merovps.com",
+    "author": "MeroVPS",
+    "author_url": "https://merovps.com",
+    "license": "Apache-2.0",
+    "version": "1.1.0",
+    "minimum_fossbilling_version": "0.8.0",
+    "icon_url": "icon.svg"
+}

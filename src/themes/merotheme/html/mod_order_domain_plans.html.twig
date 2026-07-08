@@ -953,8 +953,8 @@
         <div class="p-6 space-y-4">
 
           {# Google sign-in #}
-          {% if social.google_enabled %}
-          <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request_uri|url_encode)|url }}"
+          {% if social.google_enabled|default(false) %}
+          <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request.uri|default('/')|url_encode)|url }}"
              class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-white/[0.08] bg-white/[0.02] hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all group">
             <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                  style="background: rgba(255,255,255,0.06);">
@@ -1681,8 +1681,8 @@
       <div class="px-6 py-6 space-y-4">
 
         {# Google sign-in #}
-        {% if social.google_enabled %}
-        <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request_uri|url_encode)|url }}"
+        {% if social.google_enabled|default(false) %}
+        <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request.uri|default('/')|url_encode)|url }}"
            class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-200 text-sm font-semibold hover:bg-white/[0.08] transition-all"
            style="background:rgba(255,255,255,0.05);">
           <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -1762,7 +1762,8 @@
   const CURR_PREFIX       = '{{ currPrefix|escape('js') }}';
   const CURR_SUFFIX       = '{{ currSuffix|escape('js') }}';
   const CURR_RATE         = {{ currency.conversion_rate|default(1)|number_format(10, '.', '') }};
-  const CURR_PRICE_FORMAT = {% if currency.price_format in [1,2,3,4,5] %}{{ currency.price_format }}{% else %}1{% endif %};
+  {% set _priceFormat = currency.price_format|default(1) %}
+  const CURR_PRICE_FORMAT = {{ _priceFormat in [1,2,3,4,5] ? _priceFormat : 1 }};
   const CURRENCIES        = {{ currencies|json_encode|raw }};
   const CLIENT_CURRENCY   = '{{ clientCurrencyCode|escape('js') }}';
   const CHECKOUT          = '{{ '/order/checkout'|url }}';

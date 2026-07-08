@@ -1,0 +1,251 @@
+{% extends 'layout_default.html.twig' %}
+
+{% import 'macro_functions.html.twig' as mf %}
+
+{% set active_menu = 'extensions' %}
+{% set params = admin.extension_config_get({ 'ext': 'mod_whatsapp' }) %}
+
+{% block meta_title %}{{ 'WhatsApp Notifications'|trans }}{% endblock %}
+
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ ''|alink }}">{{ 'Home'|trans }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ 'extension'|alink }}">{{ 'Extensions'|trans }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ 'WhatsApp Notifications'|trans }}</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" data-bs-toggle="tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <a href="#tab-settings" class="nav-link active" data-bs-toggle="tab" role="tab" aria-selected="true">
+                    <svg class="icon me-1"><use xlink:href="#brand-whatsapp" /></svg>
+                    {{ 'Settings'|trans }}
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a href="#tab-notifications" class="nav-link" data-bs-toggle="tab" role="tab">
+                    <svg class="icon me-1"><use xlink:href="#bell" /></svg>
+                    {{ 'Notifications'|trans }}
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a href="#tab-log" class="nav-link" data-bs-toggle="tab" role="tab">
+                    <svg class="icon me-1"><use xlink:href="#activity" /></svg>
+                    {{ 'Message Log'|trans }}
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a href="#tab-test" class="nav-link" data-bs-toggle="tab" role="tab">
+                    <svg class="icon me-1"><use xlink:href="#wifi" /></svg>
+                    {{ 'Send Test'|trans }}
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    {# Single form wrapping Settings + Notifications tabs so config_save receives ALL fields at once #}
+    <form method="post" action="{{ 'extension/config_save'|api_url }}" {{ fb_api_form({message: 'WhatsApp settings updated'|trans}) }}>
+        <div class="tab-content">
+
+            {# ── Tab 1: Settings ───────────────────────────────────── #}
+            <div class="tab-pane fade show active" id="tab-settings" role="tabpanel">
+                <div class="card-body">
+                    <h3 class="card-title">{{ 'WaSender API Configuration'|trans }}</h3>
+                    <p class="card-subtitle">
+                        {{ 'Configure your WaSender API key to enable WhatsApp notifications. Get your API key from'|trans }}
+                        <a href="https://wasenderapi.com" target="_blank">wasenderapi.com</a>
+                    </p>
+
+                    <div class="mb-3 row">
+                        <label class="col-md-3 form-label">{{ 'Enable WhatsApp notifications'|trans }}</label>
+                        <div class="col-md-6">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" id="radioEnabledYes" type="radio" name="enabled" value="1"{% if params.enabled %} checked{% endif %}>
+                                <label class="form-check-label" for="radioEnabledYes">{{ 'Yes'|trans }}</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" id="radioEnabledNo" type="radio" name="enabled" value="0"{% if not params.enabled %} checked{% endif %}>
+                                <label class="form-check-label" for="radioEnabledNo">{{ 'No'|trans }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 row">
+                        <label class="col-md-3 col-form-label">{{ 'WaSender API Key'|trans }}</label>
+                        <div class="col-md-6">
+                            <input class="form-control" type="password" name="api_key" value="{{ params.api_key }}" placeholder="{{ 'Enter your WaSender API key'|trans }}" autocomplete="new-password">
+                            <small class="form-hint">{{ 'Your Bearer token from WaSender dashboard'|trans }}</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 row">
+                        <label class="col-md-3 form-label">{{ 'Log sent messages'|trans }}</label>
+                        <div class="col-md-6">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" id="radioLogYes" type="radio" name="log_enabled" value="1"{% if params.log_enabled %} checked{% endif %}>
+                                <label class="form-check-label" for="radioLogYes">{{ 'Yes'|trans }}</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" id="radioLogNo" type="radio" name="log_enabled" value="0"{% if not params.log_enabled %} checked{% endif %}>
+                                <label class="form-check-label" for="radioLogNo">{{ 'No'|trans }}</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Tab 2: Notifications ──────────────────────────────── #}
+            <div class="tab-pane fade" id="tab-notifications" role="tabpanel">
+                <div class="card-body">
+                    <h3 class="card-title">{{ 'Event Notifications'|trans }}</h3>
+                    <p class="card-subtitle">{{ 'Enable or disable WhatsApp notifications for each event and customize the message template.'|trans }}</p>
+                    <p class="text-muted small mb-4">
+                        {{ 'Available placeholders:'|trans }}
+                        <code>{% verbatim %}{{client_name}} {{company_name}} {{invoice_id}} {{amount}} {{due_date}} {{order_id}} {{order_title}} {{ticket_id}} {{ticket_subject}}{% endverbatim %}</code>
+                    </p>
+
+                    {% set events = {
+                        'invoice_paid':      'Invoice Paid'|trans,
+                        'invoice_created':   'Invoice Created / Approved'|trans,
+                        'order_activated':   'Order Activated'|trans,
+                        'order_suspended':   'Order Suspended'|trans,
+                        'order_unsuspended': 'Order Unsuspended'|trans,
+                        'order_cancelled':   'Order Cancelled'|trans,
+                        'ticket_opened':     'Support Ticket Opened'|trans,
+                        'ticket_reply':      'Support Ticket Reply'|trans,
+                        'ticket_closed':     'Support Ticket Closed'|trans,
+                        'client_signup':     'Client Sign-Up'|trans,
+                        'password_reset':    'Password Reset Request'|trans
+                    } %}
+
+                    {% for key, label in events %}
+                    <div class="mb-4 p-3 border rounded">
+                        <div class="row align-items-center mb-2">
+                            <div class="col-md-6">
+                                <strong>{{ label }}</strong>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input type="hidden" name="notify_{{ key }}" value="0">
+                                    <input class="form-check-input" type="checkbox" name="notify_{{ key }}" id="notify_{{ key }}" value="1"{% if params['notify_' ~ key] is defined and params['notify_' ~ key] %} checked{% endif %}>
+                                    <label class="form-check-label" for="notify_{{ key }}">{{ 'Enabled'|trans }}</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <textarea class="form-control" name="template_{{ key }}" rows="2" placeholder="{{ 'Leave empty to use the default template.'|trans }}">{{ params['template_' ~ key] is defined ? params['template_' ~ key] : '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Empty panes so Bootstrap can find them for tab switching #}
+            <div class="tab-pane fade" id="tab-log" role="tabpanel"></div>
+            <div class="tab-pane fade" id="tab-test" role="tabpanel"></div>
+
+        </div>{# /.tab-content #}
+
+        <input type="hidden" name="ext" value="mod_whatsapp">
+        <div class="card-footer text-end" id="config-footer">
+            <button type="submit" class="btn btn-primary">{{ 'Save settings'|trans }}</button>
+        </div>
+    </form>
+</div>
+
+{# ── Message Log Card ──────────────────────────────────── #}
+<div class="card mt-3" id="tab-log-card" style="display:none;">
+    <div class="card-body">
+        <h3 class="card-title">{{ 'Sent Messages'|trans }}</h3>
+
+        {% set log = admin.whatsapp_log_get_list({ 'per_page': 50 }) %}
+
+        {% if log.list|length > 0 %}
+        <div class="table-responsive">
+            <table class="table table-vcenter table-striped">
+                <thead>
+                    <tr>
+                        <th>{{ 'To'|trans }}</th>
+                        <th>{{ 'Message'|trans }}</th>
+                        <th>{{ 'Status'|trans }}</th>
+                        <th>{{ 'Sent At'|trans }}</th>
+                        <th class="w-1"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in log.list %}
+                    <tr>
+                        <td class="font-monospace">{{ entry.to }}</td>
+                        <td>
+                            <span title="{{ entry.text }}">{{ entry.text|length > 80 ? entry.text[:80] ~ '…' : entry.text }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ entry.status == 'sent' ? 'success' : 'warning' }}">{{ entry.status|default('sent') }}</span>
+                        </td>
+                        <td>{{ entry.sent_at }}</td>
+                        <td>
+                            <a href="{{ 'whatsapp/log_delete'|api_url(query: {'id': entry.id}) }}"
+                               {{ fb_api_link({modal: {type: 'danger', title: 'Delete log entry?'|trans, button: 'Delete'|trans}, reload: true}) }}
+                               class="btn btn-sm btn-outline-danger">
+                                <svg class="icon"><use xlink:href="#trash" /></svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">{{ 'No messages have been sent yet.'|trans }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Send Test Card ────────────────────────────────────── #}
+<div class="card mt-3" id="tab-test-card" style="display:none;">
+    <form method="post" action="{{ 'whatsapp/send_test'|api_url }}" {{ fb_api_form({message: 'Test message sent successfully!'|trans}) }}>
+        <div class="card-body">
+            <h3 class="card-title">{{ 'Send Test Message'|trans }}</h3>
+            <p class="card-subtitle">{{ 'Send a test WhatsApp message to verify your WaSender API integration.'|trans }}</p>
+
+            <div class="mb-3 row">
+                <label class="col-md-3 col-form-label">{{ 'Phone Number'|trans }}</label>
+                <div class="col-md-6">
+                    <input class="form-control" type="text" name="phone" placeholder="+9779800000000" required>
+                    <small class="form-hint">{{ 'Enter the phone number in E.164 format (e.g. +9779800000000).'|trans }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button type="submit" class="btn btn-primary">{{ 'Send test message'|trans }}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var logCard   = document.getElementById('tab-log-card');
+    var testCard  = document.getElementById('tab-test-card');
+    var cfgFooter = document.getElementById('config-footer');
+
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (tab) {
+        tab.addEventListener('shown.bs.tab', function (e) {
+            var target = e.target.getAttribute('href');
+            var isLog  = target === '#tab-log';
+            var isTest = target === '#tab-test';
+
+            logCard.style.display  = isLog  ? '' : 'none';
+            testCard.style.display = isTest ? '' : 'none';
+            cfgFooter.style.display = (isLog || isTest) ? 'none' : '';
+        });
+    });
+});
+</script>
+{% endblock %}

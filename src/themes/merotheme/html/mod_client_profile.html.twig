@@ -38,7 +38,7 @@
                     {{ profile.first_name|first|upper }}{{ profile.last_name|first|upper }}
                 </div>
                 <h3 class="text-lg font-bold text-slate-900 dark:text-white">{{ profile.first_name }} {{ profile.last_name }}</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Client since {{ profile.created_at|date('Y') }}</p>
+                {% if profile.created_at|default(false) %}<p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Client since {{ profile.created_at|date('Y') }}</p>{% endif %}
                 <div class="mt-5 w-full grid grid-cols-2 gap-3">
                     <div class="bg-slate-50 dark:bg-white/[0.04] rounded-lg p-3 text-left">
                         <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Balance</p>
@@ -54,7 +54,7 @@
 
         {# Side Navigation #}
         <div class="bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.08] shadow-sm py-2">
-            <a href="/client/profile"
+            <a href="{{ 'client/profile'|url }}"
                class="flex items-center gap-3 px-5 py-3.5 font-semibold text-sm border-r-4 transition-colors"
                style="color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 8%, transparent); border-color: var(--color-primary);">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,14 +63,14 @@
                 Personal Information
             </a>
 
-            <a href="/invoice"
+            <a href="{{ 'invoice'|url }}"
                class="flex items-center gap-3 px-5 py-3.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                 </svg>
                 Invoices
             </a>
-            <a href="/email"
+            <a href="{{ 'email'|url }}"
                class="flex items-center gap-3 px-5 py-3.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
@@ -78,7 +78,7 @@
                 Email History
             </a>
             <div class="border-t border-slate-100 dark:border-white/[0.06] my-2"></div>
-            <a href="/logout"
+            <a href="{{ 'client/logout'|url }}"
                class="flex items-center gap-3 px-5 py-3.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
@@ -324,13 +324,13 @@
                 <form id="form-change-password" class="space-y-5 max-w-lg">
                     <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
 
-                    {% if profile.is_social %}
+                    {% if profile.is_social|default(false) %}
                     <div class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-700/60 dark:bg-sky-900/20 dark:text-sky-300">
                         {{ 'You are signed in using Google. Set a backup password below to also use email login.'|trans }}
                     </div>
                     {% endif %}
 
-                    {% if not profile.is_social %}
+                    {% if not profile.is_social|default(false) %}
                     <div class="space-y-1.5">
                         <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Password <span class="text-red-400">*</span></label>
                         <div class="relative">

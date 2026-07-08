@@ -1,0 +1,66 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% block meta_title %}{{ 'Social Login'|trans }}{% endblock %}
+
+{% set active_menu = 'extensions' %}
+
+{% block content %}
+{% set params = admin.sociallogin_get_config %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">{{ 'Social Login Settings'|trans }}</h3>
+    </div>
+
+    <form method="post" action="{{ 'sociallogin/save_config'|api_url }}" {{ fb_api_form({message: 'Configuration updated'|trans}) }}>
+        <div class="card-body">
+
+            <div class="mb-3">
+                <label class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="google_enabled" value="1"
+                           id="google_enabled"
+                           {{ params.google_enabled ? 'checked' : '' }}>
+                    <span class="form-check-label">{{ 'Enable Google Sign-In'|trans }}</span>
+                </label>
+                <div class="form-text">{{ 'Allow clients to sign in or auto-register using their Google account.'|trans }}</div>
+            </div>
+
+            <hr>
+
+            <p class="text-muted small mb-3">
+                {{ 'To obtain credentials, create an OAuth 2.0 client ID in the'|trans }}
+                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">{{ 'Google Cloud Console'|trans }}</a>.
+                {{ 'Set the Authorized redirect URI to:'|trans }}
+                <code>{{ constant('SYSTEM_URL') }}/sociallogin/google/callback</code>
+            </p>
+
+            <div class="mb-3">
+                <label class="form-label" for="google_client_id">{{ 'Google Client ID'|trans }}</label>
+                <input type="text" class="form-control" id="google_client_id" name="google_client_id"
+                       value="{{ params.google_client_id|default('') }}"
+                       placeholder="123456789-abcdefg.apps.googleusercontent.com">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="google_client_secret">{{ 'Google Client Secret'|trans }}</label>
+                <input type="password" class="form-control" id="google_client_secret" name="google_client_secret"
+                       value=""
+                       placeholder="{{ params.google_client_secret_set ? 'Already set — enter a new value to replace it' : 'GOCSPX-...' }}">
+                <div class="form-text">
+                    {% if params.google_client_secret_set %}
+                        <span class="text-success">✓ {{ 'A client secret is currently stored.'|trans }}</span>
+                        {{ 'Leave blank to keep the existing value.'|trans }}
+                    {% else %}
+                        {{ 'Enter your Google OAuth client secret.'|trans }}
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+        <div class="card-footer text-end">
+            <button type="submit" class="btn btn-primary">{{ 'Save'|trans }}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

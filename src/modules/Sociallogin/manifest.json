@@ -1,0 +1,11 @@
+{
+  "id": "sociallogin",
+  "type": "mod",
+  "name": "Social Login",
+  "description": "Allow clients to sign in using social providers (Google OAuth2). Clients can log in or auto-register using their Google account.",
+  "version": "1.0.0",
+  "author": "MeroVPS",
+  "author_url": "",
+  "license": "Apache-2.0",
+  "icon_url": "icon.svg"
+}

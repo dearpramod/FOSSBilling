@@ -1,0 +1,12 @@
+{
+  "id": "whatsapp",
+  "type": "mod",
+  "name": "WhatsApp Notifications",
+  "description": "Send WhatsApp notifications to clients via WaSender API when key billing events occur (invoices, orders, support tickets).",
+  "homepage_url": "https://wasenderapi.com",
+  "author": "MeroVPS",
+  "author_url": "https://merovps.com",
+  "license": "Apache-2.0",
+  "version": "1.0.0",
+  "icon_url": "icon.svg"
+}
