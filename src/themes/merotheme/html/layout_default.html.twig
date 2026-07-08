@@ -17,12 +17,12 @@
     {# bfcache guard: fires when browser restores page from Back-Forward Cache without a new HTTP request.
        Validates the client session via API and redirects to login if it has been destroyed (e.g. after logout). #}
     <script>
-    window.addEventListener('pageshow', function (e) {
+    window.addEventListener('pageshow', (e) => {
         if (!e.persisted) return;
         fetch('/api/client/profile/get', { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/json' } })
-            .then(function (r) { return r.json(); })
-            .then(function (d) { if (d && d.error) window.location.replace('/login'); })
-            .catch(function () {});
+            .then((r) => r.json())
+            .then((d) => { if (d && d.error) window.location.replace('/login'); })
+            .catch(() => {});
     });
     </script>
 

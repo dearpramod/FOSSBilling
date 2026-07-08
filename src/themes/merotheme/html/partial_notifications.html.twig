@@ -62,7 +62,7 @@
     invoices:  [],
     news:      [],
     init() {
-        var el = document.getElementById('notif-news-data');
+        const el = document.getElementById('notif-news-data');
         try { this.news = el ? JSON.parse(el.textContent) : []; } catch(e) {}
     },
     toggle() {
@@ -71,16 +71,15 @@
     },
     loadInvoices() {
         {% if _notif_client %}
-        var self = this;
         FOSSBilling.api.client.get(
             'invoice/get_list',
             { status: 'unpaid', per_page: 5 },
-            function(d) {
-                self.count    = (d && d.total) ? parseInt(d.total, 10) : 0;
-                self.invoices = (d && d.list)  ? d.list : [];
-                self.loaded   = true;
+            (d) => {
+                this.count    = (d && d.total) ? parseInt(d.total, 10) : 0;
+                this.invoices = (d && d.list)  ? d.list : [];
+                this.loaded   = true;
             },
-            function() { self.loaded = true; },
+            () => { this.loaded = true; },
             false
         );
         {% else %}
@@ -92,7 +91,7 @@
     },
     fmtDate(val) {
         if (!val) return '';
-        var d = (typeof val === 'number')
+        const d = (typeof val === 'number')
               ? new Date(val * 1000)
               : new Date(String(val).replace(' ', 'T'));
         if (isNaN(d.getTime())) return '';

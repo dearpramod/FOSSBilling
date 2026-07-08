@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Bank Transfer Payment Gateway Adapter for FOSSBilling
+ * Bank Transfer Payment Gateway Adapter for FOSSBilling.
  *
  * Manual payment gateway that displays bank account details,
  * payment instructions, and billing contact information.
@@ -11,7 +11,6 @@ declare(strict_types=1);
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
 class Payment_Adapter_BankTransfer
 {
     protected ?Pimple\Container $di = null;
@@ -152,7 +151,7 @@ class Payment_Adapter_BankTransfer
         $invoiceService = $this->di['mod_service']('Invoice');
         $invoice = $invoiceService->toApiArray($invoiceModel, true);
 
-        $c = fn(string $key): string => htmlspecialchars($this->config[$key] ?? '', ENT_QUOTES, 'UTF-8');
+        $c = fn (string $key): string => htmlspecialchars($this->config[$key] ?? '', ENT_QUOTES, 'UTF-8');
 
         $amount = $invoice['total'];
         $currency = $invoice['currency'];
@@ -327,7 +326,7 @@ class Payment_Adapter_BankTransfer
             $tx->updated_at = date('Y-m-d H:i:s');
 
             return (bool) $this->di['db']->store($tx);
-        } catch (\Exception) {
+        } catch (Exception) {
             return false;
         }
     }

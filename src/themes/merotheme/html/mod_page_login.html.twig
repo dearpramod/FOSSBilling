@@ -176,17 +176,17 @@
 
             <script>
             function loginFormData() {
-                var _apiUrl     = '{{ 'api/guest/client/login'|url|e('js') }}';
-                var _redirectUrl = '{{ (redirect_uri|default('/'))|url|e('js') }}';
+                const _apiUrl     = '{{ 'api/guest/client/login'|url|e('js') }}';
+                const _redirectUrl = '{{ (redirect_uri|default('/'))|url|e('js') }}';
                 {% if guest.extension_is_on({'mod': 'antispam'}) %}
                     {% set _rc2 = guest.antispam_recaptcha %}
                     {% if _rc2.enabled and _rc2.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc2.publickey %}
-                var _rcKey = '{{ _rc2.publickey|e('js') }}';
+                const _rcKey = '{{ _rc2.publickey|e('js') }}';
                     {% else %}
-                var _rcKey = null;
+                const _rcKey = null;
                     {% endif %}
                 {% else %}
-                var _rcKey = null;
+                const _rcKey = null;
                 {% endif %}
                 return {
                     submitting: false,
@@ -397,12 +397,12 @@
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'credential=' + encodeURIComponent(credentialResponse.credential) + '&context=login'
         })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
+        .then((r) => r.json())
+        .then((data) => {
             if (data && data.result && data.result.action === 'redirect' && data.result.url) {
                 window.location.replace(data.result.url);
             } else {
-                var msg = (data && data.error && data.error.message)
+                const msg = (data && data.error && data.error.message)
                     ? data.error.message
                     : 'Google sign-in failed. Please try again.';
                 if (typeof StablePanel !== 'undefined') {
@@ -412,7 +412,7 @@
                 }
             }
         })
-        .catch(function () {
+        .catch(() => {
             window.location.replace(loginUrl + '?oauth_error=1');
         });
     }

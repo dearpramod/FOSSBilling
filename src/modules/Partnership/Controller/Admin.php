@@ -30,10 +30,10 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
             'subpages' => [
                 [
                     'location' => 'extensions',
-                    'index'    => 510,
-                    'label'    => __trans('Partnership Pricing'),
-                    'uri'      => $this->di['url']->adminLink('partnership'),
-                    'class'    => '',
+                    'index' => 510,
+                    'label' => __trans('Partnership Pricing'),
+                    'uri' => $this->di['url']->adminLink('partnership'),
+                    'class' => '',
                 ],
             ],
         ];

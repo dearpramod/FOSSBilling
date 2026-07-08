@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * eSewa Payment Gateway Adapter for FOSSBilling
+ * eSewa Payment Gateway Adapter for FOSSBilling.
  *
  * Implements the eSewa ePay v2 flow:
  *   1. Merchant generates HMAC-SHA256 signature and POSTs a form to eSewa
@@ -83,7 +83,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
 
         try {
             return $this->generateForm($invoiceModel);
-        } catch (\Payment_Exception $e) {
+        } catch (Payment_Exception $e) {
             $this->log('eSewa getHtml: ' . $e->getMessage(), 'error');
 
             return $this->renderGatewayError('eSewa');
@@ -119,7 +119,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
         $get = $data['get'] ?? [];
         $post = $data['post'] ?? [];
 
-        /** @var \Model_Transaction $tx */
+        /** @var Model_Transaction $tx */
         $tx = $this->di['db']->getExistingModelById('Transaction', $id);
 
         $encodedData = $get['data'] ?? $post['data'] ?? null;
@@ -130,6 +130,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+
             throw new Payment_Exception('eSewa: Missing payment data in callback.');
         }
 
@@ -141,6 +142,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+
             throw new Payment_Exception('eSewa: Invalid or malformed payment response.');
         }
 
@@ -159,6 +161,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
             $this->log('eSewa SECURITY: Signature mismatch on callback. transaction_uuid=' . $transactionUuid, 'error');
+
             throw new Payment_Exception('eSewa: Signature verification failed. This transaction has been flagged.');
         }
 
@@ -177,14 +180,16 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+
             throw new Payment_Exception('eSewa: Missing invoice_id in callback.');
         }
 
-        /** @var \Model_Invoice $invoice */
+        /** @var Model_Invoice $invoice */
         $invoice = $this->di['db']->getExistingModelById('Invoice', $invoiceId);
 
         if ($tx->status === 'processed') {
             $this->log('eSewa: Callback received for already-processed tx #' . $id . '. Skipping.');
+
             return;
         }
 
@@ -196,6 +201,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+
             throw new Payment_Exception('eSewa: Payment not completed. Status: ' . $esewaStatus);
         }
 
@@ -211,6 +217,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+
             throw new Payment_Exception('eSewa: Status check verification failed. Status: ' . $verifiedStatus);
         }
 
@@ -224,6 +231,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
                 $tx->updated_at = date('Y-m-d H:i:s');
                 $this->di['db']->store($tx);
                 $this->log('eSewa SECURITY: Duplicate transaction attempt. transaction_uuid=' . $transactionUuid, 'error');
+
                 throw new Payment_Exception('eSewa: This transaction has already been processed.');
             }
         }
@@ -242,6 +250,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
             $this->log('eSewa SECURITY: Amount mismatch for invoice #' . $invoiceId . '. Expected=' . $expectedAmount . ', Received=' . $verifiedAmount, 'error');
+
             throw new Payment_Exception('eSewa: Payment amount does not match invoice total.');
         }
 
@@ -257,6 +266,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
             $this->log('eSewa SECURITY: Product code mismatch for invoice #' . $invoiceId, 'error');
+
             throw new Payment_Exception('eSewa: Product code mismatch. This transaction has been flagged.');
         }
 
@@ -288,11 +298,12 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
                 $invoiceService->payInvoiceWithCredits($invoice);
                 $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $tx->error = 'Post-payment processing error: ' . $e->getMessage();
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+
             throw new Payment_Exception('eSewa: ' . $e->getMessage());
         }
 
@@ -301,12 +312,12 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
         $this->di['db']->store($tx);
     }
 
-    public function getHttpClient(): \Symfony\Contracts\HttpClient\HttpClientInterface
+    public function getHttpClient(): Symfony\Contracts\HttpClient\HttpClientInterface
     {
-        return \Symfony\Component\HttpClient\HttpClient::create(['bindto' => BIND_TO]);
+        return Symfony\Component\HttpClient\HttpClient::create(['bindto' => BIND_TO]);
     }
 
-    private function generateForm(\Model_Invoice $invoice): string
+    private function generateForm(Model_Invoice $invoice): string
     {
         $invoiceService = $this->di['mod_service']('Invoice');
         $totalAmount = (float) $invoiceService->getTotalWithTax($invoice);
@@ -393,7 +404,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
         try {
             $response = $this->getHttpClient()->request('GET', $statusUrl);
             $body = json_decode($response->getContent(false), true);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw new Payment_Exception('eSewa: Status check API request failed — ' . $e->getMessage());
         }
 
@@ -404,10 +415,10 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
         return $body;
     }
 
-    private function buildCallbackUrl(\Model_Invoice $invoice, string $type = 'success'): string
+    private function buildCallbackUrl(Model_Invoice $invoice, string $type = 'success'): string
     {
         $payGateway = $this->di['db']->findOne('PayGateway', 'gateway = "Esewa"');
-        $restoreToken = \FOSSBilling\Tools::createSessionRestoreToken(session_id());
+        $restoreToken = FOSSBilling\Tools::createSessionRestoreToken(session_id());
 
         $params = [
             'bb_gateway_id' => $payGateway->id,
@@ -467,7 +478,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
                 'debug' => $logger->debug($message),
                 default => $logger->info($message),
             };
-        } catch (\Throwable) {
+        } catch (Throwable) {
             error_log($message);
         }
     }

@@ -896,9 +896,9 @@ function hostingDash() {
 }
 
 // ── Account Management: show processing state on submit (Issue 2) ──────────
-document.querySelectorAll('.acct-form button[type="submit"]').forEach(function(btn) {
-  var originalHTML = btn.innerHTML;
-  btn.closest('form').addEventListener('submit', function() {
+document.querySelectorAll('.acct-form button[type="submit"]').forEach((btn) => {
+  const originalHTML = btn.innerHTML;
+  btn.closest('form').addEventListener('submit', () => {
     btn.innerHTML =
       '<svg class="animate-spin w-4 h-4 inline-block mr-1.5" fill="none" viewBox="0 0 24 24">' +
         '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
@@ -906,8 +906,8 @@ document.querySelectorAll('.acct-form button[type="submit"]').forEach(function(b
       '</svg>Processing...';
   });
   // Reset text when api-form re-enables the button (on success or error)
-  new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
+  new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
       if (m.attributeName === 'disabled' && !btn.disabled) {
         btn.innerHTML = originalHTML;
       }

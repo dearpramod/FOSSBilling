@@ -44,8 +44,6 @@ class Guest extends \FOSSBilling\Api\AbstractApi
      * pointing to the appropriate pre-existing flow (complete-registration or
      * link-account), reusing all the same security controls.
      *
-     * @param array $data
-     *
      * @return array{action: string, url: string}
      *
      * @throws \FOSSBilling\InformationException on invalid credential or account error
@@ -196,8 +194,6 @@ class Guest extends \FOSSBilling\Api\AbstractApi
      * Called via a same-site fetch() from the link-confirmation page.
      * Validates the pending-link token, records the Google link permanently on
      * the client account, then opens the session — identical to complete_login.
-     *
-     * @param array $data
      *
      * @throws \FOSSBilling\InformationException on invalid/expired token
      */
@@ -364,8 +360,6 @@ class Guest extends \FOSSBilling\Api\AbstractApi
      * transition HTML page that the callback renders.  Because the request is
      * same-site, the browser sends the existing PHPSESSID cookie, giving us a
      * properly fingerprinted session to write client_id into.
-     *
-     * @param array $data
      *
      * @throws \FOSSBilling\InformationException on invalid / expired token
      */

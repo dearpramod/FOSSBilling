@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * QR Payment Gateway Adapter for FOSSBilling
+ * QR Payment Gateway Adapter for FOSSBilling.
  *
  * Manual payment gateway that displays a QR code image,
  * payment instructions, and billing contact details.
@@ -11,7 +11,6 @@ declare(strict_types=1);
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
 class Payment_Adapter_QRPayment
 {
     protected ?Pimple\Container $di = null;
@@ -237,7 +236,7 @@ class Payment_Adapter_QRPayment
             $tx->updated_at = date('Y-m-d H:i:s');
 
             return (bool) $this->di['db']->store($tx);
-        } catch (\Exception) {
+        } catch (Exception) {
             return false;
         }
     }

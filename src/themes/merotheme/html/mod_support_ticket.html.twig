@@ -322,32 +322,32 @@
         // textarea replacement, avoiding the selectionStart-on-undefined race.
         requestAnimationFrame(function() {
             requestAnimationFrame(function() {
-                document.querySelectorAll('.editor-textarea').forEach(function (element) {
+                document.querySelectorAll('.editor-textarea').forEach((element) => {
                     FOSSBilling.editor.create(element)
-                        .then(function(editor) {
+                        .then((editor) => {
                             window.editors[element.name] = editor;
                         })
-                        .catch(function(error) { console.error(error); });
+                        .catch((error) => { console.error(error); });
                 });
             });
         });
     });
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    var form       = document.getElementById('ticket-reply-form');
-    var closeBtns  = document.querySelectorAll('#ticket-close-btn, #ticket-close-btn-menu');
-    var modal      = document.getElementById('close-ticket-modal');
-    var cancelBtn  = document.getElementById('ctm-cancel');
-    var confirmBtn = document.getElementById('ctm-confirm');
+document.addEventListener('DOMContentLoaded', () => {
+    const form       = document.getElementById('ticket-reply-form');
+    const closeBtns  = document.querySelectorAll('#ticket-close-btn, #ticket-close-btn-menu');
+    const modal      = document.getElementById('close-ticket-modal');
+    const cancelBtn  = document.getElementById('ctm-cancel');
+    const confirmBtn = document.getElementById('ctm-confirm');
 
     function openModal()  { modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
     function closeModal() { modal.style.display = 'none';  document.body.style.overflow = ''; }
 
-    var submitBtn  = document.getElementById('reply-submit-btn');
-    var spinner     = document.getElementById('reply-spinner');
-    var sendIcon    = document.getElementById('reply-send-icon');
-    var btnText     = document.getElementById('reply-btn-text');
+    const submitBtn  = document.getElementById('reply-submit-btn');
+    const spinner     = document.getElementById('reply-spinner');
+    const sendIcon    = document.getElementById('reply-send-icon');
+    const btnText     = document.getElementById('reply-btn-text');
 
     function setReplyLoading(loading) {
         if (!submitBtn) return;
@@ -358,18 +358,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (form) {
-        form.addEventListener('submit', function (e) {
+        form.addEventListener('submit', (e) => {
             e.preventDefault();
             setReplyLoading(true);
-            var data = {};
-            new FormData(form).forEach(function (v, k) { data[k] = v; });
+            const data = {};
+            new FormData(form).forEach((v, k) => { data[k] = v; });
             if (window.editors && window.editors['content']) {
                 data['content'] = window.editors['content'].getData();
             }
             API.client.post(
                 'support/ticket_reply', data,
-                function ()    { window.location.reload(); },
-                function (res) {
+                () => { window.location.reload(); },
+                (res) => {
                     setReplyLoading(false);
                     StablePanel.message(res.message + ' (' + res.code + ')', 'error');
                 }
@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    closeBtns.forEach(function (btn) {
+    closeBtns.forEach((btn) => {
         btn.addEventListener('click', openModal);
     });
 

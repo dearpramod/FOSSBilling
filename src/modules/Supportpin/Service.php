@@ -340,10 +340,7 @@ class Service implements InjectionAwareInterface
         $count = (int) ($data['count'] ?? 0);
 
         if ($windowStart > 0 && (time() - $windowStart) < 86400 && $count >= self::MAX_REGEN) {
-            throw new \FOSSBilling\InformationException(
-                'You can regenerate your Support PIN a maximum of :max times per 24 hours.',
-                [':max' => self::MAX_REGEN]
-            );
+            throw new \FOSSBilling\InformationException('You can regenerate your Support PIN a maximum of :max times per 24 hours.', [':max' => self::MAX_REGEN]);
         }
     }
 
