@@ -39,8 +39,10 @@ class ProductCategoryRepository extends EntityRepository
 
     public function getEnabledVisibleSearchQueryBuilder(): QueryBuilder
     {
+        // Use DISTINCT to avoid GROUP BY (MySQL strict mode compatible)
+        // Get categories that have at least one enabled, visible, non-addon product
         return $this->createQueryBuilder('c')
-            ->select('c', 'MAX(p.priority) AS HIDDEN maxPriority')
+            ->select('DISTINCT c')
             ->innerJoin(Product::class, 'p', 'WITH', 'p.productCategoryId = c.id')
             ->andWhere('p.status = :status')
             ->andWhere('p.hidden = :hidden')
@@ -48,8 +50,7 @@ class ProductCategoryRepository extends EntityRepository
             ->setParameter('status', 'enabled')
             ->setParameter('hidden', false)
             ->setParameter('isAddon', false)
-            ->groupBy('c.id')
-            ->orderBy('maxPriority', 'ASC');
+            ->orderBy('c.title', 'ASC');
     }
 
     public function findById(int $id): ?ProductCategory
