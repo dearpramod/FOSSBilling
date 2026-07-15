@@ -100,4 +100,24 @@ class LegacyExtension
 
         return $this->di['api_guest']->system_period_title(['code' => $period]);
     }
+
+    #[AsTwigFilter('markdown', isSafe: ['html'])]
+    public function markdown(?string $content): string
+    {
+        if ($content === null) {
+            return '';
+        }
+
+        return $this->di['markdown']->convert($content);
+    }
+
+    #[AsTwigFilter('gravatar')]
+    public function gravatar(?string $email, int $size = 20): string
+    {
+        if (empty($email)) {
+            return '';
+        }
+
+        return 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($email))) . "?s={$size}&d=mp&r=g";
+    }
 }
