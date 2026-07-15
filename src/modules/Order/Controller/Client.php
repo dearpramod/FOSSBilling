@@ -41,6 +41,11 @@ class Client implements \FOSSBilling\InjectionAwareInterface
 
     public function get_configure_product_by_slug(\Box_App $app, $slug): string
     {
+        // Redirect domain-related slugs to domain-tlds (the actual product slug)
+        if (\in_array($slug, ['domain-registration', 'domain-transfer', 'domain'], true)) {
+            return $app->redirect('/order/domain-tlds');
+        }
+
         $api = $this->di['api_guest'];
         $product = $api->product_get(['slug' => $slug]);
         $tpl = 'mod_service' . $product['type'] . '_order';
