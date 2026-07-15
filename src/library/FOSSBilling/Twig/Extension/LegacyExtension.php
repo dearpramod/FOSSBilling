@@ -101,14 +101,15 @@ class LegacyExtension
         return $this->di['api_guest']->system_period_title(['code' => $period]);
     }
 
-    #[AsTwigFilter('markdown', isSafe: ['html'])]
-    public function markdown(?string $content): string
+    #[AsTwigFilter('markdown', isSafe: ['html'], needsEnvironment: true)]
+    public function markdown(Environment $env, ?string $content): string
     {
         if ($content === null) {
             return '';
         }
 
-        return $this->di['markdown']->convert($content);
+        // Delegate to markdown_to_html filter (provided by Twig\Extra\Markdown\MarkdownExtension)
+        return $env->getFilter('markdown_to_html')->getCallable()($env, $content);
     }
 
     #[AsTwigFilter('gravatar')]
