@@ -812,6 +812,20 @@ class Service implements InjectionAwareInterface
         $price = $productView['price'];
         $qty = $productView['quantity'];
 
+        // Local patch: partner clients get partner pricing (partnership module).
+        // getPartnerPriceForCartItem() returns null when no partner rule applies.
+        $extensionService = $this->di['mod_service']('extension');
+        if ($extensionService->isExtensionActive('mod', 'partnership')) {
+            $partnerPrice = $this->di['mod_service']('partnership')->getPartnerPriceForCartItem(
+                (int) $productView['product_id'],
+                (string) $productView['type'],
+                is_array($config) ? $config : [],
+            );
+            if ($partnerPrice !== null) {
+                $price = $partnerPrice;
+            }
+        }
+
         [$discount_price, $discount_setup] = $this->getProductDiscount($model, $setup);
 
         $discount_total = $discount_price + $discount_setup;

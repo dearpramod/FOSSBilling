@@ -12,6 +12,13 @@ $_SERVER['APP_ENV'] = $appEnv;
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
+// Block direct access to runtime data (logs, cache, uploads) — mirrors the
+// production rule: location ^~ /data/ { return 403; }
+if (preg_match('#^/data(/|$)#', $uri)) {
+    http_response_code(403);
+    exit;
+}
+
 // Serve static files directly if they exist
 if ($uri !== '/' && file_exists(__DIR__ . $uri) && !is_dir(__DIR__ . $uri)) {
     return false; // serve the file as-is

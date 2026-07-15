@@ -667,18 +667,27 @@ class Service implements InjectionAwareInterface
         $pr = $this->getCategoryProducts($model);
 
         $type = null; // identified by first product in category
-        foreach ($pr as $p) {
-            $pa = $this->toApiArray($p, false, $identity);
-            if (reset($pr) == $p) {
-                $type = $p->getType();
+        if (!$deep) {
+            // Local patch: fast path for navigation lists (deep=0) — category
+            // type only, skipping the per-product pricing API calls below.
+            $first = reset($pr);
+            if ($first instanceof Product) {
+                $type = $first->getType();
             }
-            $products[] = $pa;
-            $startingPrice = $pa['price_starting_from'] ?? 0;
+        } else {
+            foreach ($pr as $p) {
+                $pa = $this->toApiArray($p, false, $identity);
+                if (reset($pr) == $p) {
+                    $type = $p->getType();
+                }
+                $products[] = $pa;
+                $startingPrice = $pa['price_starting_from'] ?? 0;
 
-            if ($min_price == 0) {
-                $min_price = $startingPrice;
-            } elseif ($startingPrice < $min_price) {
-                $min_price = $startingPrice;
+                if ($min_price == 0) {
+                    $min_price = $startingPrice;
+                } elseif ($startingPrice < $min_price) {
+                    $min_price = $startingPrice;
+                }
             }
         }
 
@@ -713,10 +722,14 @@ class Service implements InjectionAwareInterface
 
     public function getPaginatedProductCategories(array $data, $identity = null): array
     {
+        // Local patch: honor $data['deep'] (default true); deep=0 skips
+        // per-product pricing enrichment for cheap navigation lists.
+        $deep = (bool) ($data['deep'] ?? true);
+
         return $this->di['pager']->paginateMappedQuery(
             $this->getProductCategorySearchQueryBuilder($data),
             PaginationOptions::fromArray($data),
-            fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, true, $identity),
+            fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, $deep, $identity),
         );
     }
 

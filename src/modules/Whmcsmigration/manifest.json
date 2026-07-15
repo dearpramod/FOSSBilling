@@ -1,0 +1,13 @@
+{
+    "id": "whmcsmigration",
+    "type": "mod",
+    "name": "WHMCS Migration",
+    "description": "Import clients, catalogue, services, invoices and support history from a WHMCS installation. Part-by-part workflow with staged preview before anything is committed.",
+    "homepage_url": "https://merovps.com",
+    "author": "MeroVPS",
+    "author_url": "https://merovps.com",
+    "license": "Apache-2.0",
+    "version": "0.1.0",
+    "minimum_fossbilling_version": "0.8.0",
+    "icon_url": "icon.svg"
+}

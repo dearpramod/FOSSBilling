@@ -136,6 +136,15 @@
 
             <form method="POST" id="signup-form" novalidate class="space-y-6">
 
+                {# Antispam honeypot — hidden bait field; server rejects signup if filled #}
+                {% set _hp = antispam_honeypot() %}
+                {% if _hp.enabled %}
+                    <div style="position:absolute;left:-9999px;top:-9999px;" aria-hidden="true">
+                        <label for="{{ _hp.field }}">Leave this field empty</label>
+                        <input type="text" id="{{ _hp.field }}" name="{{ _hp.field }}" value="" tabindex="-1" autocomplete="off">
+                    </div>
+                {% endif %}
+
                 {# ─── Personal Information ───────────────────────────── #}
                 <div>
                     <h3 class="text-xs font-bold uppercase tracking-widest mb-4 pb-3 border-b"

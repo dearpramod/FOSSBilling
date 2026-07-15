@@ -2240,12 +2240,32 @@ textarea:invalid {
     }
 }
 
-/* Light mode: strengthen muted text and borders for WCAG-friendly contrast. */
+/* Light mode: strengthen muted text and borders for WCAG AA contrast (4.5:1 minimum). */
 html[data-theme="light"] .text-gray-500 {
-    color: #64748b !important;
+    color: #475569;
 }
 html[data-theme="light"] .text-gray-600 {
-    color: #475569 !important;
+    color: #334155;
+}
+
+/* Dark mode: improve contrast for WCAG AA compliance (4.5:1 minimum).
+   Primary colors on dark backgrounds need lighter tints for readability. */
+html[data-theme="dark"] .text-primary:not(.text-primary-fixed):not(.text-primary-fixed-dim) {
+    color: rgb(var(--brand-300));
+}
+html[data-theme="dark"] .text-indigo-400 {
+    color: rgb(var(--brand-300));
+}
+html[data-theme="dark"] .text-indigo-500 {
+    color: rgb(var(--brand-300));
+}
+
+/* Secondary text improvements for dark mode */
+html[data-theme="dark"] .text-gray-400 {
+    color: #cbd5e1;
+}
+html[data-theme="dark"] .text-secondary-variant {
+    color: rgba(255,255,255,0.70);
 }
 html[data-theme="light"] .border-white\/10,
 html[data-theme="light"] .border-white\/\[0\.08\],
@@ -4728,9 +4748,12 @@ html[data-theme="dark"] .tld-card button.text-primary {
     background: rgba(var(--color-primary-rgb), 0.14) !important;
 }
 /* All Extensions table — registration price column uses text-primary (solid
-   indigo on slate-800) → low contrast. Override to indigo-300. */
+   indigo on slate-800) → low contrast. Override to indigo-300 for WCAG AA compliance. */
 html[data-theme="dark"] #dom-all-extensions .text-primary {
-    color: rgb(var(--brand-300)) !important;
+    color: rgb(var(--brand-300));
+}
+html[data-theme="dark"] #dom-all-extensions .text-indigo-500 {
+    color: rgb(var(--brand-300));
 }
 /* All Extensions table — ghost "Register" button inside each row */
 html[data-theme="dark"] #dom-all-extensions button.border-primary.text-primary {
@@ -4827,15 +4850,15 @@ html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) {
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) h1,
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) h2,
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) h3 {
-    color: #0f172a !important;
+    color: #0f172a;
 }
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) .text-white:not([style*="linear-gradient"]) {
-    color: #0f172a !important;
+    color: #0f172a;
 }
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) .text-gray-400,
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) .text-gray-500,
 html[data-theme="light"] section.relative.overflow-hidden:not(.ord-cat-header) .text-gray-300 {
-    color: #64748b !important;
+    color: #475569;
 }
 
 /* Hero domain search input card */

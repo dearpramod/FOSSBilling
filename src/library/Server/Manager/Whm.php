@@ -586,6 +586,10 @@ class Server_Manager_Whm extends Server_Manager
             'verify_peer' => $verifyTls,
             'verify_host' => $verifyTls,
             'timeout' => 90, // Account creation can timeout if set too low - see #1086.
+            // Local patch: cap total transfer time below PHP's 30s max_execution_time
+            // so an unreachable WHM host surfaces as a catchable TransportException
+            // instead of a fatal timeout during checkout.
+            'max_duration' => 28,
         ]);
 
         // Construct the request URL
@@ -607,15 +611,18 @@ class Server_Manager_Whm extends Server_Manager
                 'headers' => ['Authorization' => $authHeader],
                 'body' => $params,
             ]);
-        } catch (HttpExceptionInterface $error) {
+
+            // Decode the response from JSON into a PHP variable.
+            // getContent() is inside the try block so max_duration timeouts
+            // (TransportExceptionInterface) become a catchable Server_Exception.
+            $body = $response->getContent();
+        } catch (HttpExceptionInterface|\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $error) {
             $e = new Server_Exception('HttpClientException: :error', [':error' => $error->getMessage()]);
             $this->getLog()->error($e->getMessage());
 
             throw $e;
         }
 
-        // Decode the response from JSON into a PHP variable
-        $body = $response->getContent();
         $json = json_decode($body);
 
         // Check the response for errors and throw a Server_Exception if any are found
