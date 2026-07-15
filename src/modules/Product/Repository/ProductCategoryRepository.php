@@ -40,6 +40,7 @@ class ProductCategoryRepository extends EntityRepository
     public function getEnabledVisibleSearchQueryBuilder(): QueryBuilder
     {
         return $this->createQueryBuilder('c')
+            ->select('c', 'MAX(p.priority) AS HIDDEN maxPriority')
             ->innerJoin(Product::class, 'p', 'WITH', 'p.productCategoryId = c.id')
             ->andWhere('p.status = :status')
             ->andWhere('p.hidden = :hidden')
@@ -47,7 +48,6 @@ class ProductCategoryRepository extends EntityRepository
             ->setParameter('status', 'enabled')
             ->setParameter('hidden', false)
             ->setParameter('isAddon', false)
-            ->addSelect('MAX(p.priority) AS HIDDEN maxPriority')
             ->groupBy('c.id')
             ->orderBy('maxPriority', 'ASC');
     }
