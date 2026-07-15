@@ -221,7 +221,8 @@
                             {%- set _sorted_nav_cats = serviceCategories.list|sort((a, b) => (_nav_type_order[a.type]|default(99)) <=> (_nav_type_order[b.type]|default(99))) -%}
                             {% for category in _sorted_nav_cats %}
                                 {%- set _ci = _nav_type_icons[category.type]|default({'color': 'text-indigo-400', 'bg': 'bg-indigo-500/10', 'icon': 'apps'}) -%}
-                                {%- set catHref = ('/order/' ~ category.slug)|url -%}
+                                {# Categories have no slug in the API array — derive it from the title, matching Order\Controller\Client::titleToSlug() #}
+                                {%- set catHref = ('/order/' ~ (category.title|lower|replace({' ': '-', '/': '-'})|trim('-')))|url -%}
                                 <a href="{{ catHref }}" @click="open=false"
                                    class="dropdown-link flex items-center gap-3 px-4 py-2.5 text-sm transition-all">
                                     <span class="w-7 h-7 rounded-lg {{ _ci.bg }} {{ _ci.color }} flex items-center justify-center flex-shrink-0">
@@ -515,7 +516,7 @@
                      class="ml-11 mt-1 space-y-0.5 border-l border-white/[0.06] pl-3">
                     {% for category in serviceCategories.list %}
                         {%- set _mci = _nav_type_icons[category.type]|default({'color': 'text-indigo-400', 'icon': 'apps'}) -%}
-                        {%- set mobileCatHref = (category.type == 'domain') ? ('/order/domain-tlds'|url) : (('/order/' ~ category.slug)|url) -%}
+                        {%- set mobileCatHref = (category.type == 'domain') ? ('/order/domain-tlds'|url) : (('/order/' ~ (category.title|lower|replace({' ': '-', '/': '-'})|trim('-')))|url) -%}
                     <a href="{{ mobileCatHref }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 nav-link">
                         <svg class="icon {{ _mci.color }} flex-shrink-0" style="width:0.875rem;height:0.875rem"><use href="#{{ _mci.icon }}" /></svg>
                         {{ category.title }}
