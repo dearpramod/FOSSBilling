@@ -43,7 +43,8 @@ class Client implements \FOSSBilling\InjectionAwareInterface
     {
         // Redirect domain-related slugs to domain-tlds (the actual product slug)
         if (\in_array($slug, ['domain-registration', 'domain-transfer', 'domain'], true)) {
-            return $app->redirect('/order/domain-tlds');
+            header('Location: /order/domain-tlds', true, 302);
+            exit;
         }
 
         $api = $this->di['api_guest'];
