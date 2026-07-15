@@ -388,9 +388,9 @@
                     {%- set _sb_sorted = sidebarCategories.list|sort((a, b) => (_sb_type_order[a.type]|default(99)) <=> (_sb_type_order[b.type]|default(99))) -%}
                     {% for category in _sb_sorted %}
                     {%- set _ci = _sb_type_icons[category.type]|default({'path': 'M5 12h14M12 5l7 7-7 7', 'active': 'text-indigo-400 bg-indigo-500/10'}) -%}
-                    {%- set catSlug = (category.type == 'domain') ? 'domain-tlds' : (category.title|lower|replace({' ': '-', '  ': '-', '   ': '-'})|trim('-')) -%}
+                    {%- set catSlug = (category.type == 'domain') ? 'domain-registration' : (category.title|lower|replace({' ': '-', '  ': '-', '   ': '-'})|trim('-')) -%}
                     {%- set catHref = ('/order/' ~ catSlug)|url -%}
-                    {%- set catActive = ('order/' ~ catSlug) in request.uri -%}
+                    {%- set catActive = (('order/' ~ catSlug) in request.uri) or (category.type == 'domain' and ('order/domain-' in request.uri)) -%}
                           <a href="{{ catHref }}"
                               class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
                               {{ catActive ? _ci.active : 'text-slate-400 hover:text-primary hover:bg-violet-50' }}">
