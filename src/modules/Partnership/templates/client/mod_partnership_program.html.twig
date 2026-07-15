@@ -1,12 +1,9 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
 
 {% block meta_title %}{{ 'Partnership Program'|trans }}{% endblock %}
-{% block page_header %}{{ 'Partnership Program'|trans }}{% endblock %}
+{% block page_header %}{% endblock %}
 
-{% block breadcrumb %}
-    <li class="breadcrumb-item"><a href="{{ '/'|url }}">{{ 'Home'|trans }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ 'Partnership Program'|trans }}</li>
-{% endblock %}
+{% block breadcrumb %}{% endblock %}
 
 {% block head %}
 <style>
