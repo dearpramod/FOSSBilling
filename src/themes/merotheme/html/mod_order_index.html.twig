@@ -59,7 +59,9 @@
         All Products
     </a>
     {% for category in _ord_sorted_cats %}{% if category.type != 'domain' %}
-        {% set tabHref = ('/order?category=' ~ category.id)|url %}
+        {# Convert category title to slug (e.g., "Web Hosting in Nepal" → "web-hosting-in-nepal") #}
+        {% set catSlug = category.title|lower|replace({' ': '-', '  ': '-', '   ': '-'})|trim('-') %}
+        {% set tabHref = ('/order/' ~ catSlug)|url %}
         <a href="{{ tabHref }}" role="tab"
            aria-selected="{{ request.category == category.id ~ '' ? 'true' : 'false' }}"
            class="px-5 py-2 text-sm font-semibold rounded-lg transition-all capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary
