@@ -1,156 +1,87 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+{% set active_menu = 'emails' %}
 
-{% block meta_title %}{{ email.subject }} — Email History{% endblock %}
+{% block meta_title %}{{ 'Email'|trans }}{% endblock %}
 
+{% block breadcrumb %}
+<li class="breadcrumb-item" aria-current="page"><a href="{{ 'email'|url }}">{{ 'Emails'|trans }}</a></li>
+<li class="breadcrumb-item active" aria-current="page">{{ email.subject }}</li>
+{% endblock %}
+{% block body_class %}email-email{% endblock %}
 {% block content %}
-<div class="max-w-4xl mx-auto">
-
-    {# Breadcrumb + action row #}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <a href="{{ 'email'|link }}" class="hover:text-slate-900 dark:hover:text-white transition-colors">Email History</a>
-            <svg class="w-4 h-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
-            <span class="text-slate-900 dark:text-white font-medium truncate max-w-xs">{{ email.subject|default('(No Subject)') }}</span>
-        </nav>
-        <div class="flex items-center gap-3 flex-shrink-0">
-            <a href="{{ 'email'|link }}"
-               class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors px-4 py-2 border border-slate-200 dark:border-white/[0.10] rounded-lg bg-white dark:bg-white/[0.04] shadow-sm">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                </svg>
-                Back
-            </a>
-            <button onclick="window.print()"
-                    class="inline-flex items-center gap-2 text-sm font-semibold text-white rounded-lg px-4 py-2 shadow-md transition-all hover:opacity-90"
-                    style="background:var(--color-primary);">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-                </svg>
-                Print / Export
-            </button>
-        </div>
-    </div>
-
-    {# Email detail card #}
-    <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-sm overflow-hidden">
-
-        {# Subject header + delivered badge #}
-        <div class="px-8 pt-8 pb-5 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50/50 dark:bg-white/[0.02]">
-            <div class="flex items-start justify-between gap-4">
-                <h2 class="text-2xl font-semibold text-slate-900 dark:text-white leading-tight">{{ email.subject|default('(No Subject)') }}</h2>
-                <span class="flex-shrink-0 inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
-                    <span class="w-1.5 h-1.5 bg-emerald-600 dark:bg-emerald-400 rounded-full"></span>
-                    Delivered
-                </span>
-            </div>
-        </div>
-
-        {# Meta: SENDER / RECIPIENT / DATE SENT in horizontal columns #}
-        <div class="px-8 py-5 border-b border-slate-100 dark:border-white/[0.06] flex flex-wrap gap-x-12 gap-y-4">
-            <div class="flex flex-col min-w-0">
-                <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Sender</span>
-                <div class="flex items-center gap-2">
-                    <div class="h-6 w-6 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
-                         style="background:var(--color-primary);">
-                        {{ email.sender|slice(0,1)|upper }}
+<div class="row">
+<div class="col-md-12 card">
+        <div class="card-body">
+            <h5 class="mb-0">{{ email.subject }}</h5>
+            <div class="card-header px-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex flex-column gap-1">
+                        <span class="d-block"><span class="text-muted me-2">{{ 'From'|trans }}</span>{{ email.sender }}</span>
+                        <span class="d-block"><span class="text-muted me-2">{{ 'To'|trans }}</span>{{ email.recipients }}</span>
                     </div>
-                    <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ email.sender }}</span>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="btn-group d-flex" role="group" aria-label="{{ 'Mail Action'|trans }}">
+                            <a class="btn btn-sm btn-outline-secondary email-resend" href="#" data-id="{{ email.id }}" data-bs-toggle="tooltip" data-bs-title="{{ 'Resend'|trans }}">
+                                <svg class="icon"><use href="#arrows-exchange" /></svg>
+                            </a>
+                            <a class="btn btn-sm btn-outline-danger border-start-0" data-bs-toggle="tooltip" data-bs-title="{{ 'Delete'|trans }}"
+                               {{ fb_api_link({href: 'email/delete'|api_url(query: {id: email.id}), modal: {type: 'confirm', title: 'Are you sure?'|trans}, redirect: 'email'|url}) }}>
+                                <svg class="icon"><use href="#trash" /></svg>
+                            </a>
+                        </div>
+                        <small class="text-muted">{{ email.created_at|format_date }}</small>
+                    </div>
                 </div>
             </div>
-            <div class="flex flex-col min-w-0">
-                <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Recipient</span>
-                <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ email.recipients }}</span>
-            </div>
-            <div class="flex flex-col">
-                <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Date Sent</span>
-                <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ email.created_at|date("M j, Y") }} · {{ email.created_at|date("g:i A") }}</span>
-            </div>
-        </div>
-
-        {# Email body – iframe auto-sized to content #}
-        <div class="p-6 bg-slate-50 dark:bg-white/[0.02]">
-            <div class="max-w-2xl mx-auto bg-white border border-slate-200 dark:border-slate-300/20 rounded shadow-sm overflow-hidden">
-                <iframe id="email-content"
-                        src="about:blank"
-                        style="width:100%; border:none; display:block; min-height:100px;"
-                        title="Email content"></iframe>
+            <div class="card-body">
+                <iframe class="ratio ratio-1x1 email" id="email-content" src="about:blank" sandbox="allow-popups" style="height: 30em"></iframe>
+                <script>
+                    (function () {
+                        const frame = document.getElementById("email-content");
+                        frame.srcdoc = '{{ email.content_html|e('js') }}';
+                    })();
+                </script>
             </div>
         </div>
-
-        {# Footer actions #}
-        <div class="px-8 py-4 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
-            <button id="resend-btn"
-                    data-id="{{ email.id }}"
-                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-                </svg>
-                Resend
-            </button>
-            <a href="{{ 'email/delete'|api_url(query: {id: email.id}) }}"
-               {{ fb_api_link({modal: {type: 'confirm', title: 'Delete this email?'}, redirect: 'email'|link}) }}
-               class="text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-               title="Delete">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-            </a>
-        </div>
-
-    </div>
-
 </div>
+</div>
+{% endblock %}
 
+{% block js %}
+{% autoescape "js" %}
 <script>
-(function () {
-    var frame = document.getElementById('email-content');
-    var htmlContent = {{ email.content_html|json_encode|raw }};
+    document.addEventListener("DOMContentLoaded", () => {
+        const resendEmailBtn = document.querySelectorAll('.email-resend');
 
-    function resizeFrame() {
-        try {
-            var doc = frame.contentDocument || frame.contentWindow.document;
-            if (!doc || !doc.body) return;
-            frame.style.height = '0px';
-            var height = Math.max(
-                doc.body.scrollHeight,
-                doc.body.offsetHeight,
-                doc.documentElement.scrollHeight,
-                doc.documentElement.offsetHeight,
-                100
-            );
-            frame.style.height = (height + 16) + 'px';
-        } catch (e) {}
-    }
+        resendEmailBtn.forEach((resendBtn) => {
+            resendBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleLoader();
+                FOSSBilling.api.client.post('email/resend',
+                    {id: resendBtn.dataset.id },
+                    () => {
+                        flashMessage({
+                            message: 'Email resent',
+                            reload: '{{ 'email'|url }}'
+                        });
+                    },
+                    (res) => {
+                        FOSSBilling.message(`${res.message} (${res.code})`, 'error');
+                        toggleLoader();
+                    }
+                )
+            });
+        });
 
-    frame.addEventListener('load', function () {
-        resizeFrame();
-        setTimeout(resizeFrame, 200);
-        setTimeout(resizeFrame, 600);
-    });
-
-    frame.srcdoc = htmlContent;
-
-    document.getElementById('resend-btn').addEventListener('click', function () {
-        var btn = this;
-        btn.disabled = true;
-        btn.textContent = 'Sending…';
-        API.client.post('email/resend', { id: btn.dataset.id },
-            function () {
-                btn.textContent = 'Sent!';
-                setTimeout(function () {
-                    btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>Resend';
-                }, 2000);
-            },
-            function (res) {
-                btn.disabled = false;
-                btn.textContent = 'Resend';
-                alert(res.message || 'Failed to resend.');
+        const toggleLoader = () => {
+            let loader = document.querySelector('.wait');
+            if (loader.style.display === 'none') {
+                loader.style.display = 'block';
+            } else {
+                loader.style.display = 'none';
             }
-        );
+        }
     });
-}());
 </script>
+{% endautoescape %}
 {% endblock %}

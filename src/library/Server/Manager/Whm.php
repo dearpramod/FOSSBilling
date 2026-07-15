@@ -586,7 +586,6 @@ class Server_Manager_Whm extends Server_Manager
             'verify_peer' => $verifyTls,
             'verify_host' => $verifyTls,
             'timeout' => 90, // Account creation can timeout if set too low - see #1086.
-            'max_duration' => 28, // Must stay under PHP max_execution_time (30s) so Symfony throws a catchable TransportException instead of a fatal error.
         ]);
 
         // Construct the request URL

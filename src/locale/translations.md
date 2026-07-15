@@ -1,44 +1,44 @@
 ## FOSSBilling Translations
-Dated: Wed Jun 10 12:52:21 UTC 2026
+Dated: Mon Jun 22 08:48:05 UTC 2026
 Translation Tag: [05a9971b1fbf0b089e28db85d6ce4e05](https://github.com/FOSSBilling/locale/releases/tag/05a9971b1fbf0b089e28db85d6ce4e05)
- - `sv_SE`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
- - `zh_CN`: ▰▰▰▰▰▰▱▱▱▱ 67% translated
- - `ar_EG`: ▰▱▱▱▱▱▱▱▱▱ 10% translated (excluded, too incomplete)
- - `fa_IR`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
- - `ru_RU`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
- - `hu_HU`: ▰▰▰▰▰▰▰▱▱▱ 70% translated
- - `ko_KR`: ▱▱▱▱▱▱▱▱▱▱ 3% translated (excluded, too incomplete)
- - `tr_TR`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
- - `el_GR`: ▰▰▰▰▰▰▱▱▱▱ 67% translated
- - `sr_RS`: ▰▰▰▰▰▰▰▱▱▱ 71% translated
- - `he_IL`: ▱▱▱▱▱▱▱▱▱▱ 5% translated (excluded, too incomplete)
- - `sl_SI`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
- - `ro_RO`: ▰▰▰▰▰▰▰▱▱▱ 77% translated
- - `bn_BD`: ▱▱▱▱▱▱▱▱▱▱ 2% translated (excluded, too incomplete)
- - `ta_IN`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
- - `id_ID`: ▰▰▰▰▰▰▱▱▱▱ 66% translated
- - `fi_FI`: ▰▰▰▰▰▰▱▱▱▱ 62% translated
  - `uz_UZ`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
- - `hr_HR`: ▰▰▱▱▱▱▱▱▱▱ 27% translated
- - `es_ES`: ▰▰▰▰▰▰▰▰▱▱ 82% translated
- - `ca_ES`: ▰▰▰▰▰▱▱▱▱▱ 52% translated
- - `pl_PL`: ▰▰▰▰▰▰▱▱▱▱ 66% translated
- - `uk_UA`: ▰▰▰▰▰▰▱▱▱▱ 67% translated
- - `da_DK`: ▰▰▱▱▱▱▱▱▱▱ 23% translated (excluded, too incomplete)
- - `vi_VN`: ▰▰▰▰▰▱▱▱▱▱ 58% translated
- - `pt_BR`: ▰▰▰▰▰▰▰▰▰▱ 99% translated
- - `bg_BG`: ▰▰▰▰▰▰▱▱▱▱ 61% translated
- - `ar_SA`: ▰▰▰▰▰▰▱▱▱▱ 66% translated
- - `lt_LT`: ▰▰▰▰▱▱▱▱▱▱ 48% translated
- - `cs_CZ`: ▰▰▰▰▰▰▰▱▱▱ 76% translated
- - `si_LK`: ▱▱▱▱▱▱▱▱▱▱ 2% translated (excluded, too incomplete)
- - `ja_JP`: ▱▱▱▱▱▱▱▱▱▱ 2% translated (excluded, too incomplete)
- - `en_GB`: ▰▰▰▰▰▰▰▱▱▱ 71% translated
- - `it_IT`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
+ - `sr_RS`: ▰▰▰▰▰▰▰▱▱▱ 71% translated
+ - `fi_FI`: ▰▰▰▰▰▰▱▱▱▱ 62% translated
  - `zh_TW`: ▰▰▰▰▰▱▱▱▱▱ 58% translated
+ - `hr_HR`: ▰▰▱▱▱▱▱▱▱▱ 27% translated
+ - `it_IT`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
  - `th_TH`: ▰▰▰▰▰▰▰▰▰▰ 100% translated
+ - `el_GR`: ▰▰▰▰▰▰▱▱▱▱ 67% translated
+ - `fr_FR`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
+ - `es_ES`: ▰▰▰▰▰▰▰▰▱▱ 82% translated
+ - `tr_TR`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
+ - `bn_BD`: ▱▱▱▱▱▱▱▱▱▱ 2% translated (excluded, too incomplete)
+ - `ko_KR`: ▱▱▱▱▱▱▱▱▱▱ 3% translated (excluded, too incomplete)
+ - `de_DE`: ▰▰▰▰▰▰▰▱▱▱ 75% translated
+ - `cs_CZ`: ▰▰▰▰▰▰▰▱▱▱ 76% translated
+ - `ar_EG`: ▰▱▱▱▱▱▱▱▱▱ 10% translated (excluded, too incomplete)
+ - `vi_VN`: ▰▰▰▰▰▱▱▱▱▱ 58% translated
+ - `ca_ES`: ▰▰▰▰▰▱▱▱▱▱ 52% translated
+ - `hu_HU`: ▰▰▰▰▰▰▰▱▱▱ 70% translated
  - `nl_NL`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
  - `pt_PT`: ▰▰▰▰▰▱▱▱▱▱ 58% translated
- - `fr_FR`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
+ - `bg_BG`: ▰▰▰▰▰▰▱▱▱▱ 61% translated
+ - `en_GB`: ▰▰▰▰▰▰▰▱▱▱ 71% translated
+ - `sl_SI`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
+ - `ar_SA`: ▰▰▰▰▰▰▱▱▱▱ 66% translated
  - `en_AU`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
- - `de_DE`: ▰▰▰▰▰▰▰▱▱▱ 75% translated
+ - `si_LK`: ▱▱▱▱▱▱▱▱▱▱ 2% translated (excluded, too incomplete)
+ - `ta_IN`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
+ - `id_ID`: ▰▰▰▰▰▰▱▱▱▱ 66% translated
+ - `ro_RO`: ▰▰▰▰▰▰▰▱▱▱ 77% translated
+ - `ru_RU`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
+ - `uk_UA`: ▰▰▰▰▰▰▱▱▱▱ 67% translated
+ - `he_IL`: ▱▱▱▱▱▱▱▱▱▱ 5% translated (excluded, too incomplete)
+ - `pt_BR`: ▰▰▰▰▰▰▰▰▰▱ 99% translated
+ - `lt_LT`: ▰▰▰▰▱▱▱▱▱▱ 48% translated
+ - `da_DK`: ▰▰▱▱▱▱▱▱▱▱ 23% translated (excluded, too incomplete)
+ - `sv_SE`: ▱▱▱▱▱▱▱▱▱▱ 0% translated (excluded, too incomplete)
+ - `fa_IR`: ▰▰▰▰▰▰▰▱▱▱ 79% translated
+ - `ja_JP`: ▱▱▱▱▱▱▱▱▱▱ 2% translated (excluded, too incomplete)
+ - `zh_CN`: ▰▰▰▰▰▰▱▱▱▱ 67% translated
+ - `pl_PL`: ▰▰▰▰▰▰▱▱▱▱ 66% translated

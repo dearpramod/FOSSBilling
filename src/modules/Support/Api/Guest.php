@@ -147,7 +147,7 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         $this->assertKbEnabled();
 
         $search = $data['search'] ?? null;
-        $cat = isset($data['kb_article_category_id']) ? (string) $data['kb_article_category_id'] : null;
+        $cat = $data['kb_article_category_id'] ?? null;
 
         /** @var \Box\Mod\Support\Repository\KbArticleRepository $repo */
         $repo = $this->getService()->getKbArticleRepository();

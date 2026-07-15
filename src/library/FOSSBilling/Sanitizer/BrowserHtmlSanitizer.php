@@ -44,7 +44,6 @@ final class BrowserHtmlSanitizer
     private static function createThemeSettingsConfig(): HtmlSanitizerConfig
     {
         return self::createBaseConfig()
-            ->withMaxInputLength(-1)
             ->allowElement('input', [
                 'type', 'name', 'value', 'id', 'checked', 'placeholder', 'accept',
                 'multiple', 'min', 'max', 'step', 'readonly', 'disabled', 'required',

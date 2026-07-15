@@ -30,15 +30,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
 
         $this->getDi()['events_manager']->fire(['event' => 'onBeforeClientChangeNameservers', 'params' => $data]);
 
-        try {
-            $this->getService()->updateNameservers($s, $data);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain NS update failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to update nameservers. Please verify the nameserver addresses and try again.');
-        }
+        $this->getService()->updateNameservers($s, $data);
 
         $this->getDi()['events_manager']->fire(['event' => 'onAfterClientChangeNameservers', 'params' => $data]);
 
@@ -54,15 +46,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        try {
-            return $this->getService()->updateContacts($s, $data);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain contact update failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to update contact details. Please try again.');
-        }
+        return $this->getService()->updateContacts($s, $data);
     }
 
     /**
@@ -74,15 +58,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        try {
-            return $this->getService()->enablePrivacyProtection($s);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain privacy enable failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to enable privacy protection. Please try again.');
-        }
+        return $this->getService()->enablePrivacyProtection($s);
     }
 
     /**
@@ -94,15 +70,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        try {
-            return $this->getService()->disablePrivacyProtection($s);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain privacy disable failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to disable privacy protection. Please try again.');
-        }
+        return $this->getService()->disablePrivacyProtection($s);
     }
 
     /**
@@ -114,51 +82,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        try {
-            return $this->getService()->getTransferCode($s);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain transfer code retrieval failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to retrieve the transfer code. Please try again.');
-        }
-    }
-
-    /**
-     * Get WHOIS contact details from the local database (no registrar call).
-     * Returns contact data keyed by role: registrant, admin, tech, billing.
-     * Since ConnectReseller assigns one contact to all four roles, each role
-     * returns the same data.
-     *
-     * @return array{registrant: array, admin: array, tech: array, billing: array}
-     */
-    public function get_whois_info($data): array
-    {
-        $s = $this->_getService($data);
-
-        return $this->getService()->getWhoisInfo($s);
-    }
-
-    /**
-     * Fetch live WHOIS contact data from the registrar, persist to DB, return by role.
-     * Makes a live registrar API call — use sparingly.
-     *
-     * @return array{registrant: array, admin: array, tech: array, billing: array}
-     */
-    public function sync_whois_info($data): array
-    {
-        $s = $this->_getService($data);
-
-        try {
-            return $this->getService()->syncWhoisInfo($s);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain WHOIS sync failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to sync WHOIS data from the registrar. Please try again.');
-        }
+        return $this->getService()->getTransferCode($s);
     }
 
     /**
@@ -170,15 +94,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        try {
-            return $this->getService()->lock($s);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain lock failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to lock the domain. Please try again.');
-        }
+        return $this->getService()->lock($s);
     }
 
     /**
@@ -190,15 +106,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        try {
-            return $this->getService()->unlock($s);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->getDi()['logger']->warning(sprintf('Domain unlock failed for order %s: %s', $data['order_id'] ?? '?', $e->getMessage()));
-
-            throw $this->_registrarError($e, 'Failed to unlock the domain. Please try again.');
-        }
+        return $this->getService()->unlock($s);
     }
 
     protected function _getService($data)
@@ -219,26 +127,5 @@ class Client extends \FOSSBilling\Api\AbstractApi
         }
 
         return $s;
-    }
-
-    /**
-     * Convert a registrar exception into a user-safe InformationException.
-     *
-     * When the registrar returned a specific error (format: "… error on <endpoint>: <detail>"),
-     * the detail is extracted and used as the client message — it comes from the registrar's
-     * own API response and does not contain internal infrastructure information.
-     * For generic transport/auth failures the provided $fallback is used instead.
-     */
-    private function _registrarError(\Throwable $e, string $fallback): \FOSSBilling\InformationException
-    {
-        // Match "… error on <word>: <detail>" — the detail is the registrar's own API error text
-        if (preg_match('/error on \S+?:\s*(.+)/i', $e->getMessage(), $m)) {
-            $detail = rtrim(trim($m[1]), '.');
-            if ($detail !== '' && strlen($detail) <= 200) {
-                return new \FOSSBilling\InformationException($detail);
-            }
-        }
-
-        return new \FOSSBilling\InformationException($fallback);
     }
 }

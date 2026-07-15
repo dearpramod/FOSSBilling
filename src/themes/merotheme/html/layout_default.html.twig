@@ -192,7 +192,7 @@
     {% block head %}{% endblock %}
 </head>
 
-{% set orderServicesActive = 'order/domain-registration' in request.uri or (request.uri starts with '/order' and 'service' not in request.uri and 'checkout' not in request.uri) %}
+{% set orderServicesActive = 'order/domain-tlds' in request.uri or (request.uri starts with '/order' and 'service' not in request.uri and 'checkout' not in request.uri) %}
 {% set normalizedPath = (request_path|default(request.uri|default('/')))|trim('/')|lower %}
 {% set isDashboardRoute = normalizedPath == '' or normalizedPath starts with 'dashboard' %}
 <body class="bg-[#f8f9ff] text-[#0b1c30] font-sans h-full {% block body_class %}{% endblock %}" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sb_collapsed') === '1', helpOpen: false, orderServicesOpen: {{ orderServicesActive ? 'true' : 'false' }}, darkMode: localStorage.getItem('merovps_theme') === 'dark' }" x-init="document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light'); $watch('sidebarCollapsed', function(v){ localStorage.setItem('sb_collapsed', v ? '1' : '0'); document.documentElement.setAttribute('data-sb', v ? 'collapsed' : 'expanded'); }); $watch('darkMode', function(v){ var t = v ? 'dark' : 'light'; localStorage.setItem('merovps_theme', t); document.documentElement.setAttribute('data-theme', t); });">
@@ -388,8 +388,8 @@
                     {%- set _sb_sorted = sidebarCategories.list|sort((a, b) => (_sb_type_order[a.type]|default(99)) <=> (_sb_type_order[b.type]|default(99))) -%}
                     {% for category in _sb_sorted %}
                     {%- set _ci = _sb_type_icons[category.type]|default({'path': 'M5 12h14M12 5l7 7-7 7', 'active': 'text-indigo-400 bg-indigo-500/10'}) -%}
-                    {%- set catHref = (category.type == 'domain') ? ('/order/domain-registration'|url) : (('/order/' ~ category.slug)|url) -%}
-                    {%- set catActive = (category.type == 'domain') ? ('order/domain-registration' in request.uri) : (('order/' ~ category.slug) in request.uri) -%}
+                    {%- set catHref = (category.type == 'domain') ? ('/order/domain-tlds'|url) : (('/order/' ~ category.slug)|url) -%}
+                    {%- set catActive = (category.type == 'domain') ? ('order/domain-tlds' in request.uri) : (('order/' ~ category.slug) in request.uri) -%}
                           <a href="{{ catHref }}"
                               class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
                               {{ catActive ? _ci.active : 'text-slate-400 hover:text-primary hover:bg-violet-50' }}">

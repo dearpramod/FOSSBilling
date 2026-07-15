@@ -36,7 +36,7 @@ final class EmailPolicy
             'currency_name', 'currency_symbol',
             'country_name',
             // FOSSBillingExtension
-            'url', 'link', 'alink', 'daysleft', 'trans',
+            'url', 'daysleft', 'trans',
             // LegacyExtension
             'period_title',
             // MarkdownExtension

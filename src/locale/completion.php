@@ -1,7 +1,7 @@
 <?php
 /**
  * FOSSBilling translations
- * Dated: Wed Jun 10 12:52:21 UTC 2026
+ * Dated: Mon Jun 22 08:48:05 UTC 2026
  * License: https://github.com/FOSSBilling/locale/blob/main/LICENSE.md
  */
 return [
@@ -40,8 +40,8 @@ return [
   'lt_LT' => 48,
   'ja_JP' => 2,
   'ko_KR' => 3,
-  'th_TH' => 100,
   'pl_PL' => 66,
+  'th_TH' => 100,
   'en_AU' => 79,
   'hu_HU' => 70,
   'de_DE' => 75,

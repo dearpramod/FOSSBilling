@@ -24,12 +24,6 @@
 {% block meta_title %}{{ 'Settings for'|trans }} {{ theme_code }}{% endblock %}
 
 {% block content %}
-    {% if success %}
-        <div class="alert alert-success" role="alert">
-            <strong>{{ 'Success'|trans }}:</strong> {{ success }}
-        </div>
-    {% endif %}
-
     {% if error %}
         <div class="alert alert-danger" role="alert">
             <strong>{{ 'Important'|trans }}:</strong> {{ error }}

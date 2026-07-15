@@ -305,7 +305,7 @@
 
                                 {# Resolve the correct order link per product type #}
                                 {% if product.type == 'domain' %}
-                                    {% set order_link = '/order/domain-registration'|url %}
+                                    {% set order_link = '/order/domain-tlds'|url %}
                                 {% else %}
                                     {% set order_link = ('/order/' ~ product.slug)|url %}
                                 {% endif %}
@@ -515,7 +515,7 @@
         domainQ: '',
         get registerHref() {
             const raw = this.domainQ.trim();
-            const base = '{{ '/order/domain-registration'|url }}';
+            const base = '{{ '/order/domain-tlds'|url }}';
             if (!raw) return base;
             const dot = raw.lastIndexOf('.');
             const sld = dot > 0 ? raw.slice(0, dot) : raw;
@@ -523,7 +523,7 @@
             return base + '?register_sld=' + encodeURIComponent(sld) + (tld ? '&register_tld=' + encodeURIComponent(tld) : '');
         },
         tldHref(tld) {
-            const base = '{{ '/order/domain-registration'|url }}';
+            const base = '{{ '/order/domain-tlds'|url }}';
             const sld = this.domainQ.trim().replace(/\.[^.]*$/, '') || '';
             return base + '?register_tld=' + encodeURIComponent(tld) + (sld ? '&register_sld=' + encodeURIComponent(sld) : '');
         },

@@ -13,7 +13,7 @@ namespace FOSSBilling;
 
 final class Version
 {
-    public const string VERSION = '0.8.3';
+    public const string VERSION = '0.8.4';
     public const int PATCH = 0;
     public const int MINOR = 1;
     public const int MAJOR = 2;

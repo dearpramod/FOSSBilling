@@ -432,16 +432,4 @@ class FOSSBillingExtension
 
         return $this->di['url']->link($path, $query);
     }
-
-    #[AsTwigFilter('link', isSafe: ['html'])]
-    public function clientLink(string $path, ?array $query = null): string
-    {
-        return $this->di['url']->link($path, $query);
-    }
-
-    #[AsTwigFilter('alink', isSafe: ['html'])]
-    public function adminLink(string $path, ?array $query = null): string
-    {
-        return $this->di['url']->adminLink($path, $query);
-    }
 }

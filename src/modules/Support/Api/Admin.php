@@ -615,8 +615,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
         $status = $data['status'] ?? null;
         $search = $data['search'] ?? null;
-        $raw = $data['kb_article_category_id'] ?? $data['cat'] ?? null;
-        $cat = isset($raw) ? (string) $raw : null;
+        $cat = $data['kb_article_category_id'] ?? $data['cat'] ?? null;
 
         /** @var \Box\Mod\Support\Repository\KbArticleRepository $repo */
         $repo = $this->getService()->getKbArticleRepository();
