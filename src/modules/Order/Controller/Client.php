@@ -30,6 +30,8 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         $app->get('/order', 'get_products', [], static::class);
         $app->get('/order/checkout', 'get_checkout', [], static::class);
         $app->post('/order/checkout/login', 'post_checkout_login', [], static::class);
+        $app->get('/order/domain-registration', 'get_domain_order', [], static::class);
+        $app->get('/order/domain-transfer', 'get_domain_transfer', [], static::class);
         $app->get('/order/service', 'get_orders', [], static::class);
         $app->get('/order/service/manage/:id', 'get_order', ['id' => '[0-9]+'], static::class);
         $app->get('/order/:id', 'get_configure_product', ['id' => '[0-9]+'], static::class);
@@ -75,14 +77,18 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         $app->redirect('/order/checkout');
     }
 
+    public function get_domain_order(\Box_App $app): string
+    {
+        return $app->render('mod_order_domain_plans');
+    }
+
+    public function get_domain_transfer(\Box_App $app): string
+    {
+        return $app->render('mod_order_domain_transfer');
+    }
+
     public function get_configure_product_by_slug(\Box_App $app, $slug): string
     {
-        // Redirect domain-related slugs to domain-tlds (the actual product slug)
-        if (\in_array($slug, ['domain-registration', 'domain-transfer', 'domain'], true)) {
-            header('Location: /order/domain-tlds', true, 302);
-            exit;
-        }
-
         $api = $this->di['api_guest'];
 
         // First: try to match a product by its slug
