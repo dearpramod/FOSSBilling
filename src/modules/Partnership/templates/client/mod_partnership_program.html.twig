@@ -243,18 +243,18 @@
 
     {# ── 1. Active Plan ────────────────────────────────────────────────── #}
     <section class="pp-plan-card">
-        <div class="flex justify-between items-end flex-wrap gap-4 mb-4">
-            <div>
+        <div class="flex justify-between items-start flex-wrap gap-6 mb-4">
+            <div class="flex-1 min-w-0">
                 <div class="pp-plan-badge">{{ 'Active Plan'|trans }}</div>
                 <h1 class="pp-plan-title">{{ group_title }}</h1>
                 <p class="pp-plan-desc">{{ 'Your current tier includes exclusive wholesale pricing and priority support.'|trans }}</p>
             </div>
-            <div class="flex gap-6">
-                <div style="text-align:right;">
+            <div class="flex gap-8 flex-shrink-0">
+                <div class="text-right">
                     <div class="pp-plan-stat-val">{{ products|length }}</div>
                     <div class="pp-plan-stat-lbl">{{ 'product rules'|trans }}</div>
                 </div>
-                <div style="text-align:right;">
+                <div class="text-right">
                     <div class="pp-plan-stat-val">{{ tld_prices|length }}</div>
                     <div class="pp-plan-stat-lbl">{{ 'TLD rules'|trans }}</div>
                 </div>
