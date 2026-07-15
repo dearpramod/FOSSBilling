@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -38,6 +37,7 @@ class Server_Manager_Whm extends Server_Manager
                             'label' => 'Username',
                             'placeholder' => 'Username to connect to the server',
                             'required' => true,
+                            'secret' => true,
                         ],
                         [
                             'name' => 'accesshash',
@@ -45,6 +45,7 @@ class Server_Manager_Whm extends Server_Manager
                             'label' => 'Access Hash or API Token',
                             'placeholder' => 'Access hash or WHM API token to connect to the server',
                             'required' => true,
+                            'secret' => true,
                         ],
                     ],
                 ],

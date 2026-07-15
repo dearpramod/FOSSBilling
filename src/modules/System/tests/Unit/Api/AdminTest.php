@@ -13,7 +13,7 @@ declare(strict_types=1);
 use function Tests\Helpers\container;
 
 test('dependency injection', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $di = container();
     $api->setDi($di);
     $getDi = $api->getDi();
@@ -21,7 +21,7 @@ test('dependency injection', function (): void {
 });
 
 test('get params', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $data = [];
 
     $serviceMock = Mockery::mock(Box\Mod\System\Service::class);
@@ -37,7 +37,7 @@ test('get params', function (): void {
 });
 
 test('update params', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $data = [];
 
     $serviceMock = Mockery::mock(Box\Mod\System\Service::class);
@@ -54,7 +54,7 @@ test('update params', function (): void {
 });
 
 test('messages', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $data = [];
 
     $di = container();
@@ -74,7 +74,7 @@ test('messages', function (): void {
 });
 
 test('template exists', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $data = [
         'file' => 'testing.txt',
     ];
@@ -93,7 +93,7 @@ test('template exists', function (): void {
 });
 
 test('env', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $data = [];
 
     $serviceMock = Mockery::mock(Box\Mod\System\Service::class);
@@ -112,7 +112,7 @@ test('env', function (): void {
 });
 
 test('is allowed', function (): void {
-    $api = new Box\Mod\System\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
     $data = [
         'mod' => 'extension',
     ];
@@ -139,4 +139,107 @@ test('is allowed', function (): void {
     $result = $api->is_allowed($data);
     expect($result)->toBeBool();
     expect($result)->toBeTrue();
+});
+
+test('update finalization status allows super administrator while pending', function (): void {
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
+
+    $admin = new Model_Admin();
+    $admin->loadBean(new Tests\Helpers\DummyBean());
+    $admin->id = 1;
+    $admin->role = 'staff';
+    $api->setIdentity($admin);
+
+    $staffService = Mockery::mock(Box\Mod\Staff\Service::class);
+    $staffService->shouldReceive('isSuperAdministrator')->once()->with(1)->andReturn(true);
+
+    $updateFinalization = Mockery::mock();
+    $updateFinalization->shouldReceive('isRequired')->once()->andReturn(true);
+    $updateFinalization->shouldReceive('getStatus')->once()->withNoArgs()->andReturn(['required' => true]);
+
+    $di = container();
+    $di['update_finalization'] = $updateFinalization;
+    $di['mod_service'] = $di->protect(fn (string $serviceName): mixed => $serviceName === 'Staff' ? $staffService : false);
+    $api->setDi($di);
+
+    expect($api->update_finalization_status())->toBe(['required' => true]);
+});
+
+test('update finalization status falls back to legacy admin while pending', function (): void {
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
+
+    $admin = new Model_Admin();
+    $admin->loadBean(new Tests\Helpers\DummyBean());
+    $admin->id = 1;
+    $api->setIdentity($admin);
+
+    $staffService = Mockery::mock(Box\Mod\Staff\Service::class);
+    $staffService->shouldReceive('isSuperAdministrator')->once()->with(1)->andThrow(new class('admin groups unavailable') extends RuntimeException implements Doctrine\DBAL\Exception {});
+
+    $updateFinalization = Mockery::mock();
+    $updateFinalization->shouldReceive('isRequired')->once()->andReturn(true);
+    $updateFinalization->shouldReceive('getStatus')->once()->withNoArgs()->andReturn(['required' => true]);
+
+    $db = Mockery::mock(Box_Database::class);
+    $db->shouldReceive('getCell')->once()->with("SHOW COLUMNS FROM `admin` LIKE 'role'")->andReturn('role');
+    $db->shouldReceive('getCell')->once()->with('SELECT role FROM admin WHERE id = :id', ['id' => 1])->andReturn('admin');
+
+    $di = container();
+    $di['update_finalization'] = $updateFinalization;
+    $di['mod_service'] = $di->protect(fn (string $serviceName): mixed => $serviceName === 'Staff' ? $staffService : false);
+    $di['db'] = $db;
+    $api->setDi($di);
+
+    expect($api->update_finalization_status())->toBe(['required' => true]);
+});
+
+test('update finalization status rejects legacy non-admin while pending', function (): void {
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
+
+    $admin = new Model_Admin();
+    $admin->loadBean(new Tests\Helpers\DummyBean());
+    $admin->id = 1;
+    $api->setIdentity($admin);
+
+    $staffService = Mockery::mock(Box\Mod\Staff\Service::class);
+    $staffService->shouldReceive('isSuperAdministrator')->once()->with(1)->andThrow(new class('admin groups unavailable') extends RuntimeException implements Doctrine\DBAL\Exception {});
+
+    $updateFinalization = Mockery::mock();
+    $updateFinalization->shouldReceive('isRequired')->once()->andReturn(true);
+
+    $db = Mockery::mock(Box_Database::class);
+    $db->shouldReceive('getCell')->once()->with("SHOW COLUMNS FROM `admin` LIKE 'role'")->andReturn('role');
+    $db->shouldReceive('getCell')->once()->with('SELECT role FROM admin WHERE id = :id', ['id' => 1])->andReturn('staff');
+
+    $di = container();
+    $di['update_finalization'] = $updateFinalization;
+    $di['mod_service'] = $di->protect(fn (string $serviceName): mixed => $serviceName === 'Staff' ? $staffService : false);
+    $di['db'] = $db;
+    $api->setDi($di);
+
+    expect(fn (): array => $api->update_finalization_status())
+        ->toThrow(FOSSBilling\InformationException::class, 'You need to be a Super Administrator to finalize this update.');
+});
+
+test('update finalization status does not mask unrelated errors from isSuperAdministrator while pending', function (): void {
+    $api = apiEndpoint(new Box\Mod\System\Api\Admin());
+
+    $admin = new Model_Admin();
+    $admin->loadBean(new Tests\Helpers\DummyBean());
+    $admin->id = 1;
+    $api->setIdentity($admin);
+
+    $staffService = Mockery::mock(Box\Mod\Staff\Service::class);
+    $staffService->shouldReceive('isSuperAdministrator')->once()->with(1)->andThrow(new RuntimeException('unexpected failure'));
+
+    $updateFinalization = Mockery::mock();
+    $updateFinalization->shouldReceive('isRequired')->once()->andReturn(true);
+
+    $di = container();
+    $di['update_finalization'] = $updateFinalization;
+    $di['mod_service'] = $di->protect(fn (string $serviceName): mixed => $serviceName === 'Staff' ? $staffService : false);
+    $api->setDi($di);
+
+    expect(fn (): array => $api->update_finalization_status())
+        ->toThrow(RuntimeException::class, 'unexpected failure');
 });

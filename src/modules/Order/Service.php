@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -16,6 +15,7 @@ use Box\Mod\Currency\Entity\Currency;
 use Box\Mod\Product\Entity\Product;
 use FOSSBilling\InformationException;
 use FOSSBilling\InjectionAwareInterface;
+use FOSSBilling\Validation\PriceValidator;
 use Symfony\Component\HttpFoundation\Response;
 
 class Service implements InjectionAwareInterface
@@ -50,6 +50,7 @@ class Service implements InjectionAwareInterface
                 'display_name' => __trans('Export orders'),
                 'description' => __trans('Allows the staff member to export order data as CSV.'),
             ],
+            'manage_settings' => [],
         ];
     }
 
@@ -330,7 +331,18 @@ class Service implements InjectionAwareInterface
                 AND co.invoice_option = :invoice_option
                 AND co.period IS NOT NULL
                 AND co.expires_at IS NOT NULL
-                AND i.id IS NULL';
+                AND i.id IS NULL
+                /* Pair non-executed renewal items with paid invoices to skip renewals already queued for activation. */
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM invoice_item pending_item
+                    INNER JOIN invoice pending_invoice ON pending_invoice.id = pending_item.invoice_id
+                    WHERE pending_item.rel_id = co.id
+                    AND pending_item.type = :pending_item_type
+                    AND pending_item.task = :pending_item_task
+                    AND pending_item.status != :pending_item_status
+                    AND pending_invoice.status = :pending_invoice_status
+                )';
 
         $where = [];
         $bindings = [];
@@ -348,6 +360,10 @@ class Service implements InjectionAwareInterface
         $bindings[':status'] = \Model_ClientOrder::STATUS_ACTIVE;
         $bindings[':invoice_option'] = 'issue-invoice';
         $bindings[':unpaid_invoice_status'] = \Model_Invoice::STATUS_UNPAID;
+        $bindings[':pending_item_type'] = \Model_InvoiceItem::TYPE_ORDER;
+        $bindings[':pending_item_task'] = \Model_InvoiceItem::TASK_RENEW;
+        $bindings[':pending_item_status'] = \Model_InvoiceItem::STATUS_EXECUTED;
+        $bindings[':pending_invoice_status'] = \Model_Invoice::STATUS_PAID;
         $bindings[':days_until_expiration'] = $days_until_expiration;
 
         return [$query, $bindings];
@@ -364,7 +380,7 @@ class Service implements InjectionAwareInterface
         $data['discount'] ??= 0;
         $data['title'] = $model->title;
         $data['meta'] = $this->di['db']->getAssoc('SELECT name, value FROM client_order_meta WHERE client_order_id = :id', [':id' => $model->id]);
-        $data['active_tickets'] = $supportService->getActiveTicketsCountForOrder($model);
+        $data['active_tickets'] = $supportService->getSupportTicketRepository()->countActiveTicketsForOrder((int) $model->id);
         $client = $this->di['db']->getExistingModelById('Client', $model->client_id, 'Client not found');
         $data['client'] = $clientService->toApiArray($client, false);
 
@@ -631,6 +647,9 @@ class Service implements InjectionAwareInterface
 
     public function createOrder(\Model_Client $client, Product $product, array $data)
     {
+        $quantity = PriceValidator::validateQuantity($data['quantity'] ?? 1);
+        $price = isset($data['price']) ? PriceValidator::validateAmount($data['price']) : null;
+
         $currencyService = $this->di['mod_service']('currency');
         /** @var \Box\Mod\Currency\Repository\CurrencyRepository $currencyRepository */
         $currencyRepository = $currencyService->getCurrencyRepository();
@@ -649,7 +668,6 @@ class Service implements InjectionAwareInterface
         $this->di['events_manager']->fire(['event' => 'onBeforeAdminOrderCreate', 'params' => $data, 'subject' => $this->getProductType($product)]);
 
         $period = (isset($data['period']) && !empty($data['period'])) ? $data['period'] : null;
-        $qty = $data['quantity'] ?? 1;
         $config = (isset($data['config']) && is_array($data['config'])) ? $data['config'] : [];
         $group_id = $data['group_id'] ?? null;
         $activate = (bool) ($data['activate'] ?? false);
@@ -658,7 +676,7 @@ class Service implements InjectionAwareInterface
 
         $cartService = $this->di['mod_service']('cart');
         // check stock
-        if (!$cartService->isStockAvailable($product, $qty)) {
+        if (!$cartService->isStockAvailable($product, $quantity)) {
             throw new InformationException('Product :id is out of stock.', [':id' => $this->getProductId($product)], 831);
         }
 
@@ -709,8 +727,9 @@ class Service implements InjectionAwareInterface
             $invoiceOption,
             $parent_order,
             $period,
+            $price,
             $product,
-            $qty,
+            $quantity,
             &$invoice
         ) {
             $order = $this->di['db']->dispense('ClientOrder');
@@ -735,14 +754,14 @@ class Service implements InjectionAwareInterface
             $line = null;
             if (!isset($data['price']) || $this->getProductType($product) === \Box\Mod\Product\Service::DOMAIN) {
                 $productService = $this->di['mod_service']('Product');
-                $line = $productService->getProductOrderLineConfig($product, array_merge($config, ['quantity' => $qty]));
+                $line = $productService->getProductOrderLineConfig($product, array_merge($config, ['quantity' => $quantity]));
                 $order->quantity = $line['quantity'];
             } else {
-                $order->quantity = $qty;
+                $order->quantity = $quantity;
             }
 
-            if (isset($data['price'])) {
-                $order->price = $data['price'];
+            if ($price !== null) {
+                $order->price = $price;
             } else {
                 $rate = $currencyRepository->getRateByCode($currency->getCode());
                 if ($rate === null) {
@@ -781,9 +800,16 @@ class Service implements InjectionAwareInterface
                 }
             }
 
-            if ($invoiceOption == 'issue-invoice' && $order->price > 0) {
+            if ($invoiceOption == 'issue-invoice') {
                 $invoiceService = $this->di['mod_service']('invoice');
-                $invoice = $invoiceService->generateForOrder($order);
+
+                try {
+                    $invoice = $invoiceService->generateForOrder($order);
+                } catch (InformationException $e) {
+                    // Order price resolved to a negative amount (e.g. via a misconfigured
+                    // pricing rule); don't let a failed invoice attempt roll back order creation.
+                    $this->di['logger']->warning($e->getMessage());
+                }
             }
 
             return $id;
@@ -864,14 +890,25 @@ class Service implements InjectionAwareInterface
 
     public function activateOrder(\Model_ClientOrder $order, $data = []): bool
     {
+        // re-fetch in case the caller's order object is stale (e.g. already activated by another code path)
+        $orderId = $order->id;
+        $order = $this->di['db']->load('ClientOrder', $orderId);
+        if (!$order instanceof \Model_ClientOrder) {
+            throw new \FOSSBilling\Exception('Order :id not found', [':id' => $orderId]);
+        }
+        $force = !empty($data['force']);
+
+        // Already active and not a forced re-activation: nothing to do.
+        if ($order->status === \Model_ClientOrder::STATUS_ACTIVE && !$force) {
+            return true;
+        }
+
         $statues = [
             \Model_ClientOrder::STATUS_PENDING_SETUP,
             \Model_ClientOrder::STATUS_FAILED_SETUP,
         ];
-        if (!in_array($order->status, $statues)) {
-            if (!isset($data['force']) || !$data['force']) {
-                throw new \FOSSBilling\Exception('Only pending setup or failed orders can be activated');
-            }
+        if (!in_array($order->status, $statues) && !$force) {
+            throw new \FOSSBilling\Exception('Only pending setup or failed orders can be activated');
         }
 
         $event_params = ['id' => $order->id];
@@ -1066,7 +1103,9 @@ class Service implements InjectionAwareInterface
 
         $order->invoice_option = $data['invoice_option'] ?? $order->invoice_option;
         $order->title = $data['title'] ?? $order->title;
-        $order->price = $data['price'] ?? $order->price;
+        if (isset($data['price'])) {
+            $order->price = PriceValidator::validateAmount($data['price']);
+        }
         if (isset($data['status']) && $data['status'] !== $order->status) {
             if (!in_array($data['status'], \Model_ClientOrder::getValidStatuses(), true)) {
                 throw new InformationException('Invalid order status: :status', [':status:' => $data['status']]);
@@ -1127,7 +1166,6 @@ class Service implements InjectionAwareInterface
             throw $e;
         }
 
-        // set automatic order expiration
         if (!empty($order->period)) {
             $from_time = ($order->expires_at === null) ? time() : strtotime($order->expires_at); // from expiration date
 
@@ -1297,7 +1335,6 @@ class Service implements InjectionAwareInterface
     public function rmOrder(\Model_ClientOrder $model): void
     {
         if ($model->group_master) {
-            // set addons as separate orders
             $list = $this->getOrderAddonsList($model);
             foreach ($list as $addon) {
                 $addon->group_master = 1;
@@ -1533,6 +1570,18 @@ class Service implements InjectionAwareInterface
         ];
 
         return $this->di['db']->findOne('ClientOrder', 'id = :id AND client_id = :client_id', $bindings);
+    }
+
+    public function findByClientIdAndOrderId(int $clientId, int $orderId): ?\Model_ClientOrder
+    {
+        $bindings = [
+            ':id' => $orderId,
+            ':client_id' => $clientId,
+        ];
+
+        $order = $this->di['db']->findOne('ClientOrder', 'id = :id AND client_id = :client_id', $bindings);
+
+        return $order instanceof \Model_ClientOrder ? $order : null;
     }
 
     public function getOrderServiceData(\Model_ClientOrder $order, $identity = null)

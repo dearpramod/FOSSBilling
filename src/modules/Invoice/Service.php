@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2026 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -15,26 +14,27 @@ namespace Box\Mod\Invoice;
 use Box\Mod\Currency\Entity\Currency;
 use Dompdf\Dompdf;
 use FOSSBilling\Environment;
-use FOSSBilling\Http\HttpResponseException;
-use FOSSBilling\Http\RequestFactory;
+use FOSSBilling\Http\ResponseFactory;
 use FOSSBilling\InformationException;
 use FOSSBilling\InjectionAwareInterface;
 use FOSSBilling\Tools;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\HttpFoundation\HeaderUtils;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Twig\Loader\FilesystemLoader;
 
 class Service implements InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
-    private readonly Filesystem $filesystem;
+    private Filesystem $filesystem;
 
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -80,6 +80,7 @@ class Service implements InjectionAwareInterface
                 'display_name' => __trans('Export invoice data'),
                 'description' => __trans('Allows the staff member to export invoice data as CSV.'),
             ],
+            'manage_settings' => [],
         ];
     }
 
@@ -389,12 +390,7 @@ class Service implements InjectionAwareInterface
             $invoiceModel = $di['db']->load('Invoice', $params['id'] ?? 0);
             $invoice = $service->toApiArray($invoiceModel, true);
             if (($invoice['total'] ?? 0) > 0) {
-                $email = [];
-                $email['to_client'] = $invoiceModel->client_id;
-                $email['code'] = 'mod_invoice_paid';
-                $email['invoice'] = $invoice;
-                $emailService = $di['mod_service']('email');
-                $emailService->sendTemplate($email);
+                $service->sendInvoiceEmail($invoiceModel, $invoice, 'mod_invoice_paid');
             }
         } catch (\Exception $exc) {
             $di['logger']->setChannel('email')->error('Failed to send email for invoice payment', ['exception' => $exc->getMessage()]);
@@ -412,12 +408,7 @@ class Service implements InjectionAwareInterface
         try {
             $invoiceModel = $di['db']->load('Invoice', $params['id']);
             $invoice = $service->toApiArray($invoiceModel, true);
-            $email = [];
-            $email['to_client'] = $invoiceModel->client_id;
-            $email['code'] = 'mod_invoice_created';
-            $email['invoice'] = $invoice;
-            $emailService = $di['mod_service']('email');
-            $emailService->sendTemplate($email);
+            $service->sendInvoiceEmail($invoiceModel, $invoice, 'mod_invoice_created');
         } catch (\Exception $exc) {
             $di['logger']->setChannel('email')->error('Failed to send email for invoice creation', ['exception' => $exc->getMessage()]);
         }
@@ -429,25 +420,23 @@ class Service implements InjectionAwareInterface
     {
         $params = $event->getParameters();
         $di = $event->getDi();
+        $service = $di['mod_service']('invoice');
 
         try {
+            $invoiceModel = $di['db']->load('Invoice', $params['id'] ?? 0);
+
             if (($params['total'] ?? 0) > 0
                 && ($params['status'] ?? null) !== \Model_Invoice::STATUS_PAID
                 && isset($params['client']['id'])
             ) {
-                $email = [];
-                $email['to_client'] = $params['client']['id'];
-                $email['code'] = 'mod_invoice_created';
-                $email['invoice'] = $params;
-                $emailService = $di['mod_service']('email');
-                $emailService->sendTemplate($email);
+                if ($invoiceModel instanceof \Model_Invoice) {
+                    $service->sendInvoiceEmail($invoiceModel, $params, 'mod_invoice_created', (int) $params['client']['id']);
+                }
             }
 
             // Sending the created-email extends the hash lifetime so the
             // recipient has a fresh window to act on the link.
-            $invoiceModel = $di['db']->load('Invoice', $params['id'] ?? 0);
             if ($invoiceModel instanceof \Model_Invoice) {
-                $service = $di['mod_service']('invoice');
                 $service->extendInvoiceHashLifetime($invoiceModel);
             }
         } catch (\Exception $exc) {
@@ -455,6 +444,22 @@ class Service implements InjectionAwareInterface
         }
 
         return true;
+    }
+
+    private function sendInvoiceEmail(\Model_Invoice $invoice, array $invoiceData, string $templateCode, ?int $clientId = null): void
+    {
+        $email = [
+            'to_client' => $clientId ?? $invoice->client_id,
+            'code' => $templateCode,
+            'invoice' => $invoiceData,
+        ];
+
+        $attachment = $this->getInvoicePdfAttachment($invoice);
+        if ($attachment !== null) {
+            $email['attachment'] = $attachment;
+        }
+
+        $this->di['mod_service']('email')->sendTemplate($email);
     }
 
     public static function onAfterAdminInvoiceReminderSent(\Box_Event $event): void
@@ -474,12 +479,36 @@ class Service implements InjectionAwareInterface
             $email['to_client'] = $invoiceModel->client_id;
             $email['code'] = 'mod_invoice_payment_reminder';
             $email['invoice'] = $invoice;
+            $attachment = $service->getInvoicePdfAttachment($invoiceModel);
+            if ($attachment !== null) {
+                $email['attachment'] = $attachment;
+            }
             $emailService = $di['mod_service']('email');
             $emailService->sendTemplate($email);
 
             // Sending a payment reminder also re-extends the hash lifetime
             // since the recipient is being re-engaged via the same link.
             $service->extendInvoiceHashLifetime($invoiceModel);
+        } catch (\Exception $exc) {
+            $di['logger']->setChannel('email')->error('Failed to send invoice reminder email', ['exception' => $exc->getMessage()]);
+        }
+    }
+
+    public static function onEventBeforeInvoiceIsDue(\Box_Event $event): void
+    {
+        $params = $event->getParameters();
+        $di = $event->getDi();
+        $service = $di['mod_service']('invoice');
+
+        try {
+            if (!$service->isInvoiceReminderIntervalEnabled('invoice_reminder_before_due_days', (int) ($params['days_left'] ?? 0), '', $params['reminder_intervals'] ?? null)) {
+                return;
+            }
+
+            $invoiceModel = $di['db']->load('Invoice', $params['id'] ?? 0);
+            if ($invoiceModel instanceof \Model_Invoice) {
+                $service->sendInvoiceReminder($invoiceModel);
+            }
         } catch (\Exception $exc) {
             $di['logger']->setChannel('email')->error('Failed to send invoice reminder email', ['exception' => $exc->getMessage()]);
         }
@@ -504,12 +533,11 @@ class Service implements InjectionAwareInterface
         $di = $event->getDi();
         $service = $di['mod_service']('invoice');
 
-        // send reminder once a day when 5 days has passed
-        if ($params['days_passed'] != 5) {
-            return;
-        }
-
         try {
+            if (!$service->isInvoiceReminderIntervalEnabled('invoice_reminder_after_due_days', (int) ($params['days_passed'] ?? 0), '5', $params['reminder_intervals'] ?? null)) {
+                return;
+            }
+
             $invoiceModel = $di['db']->load('Invoice', $params['id']);
             $invoice = $service->toApiArray($invoiceModel, true);
             $email = [];
@@ -517,6 +545,10 @@ class Service implements InjectionAwareInterface
             $email['code'] = 'mod_invoice_due_after';
             $email['days_passed'] = $params['days_passed'];
             $email['invoice'] = $invoice;
+            $attachment = $service->getInvoicePdfAttachment($invoiceModel);
+            if ($attachment !== null) {
+                $email['attachment'] = $attachment;
+            }
 
             $emailService = $di['mod_service']('email');
             $emailService->sendTemplate($email);
@@ -870,6 +902,13 @@ class Service implements InjectionAwareInterface
             // @phpstan-ignore if.alwaysFalse
             if (DEBUG) {
                 $this->di['logger']->setChannel('billing')->info("Setting invoice {$invoice->id} as paid with credits for the amount of {$required}.");
+            }
+
+            if ($required <= $epsilon) {
+                // Nothing was actually charged against the client's balance, so don't record a $0 credit transaction.
+                $this->markAsPaid($invoice, false, true);
+
+                return true;
             }
 
             $balanceTransaction = $this->di['db']->dispense('ClientBalance');
@@ -1246,6 +1285,9 @@ class Service implements InjectionAwareInterface
             'quantity' => $order->quantity,
         ];
 
+        // Domain renewal pricing is resolved from the registrar/config rather than
+        // the order, since it legitimately changes between registration and renewal.
+        // Other products keep the order's own price so admin-edited prices are respected.
         if (in_array($order->status, [
             \Model_ClientOrder::STATUS_ACTIVE,
             \Model_ClientOrder::STATUS_FAILED_RENEW,
@@ -1253,9 +1295,9 @@ class Service implements InjectionAwareInterface
         ], true)) {
             $productService = $this->di['mod_service']('Product');
             $product = $productService->findProductById((int) $order->product_id);
-            $config = json_decode($order->config ?? '', true) ?? [];
 
-            if ($productService instanceof \Box\Mod\Product\Service) {
+            if ($productService instanceof \Box\Mod\Product\Service && $product->getType() === \Box\Mod\Product\Service::DOMAIN) {
+                $config = json_decode($order->config ?? '', true) ?? [];
                 $currencyService = $this->di['mod_service']('Currency');
                 $currencyRepository = $currencyService->getCurrencyRepository();
                 $rate = $currencyRepository->getRateByCode($order->currency);
@@ -1272,8 +1314,8 @@ class Service implements InjectionAwareInterface
             }
         }
 
-        if (($price * ($line['quantity'] ?? 1)) <= 0) {
-            throw new InformationException('Invoices are not generated for 0 amount orders.');
+        if (($price * ($line['quantity'] ?? 1)) < 0) {
+            throw new InformationException('Invoices are not generated for negative amount orders.');
         }
 
         $client = $this->di['db']->getExistingModelById('Client', $order->client_id, 'Client not found');
@@ -1350,13 +1392,10 @@ class Service implements InjectionAwareInterface
     public function doBatchRemindersSend(): bool
     {
         $this->di['events_manager']->fire(['event' => 'onBeforeAdminInvoiceSendReminders']);
-        $list = $this->getUnpaidInvoicesLateFor();
-        foreach ($list as $invoice) {
-            $this->sendInvoiceReminder($invoice);
-        }
+        $result = $this->doBatchInvokeDueEvent(['once_per_day' => false]);
         $this->di['logger']->info('Executed action to send invoice payment reminders.');
 
-        return true;
+        return $result;
     }
 
     public function doBatchInvokeDueEvent(array $data): bool
@@ -1372,13 +1411,18 @@ class Service implements InjectionAwareInterface
             return false;
         }
 
+        $beforeDueReminderIntervals = $this->parseInvoiceReminderIntervals($ss->getParamValue('invoice_reminder_before_due_days', ''));
+        $afterDueReminderIntervals = $this->parseInvoiceReminderIntervals($ss->getParamValue('invoice_reminder_after_due_days', '5'));
+
         $before_due_list = $this->di['db']->getAll("SELECT id, DATEDIFF(due_at, NOW()) as days_left FROM invoice WHERE status = 'unpaid' AND approved = 1 AND due_at > NOW()");
         foreach ($before_due_list as $params) {
+            $params['reminder_intervals'] = $beforeDueReminderIntervals;
             $this->di['events_manager']->fire(['event' => 'onEventBeforeInvoiceIsDue', 'params' => $params]);
         }
 
         $after_due_list = $this->di['db']->getAll("SELECT id, ABS(DATEDIFF(due_at, NOW())) as days_passed FROM invoice WHERE status = 'unpaid' AND approved = 1 AND ((due_at < NOW()) OR (ABS(DATEDIFF(due_at, NOW())) = 0 ))");
         foreach ($after_due_list as $params) {
+            $params['reminder_intervals'] = $afterDueReminderIntervals;
             $this->di['events_manager']->fire(['event' => 'onEventAfterInvoiceIsDue', 'params' => $params]);
         }
 
@@ -1471,14 +1515,14 @@ class Service implements InjectionAwareInterface
 
         $invoice = $this->di['db']->findOne('Invoice', 'hash = ?', [$data['hash']]);
         if (!$invoice instanceof \Model_Invoice) {
-            throw new \FOSSBilling\Exception('Invoice not found', null, 812);
+            throw new InformationException('Invoice not found', null, 812);
         }
 
         $this->checkInvoiceAuth($invoice, InvoiceOperation::PAYMENT);
 
         $gtw = $this->di['db']->load('PayGateway', $data['gateway_id']);
         if (!$gtw instanceof \Model_PayGateway) {
-            throw new \FOSSBilling\Exception('Payment method not found', null, 813);
+            throw new InformationException('Payment method not found', null, 813);
         }
 
         if (!$gtw->enabled) {
@@ -1539,41 +1583,76 @@ class Service implements InjectionAwareInterface
 
     public function generatePDF($hash, $identity): Response
     {
+        $invoiceModel = $this->di['db']->findOne('Invoice', 'hash = :hash', [':hash' => $hash]);
+
+        if (!$invoiceModel instanceof \Model_Invoice) {
+            throw new InformationException('Invoice not found');
+        }
+
+        $this->checkInvoiceAuth($invoiceModel, InvoiceOperation::READ);
+
+        $invoice = $this->toApiArray($invoiceModel, false, $identity);
+        $content = $this->renderInvoicePdfContent($invoiceModel, $invoice);
+
+        return $this->createPdfResponse($content, $invoice['serie_nr']);
+    }
+
+    /**
+     * Build the PDF invoice as an email attachment, provided the admin has opted into it via
+     * the "Attach PDF invoice to invoice emails" setting. Returns null if the setting is off
+     * or the PDF could not be generated, so callers can skip attaching without failing the send.
+     *
+     * @return array{content: string, name: string, mime: string}|null
+     */
+    public function getInvoicePdfAttachment(\Model_Invoice $invoiceModel): ?array
+    {
+        $systemService = $this->di['mod_service']('system');
+        if (!$systemService->getParamValue('invoice_email_attach_pdf')) {
+            return null;
+        }
+
+        try {
+            $invoice = $this->toApiArray($invoiceModel, false);
+            $content = $this->renderInvoicePdfContent($invoiceModel, $invoice);
+
+            return [
+                'content' => $content,
+                'name' => $this->sanitizePdfFileName((string) $invoice['serie_nr']) . '.pdf',
+                'mime' => 'application/pdf',
+            ];
+        } catch (\Exception $e) {
+            $this->di['logger']->setChannel('email')->error('Failed to generate PDF invoice attachment: ' . $e->getMessage());
+
+            return null;
+        }
+    }
+
+    protected function renderInvoicePdfContent(\Model_Invoice $invoiceModel, array $invoice): string
+    {
         $systemService = $this->di['mod_service']('system');
         $c = $systemService->getCompany();
         $document_format = $systemService->getParamValue('invoice_document_format', 'Letter');
 
-        $invoice = $this->di['db']->findOne('Invoice', 'hash = :hash', [':hash' => $hash]);
-
-        if (!$invoice instanceof \Model_Invoice) {
-            throw new \FOSSBilling\Exception('Invoice not found');
-        }
-
-        $this->checkInvoiceAuth($invoice, InvoiceOperation::READ);
-
-        if (isset($invoice->currency)) {
-            $currencyCode = $invoice->currency;
+        if (isset($invoiceModel->currency)) {
+            $currencyCode = $invoiceModel->currency;
         } else {
-            $client = $this->di['db']->getExistingModelById('Client', $invoice->client_id, 'Client not found');
+            $client = $this->di['db']->getExistingModelById('Client', $invoiceModel->client_id, 'Client not found');
             $currencyCode = $client->currency;
         }
-
-        $invoice = $this->toApiArray($invoice, false, $identity);
-        $company = $this->di['mod_service']('System')->getCompany();
 
         $CSS = $this->getPdfCss();
 
         $pdf = $this->createPdfGenerator();
         $pdf->setPaper($document_format, 'portrait');
         $options = $pdf->getOptions();
-        $options->setChroot($_SERVER['DOCUMENT_ROOT']);
+        $options->setChroot($this->di['request']->server->get('DOCUMENT_ROOT', ''));
 
         $sellerLines = 0;
         $buyerLines = 0;
         $logoSource = '';
 
-        if (!empty($company['logo_url'])) {
-            [$logoSource, $remote] = $this->getPdfLogoSource($company['logo_url']);
+        if (!empty($c['logo_url'])) {
+            [$logoSource, $remote] = $this->getPdfLogoSource($c['logo_url']);
             $options->set('isRemoteEnabled', $remote);
         }
 
@@ -1599,7 +1678,7 @@ class Service implements InjectionAwareInterface
         $pdf->loadHtml($html);
         $pdf->render();
 
-        return $this->createPdfResponse($pdf->output(), $invoice['serie_nr']);
+        return $pdf->output();
     }
 
     public function addNote(\Model_Invoice $model, $note): bool
@@ -1654,6 +1733,46 @@ class Service implements InjectionAwareInterface
         $conditions = 'status = ? and approved = 1 and reminded_at is null and DATEDIFF(NOW(), created_at) > ?';
 
         return $this->di['db']->find('Invoice', $conditions, [\Model_Invoice::STATUS_UNPAID, $days_after_issue]);
+    }
+
+    public function isInvoiceReminderIntervalEnabled(string $param, int $days, string $default = '', mixed $intervals = null): bool
+    {
+        if ($days < 1) {
+            return false;
+        }
+
+        if ($intervals === null) {
+            $systemService = $this->di['mod_service']('system');
+            $intervals = $systemService->getParamValue($param, $default);
+        }
+
+        return in_array($days, $this->parseInvoiceReminderIntervals($intervals), true);
+    }
+
+    public function parseInvoiceReminderIntervals(mixed $value): array
+    {
+        if (is_array($value)) {
+            $parts = $value;
+        } else {
+            $parts = preg_split('/[,\s]+/', (string) $value) ?: [];
+        }
+
+        $days = [];
+        foreach ($parts as $part) {
+            if ($part === '' || !is_numeric($part)) {
+                continue;
+            }
+
+            $day = (int) $part;
+            if ($day > 0) {
+                $days[] = $day;
+            }
+        }
+
+        $days = array_values(array_unique($days));
+        sort($days);
+
+        return $days;
     }
 
     private function _isAutoApproved(): bool
@@ -1813,24 +1932,11 @@ class Service implements InjectionAwareInterface
         $isOwner = $client !== null && (int) $invoiceClientId === (int) $client->id;
 
         if (!$isOwner && $this->isHashExpired($invoice)) {
-            $api_str = '/api/';
-            $url = RequestFactory::getRoutePath($this->di['request']);
-            if (strncasecmp($url, $api_str, strlen($api_str)) === 0) {
-                throw new InformationException('This invoice link has expired', [], 403);
-            }
-
-            throw new HttpResponseException(new RedirectResponse($this->di['url']->link('invoice')));
+            throw new InformationException('This invoice link has expired', [], 403);
         }
 
         if (!$hashAccessAllowed && !$isOwner) {
-            $api_str = '/api/';
-            $url = RequestFactory::getRoutePath($this->di['request']);
-            if (strncasecmp($url, $api_str, strlen($api_str)) === 0) {
-                throw new InformationException('You do not have permission to perform this action', [], 403);
-            }
-            $invoiceLink = $this->di['url']->link('invoice');
-
-            throw new HttpResponseException(new RedirectResponse($invoiceLink));
+            throw new InformationException('You do not have permission to perform this action', [], 403);
         }
     }
 
@@ -1900,17 +2006,13 @@ class Service implements InjectionAwareInterface
 
     protected function createPdfResponse(string $content, string $fileName): Response
     {
-        $response = new Response($content);
+        $response = (new ResponseFactory())->html($content);
         $safeFileName = str_replace(['/', '\\', '%'], '-', trim($fileName));
         if ($safeFileName === '') {
             $safeFileName = 'invoice';
         }
 
-        $fallbackFileName = preg_replace('/[^A-Za-z0-9._-]/', '-', $safeFileName);
-        $fallbackFileName = trim((string) $fallbackFileName, '.-');
-        if ($fallbackFileName === '') {
-            $fallbackFileName = 'invoice';
-        }
+        $fallbackFileName = $this->sanitizePdfFileName($fileName);
 
         $disposition = $response->headers->makeDisposition(
             HeaderUtils::DISPOSITION_INLINE,
@@ -1922,6 +2024,18 @@ class Service implements InjectionAwareInterface
         $response->headers->set('Content-Disposition', $disposition);
 
         return $response;
+    }
+
+    /**
+     * Reduce a file name to a plain ASCII form safe for both HTTP fallback
+     * Content-Disposition names and MIME attachment part headers.
+     */
+    private function sanitizePdfFileName(string $fileName): string
+    {
+        $fallbackFileName = preg_replace('/[^A-Za-z0-9._-]/', '-', trim($fileName));
+        $fallbackFileName = trim((string) $fallbackFileName, '.-');
+
+        return $fallbackFileName !== '' ? $fallbackFileName : 'invoice';
     }
 
     protected function getPdfCss(): string
@@ -1959,7 +2073,7 @@ class Service implements InjectionAwareInterface
 
         // prevent openbasedir error from preventing pdf creation when debug mode is enabled
         if (@!$this->filesystem->exists($source)) {
-            $source = Path::join($_SERVER['DOCUMENT_ROOT'], $source);
+            $source = Path::join($this->di['request']->server->get('DOCUMENT_ROOT', ''), $source);
             if (!$this->filesystem->exists($source)) {
                 // Assume the URL points to an image not hosted on this server
                 $source = $originalUrl;

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -23,6 +22,8 @@ class Box_Period
     final public const string PERIOD_ANNUAL = '1Y';
     final public const string PERIOD_BIENNIAL = '2Y';
     final public const string PERIOD_TRIENNIAL = '3Y';
+    final public const string PERIOD_QUADRENNIAL = '4Y';
+    final public const string PERIOD_QUINQUENNIAL = '5Y';
 
     /**
      * Predefined periods.
@@ -34,6 +35,8 @@ class Box_Period
         self::PERIOD_ANNUAL => 12,
         self::PERIOD_BIENNIAL => 24,
         self::PERIOD_TRIENNIAL => 36,
+        self::PERIOD_QUADRENNIAL => 48,
+        self::PERIOD_QUINQUENNIAL => 60,
     ];
 
     private readonly string $unit;
@@ -89,6 +92,8 @@ class Box_Period
             self::PERIOD_ANNUAL => ['rec_qty' => 1, 'title' => __trans('Every Year'), 'code' => self::PERIOD_ANNUAL, 'rec_unit' => self::UNIT_YEAR],
             self::PERIOD_BIENNIAL => ['rec_qty' => 2, 'title' => __trans('Every 2 Years'), 'code' => self::PERIOD_BIENNIAL, 'rec_unit' => self::UNIT_YEAR],
             self::PERIOD_TRIENNIAL => ['rec_qty' => 3, 'title' => __trans('Every 3 Years'), 'code' => self::PERIOD_TRIENNIAL, 'rec_unit' => self::UNIT_YEAR],
+            self::PERIOD_QUADRENNIAL => ['rec_qty' => 4, 'title' => __trans('Every 4 Years'), 'code' => self::PERIOD_QUADRENNIAL, 'rec_unit' => self::UNIT_YEAR],
+            self::PERIOD_QUINQUENNIAL => ['rec_qty' => 5, 'title' => __trans('Every 5 Years'), 'code' => self::PERIOD_QUINQUENNIAL, 'rec_unit' => self::UNIT_YEAR],
         ];
 
         if ($simple) {

@@ -20,28 +20,26 @@ test('gets admin profile', function (): void {
     $model = new Model_Admin();
     $model->loadBean(new Tests\Helpers\DummyBean());
     $model->id = 1;
-    $model->role = 'admin';
-    $model->admin_group_id = 1;
     $model->email = 'admin@fossbilling.org';
     $model->name = 'Admin';
     $model->signature = 'Sincerely';
     $model->status = 'active';
     $model->created_at = '2014-01-01';
     $model->updated_at = '2014-01-01';
+    $model->timezone = null;
 
-    $adminApi = new Admin();
+    $adminApi = apiEndpoint(new Admin());
     $adminApi->setIdentity($model);
     $adminApi->setService($service);
     $result = $adminApi->get();
     $expected = [
         'id' => $model->id,
-        'role' => $model->role,
-        'admin_group_id' => $model->admin_group_id,
         'email' => $model->email,
         'name' => $model->name,
         'signature' => $model->signature,
         'status' => $model->status,
         'api_token' => null,
+        'timezone' => null,
         'created_at' => $model->created_at,
         'updated_at' => $model->updated_at,
     ];
@@ -57,7 +55,7 @@ test('logs out admin', function (): void {
     $di['session'] = $sessionMock;
     $di['logger'] = new Tests\Helpers\TestLogger();
 
-    $adminApi = new Admin();
+    $adminApi = apiEndpoint(new Admin());
     $adminApi->setDi($di);
     $result = $adminApi->logout();
     expect($result)->toBeTrue();
@@ -71,7 +69,7 @@ test('updates admin profile', function (): void {
         ->once()
         ->andReturn(true);
 
-    $adminApi = new Admin();
+    $adminApi = apiEndpoint(new Admin());
     $adminApi->setIdentity($model);
     $adminApi->setService($serviceMock);
     $result = $adminApi->update(['name' => 'Root']);
@@ -86,7 +84,7 @@ test('generates api key', function (): void {
         ->once()
         ->andReturn(true);
 
-    $adminApi = new Admin();
+    $adminApi = apiEndpoint(new Admin());
     $adminApi->setIdentity($model);
     $adminApi->setService($serviceMock);
     $result = $adminApi->generate_api_key([]);
@@ -97,7 +95,7 @@ test('throws exception when changing password without required params', function
     $di = container();
     $di['validator'] = new FOSSBilling\Validate();
 
-    $adminApi = new Admin();
+    $adminApi = apiEndpoint(new Admin());
     $adminApi->setDi($di);
 
     expect(fn () => $adminApi->change_password([]))
@@ -120,7 +118,7 @@ test('changes password', function (): void {
     $serviceMock->shouldReceive('invalidateSessions')
         ->once();
 
-    $adminApi = new Admin();
+    $adminApi = apiEndpoint(new Admin());
     $adminApi->setDi($di);
     $adminApi->setIdentity($model);
     $adminApi->setService($serviceMock);

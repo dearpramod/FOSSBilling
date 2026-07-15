@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -16,6 +15,8 @@ declare(strict_types=1);
 
 namespace Box\Mod\Support\Api;
 
+use Box\Mod\Support\Entity\Helpdesk;
+use Box\Mod\Support\Entity\SupportTicket;
 use FOSSBilling\PaginationOptions;
 use FOSSBilling\Validation\Api\RequiredParams;
 
@@ -33,15 +34,13 @@ class Client extends \FOSSBilling\Api\AbstractApi
         $identity = $this->getIdentity();
         $data['client_id'] = $identity->id;
 
-        [$sql, $bindings] = $this->getService()->getSearchQuery($data);
-        $pager = $this->getDi()['pager']->getPaginatedResultSet($sql, $bindings, PaginationOptions::fromArray($data));
+        $repo = $this->getService()->getSupportTicketRepository();
 
-        foreach ($pager['list'] as $key => $ticketArr) {
-            $ticket = $this->getDi()['db']->getExistingModelById('SupportTicket', $ticketArr['id'], 'Ticket not found');
-            $pager['list'][$key] = $this->getService()->toApiArray($ticket, true, $this->getIdentity());
-        }
-
-        return $pager;
+        return $this->getDi()['pager']->paginateMappedQuery(
+            $repo->getSearchQueryBuilder($data),
+            PaginationOptions::fromArray($data),
+            fn (SupportTicket $ticket): array => $this->getService()->toApiArray($ticket, true, $this->getIdentity()),
+        );
     }
 
     /**
@@ -61,7 +60,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
      */
     public function helpdesk_get_pairs(): array
     {
-        return $this->getService()->helpdeskGetPairs();
+        return $this->getService()->getHelpdeskRepository()->getPairs();
     }
 
     /**
@@ -82,10 +81,15 @@ class Client extends \FOSSBilling\Api\AbstractApi
     ])]
     public function ticket_create(array $data): int
     {
-        // Sanitize content to prevent XSS attacks
-        $data['content'] = \FOSSBilling\Tools::sanitizeContent($data['content'], true);
+        $data['content'] = \FOSSBilling\Tools::sanitizeMarkdownContent($data['content']);
 
-        $helpdesk = $this->getDi()['db']->getExistingModelById('SupportHelpdesk', $data['support_helpdesk_id'], 'Helpdesk invalid');
+        /** @var \Box\Mod\Support\Repository\HelpdeskRepository $repo */
+        $repo = $this->getService()->getHelpdeskRepository();
+
+        $helpdesk = $repo->find((int) $data['support_helpdesk_id']);
+        if (!$helpdesk instanceof Helpdesk) {
+            throw new \FOSSBilling\InformationException('Helpdesk invalid');
+        }
 
         $client = $this->getIdentity();
 
@@ -98,18 +102,12 @@ class Client extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['id' => 'Ticket ID was not passed', 'content' => 'Ticket content required'])]
     public function ticket_reply(array $data): bool
     {
-        // Sanitize content to prevent XSS attacks
-        $data['content'] = \FOSSBilling\Tools::sanitizeContent($data['content'], true);
+        $data['content'] = \FOSSBilling\Tools::sanitizeMarkdownContent($data['content']);
 
         $client = $this->getIdentity();
+        $ticket = $this->getService()->getSupportTicketRepository()->findOneByClient((int) $client->id, (int) $data['id']);
 
-        $bindings = [
-            ':id' => $data['id'],
-            ':client_id' => $client->id,
-        ];
-        $ticket = $this->getDi()['db']->findOne('SupportTicket', 'id = :id AND client_id = :client_id', $bindings);
-
-        if (!$ticket instanceof \Model_SupportTicket) {
+        if (!$ticket instanceof SupportTicket) {
             throw new \FOSSBilling\InformationException('Ticket not found');
         }
 

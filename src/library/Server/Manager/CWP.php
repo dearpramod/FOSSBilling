@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -35,6 +34,7 @@ class Server_Manager_CWP extends Server_Manager
                             'label' => __trans('API Key'),
                             'placeholder' => __trans('API key you generated from within CWP.'),
                             'required' => true,
+                            'secret' => true,
                         ],
                     ],
                 ],

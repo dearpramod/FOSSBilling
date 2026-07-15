@@ -13,7 +13,7 @@ declare(strict_types=1);
 use function Tests\Helpers\container;
 
 test('getDi returns the dependency injection container', function (): void {
-    $api = new Box\Mod\Extension\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Extension\Api\Admin());
     $di = container();
     $api->setDi($di);
     $getDi = $api->getDi();
@@ -21,7 +21,7 @@ test('getDi returns the dependency injection container', function (): void {
 });
 
 test('activate activates an extension', function (): void {
-    $api = new Box\Mod\Extension\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Extension\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Extension\Service::class)->makePartial();
     $serviceMock->shouldAllowMockingProtectedMethods();
     $serviceMock->shouldReceive('activateExistingExtension')
@@ -36,7 +36,7 @@ test('activate activates an extension', function (): void {
 });
 
 test('configGet gets extension config', function (): void {
-    $api = new Box\Mod\Extension\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Extension\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Extension\Service::class)->makePartial();
     $serviceMock->shouldAllowMockingProtectedMethods();
     $serviceMock->shouldReceive('getConfig')
@@ -58,9 +58,14 @@ test('configGet gets extension config', function (): void {
 });
 
 test('configSave saves extension config', function (): void {
-    $api = new Box\Mod\Extension\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Extension\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Extension\Service::class)->makePartial();
     $serviceMock->shouldAllowMockingProtectedMethods();
+    $serviceMock->shouldReceive('hasManagePermission')
+        ->with('mod_example')
+        ->atLeast()
+        ->once()
+        ->andReturn(true);
     $serviceMock->shouldReceive('setConfig')
         ->atLeast()
         ->once()
@@ -68,12 +73,12 @@ test('configSave saves extension config', function (): void {
 
     $api->setService($serviceMock);
 
-    $result = $api->config_save([]);
+    $result = $api->config_save(['ext' => 'mod_example']);
     expect($result)->toBeTrue();
 });
 
 test('getList returns extensions list', function (): void {
-    $api = new Box\Mod\Extension\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Extension\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Extension\Service::class)->makePartial();
     $serviceMock->shouldAllowMockingProtectedMethods();
     $serviceMock->shouldReceive('getExtensionsList')
@@ -88,7 +93,7 @@ test('getList returns extensions list', function (): void {
 });
 
 test('getNavigation returns admin navigation', function (): void {
-    $api = new Box\Mod\Extension\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Extension\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Extension\Service::class)->makePartial();
     $serviceMock->shouldAllowMockingProtectedMethods();
     $serviceMock->shouldReceive('getAdminNavigation')

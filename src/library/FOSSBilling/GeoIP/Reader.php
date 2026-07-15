@@ -11,15 +11,14 @@ declare(strict_types=1);
 
 namespace FOSSBilling\GeoIP;
 
-use FOSSBilling\i18n;
-use FOSSBilling\StandardsHelper;
+use FOSSBilling\Config;
 use MaxMind\Db\Reader as MaxMindReader;
 use MaxMind\Db\Reader\InvalidDatabaseException;
+use Pimple\Container;
 use PrinsFrank\Standards\Language\LanguageAlpha2;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
-use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\RedirectionExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
@@ -27,8 +26,20 @@ use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 
 class Reader
 {
+    protected ?Container $di = null;
+
     private readonly MaxMindReader $reader;
     private readonly LanguageAlpha2 $language;
+
+    public function setDi(Container $di): void
+    {
+        $this->di = $di;
+    }
+
+    public function getDi(): ?Container
+    {
+        return $this->di;
+    }
 
     /**
      * Returns the path to the system's `country` database.
@@ -53,7 +64,7 @@ class Reader
      *
      * @throws IOException
      */
-    public static function updateDefaultDatabases(): bool
+    public function updateDefaultDatabases(): bool
     {
         $databases = [
             self::getCountryDatabase() => 'https://github.com/HostByBelle/IP-Geolocation-DB/releases/latest/download/cc0-both-country.mmdb',
@@ -63,7 +74,7 @@ class Reader
         foreach ($databases as $path => $url) {
             if (self::shouldUpdate($path)) {
                 try {
-                    self::downloadDb($path, $url);
+                    $this->downloadDb($path, $url);
 
                     return true;
                 } catch (\Exception $e) {
@@ -79,7 +90,7 @@ class Reader
      * Constructs a new GeoIP reader instance.
      *
      * @param string|null $database (Optional) a path to the database to load> Will default to the system's country database
-     * @param string|null $locale   (Optional) the locale to use for country names. Defaults to the locale being used by FOSSBilling.
+     * @param string|null $locale   (Optional) the locale to use for country names. Defaults to the configured default locale.
      *
      * @throws \InvalidArgumentException for invalid database path or unknown arguments
      * @throws InvalidDatabaseException  if the database is invalid or there is an error reading from it
@@ -91,10 +102,14 @@ class Reader
         $this->reader = new MaxMindReader($database);
 
         if ($locale === null) {
-            $locale = i18n::getActiveLocale();
+            $locale = Config::getProperty('i18n.locale', 'en_US');
         }
 
-        $this->language = StandardsHelper::getLanguageObject(false, $locale);
+        $original = $locale;
+        if (str_contains((string) $locale, '_')) {
+            $locale = explode('_', (string) $locale)[0];
+        }
+        $this->language = strlen((string) $locale) === 2 ? LanguageAlpha2::from($locale) : throw new \ValueError("No matching Alpha2 language found for {$original}");
     }
 
     /**
@@ -176,14 +191,13 @@ class Reader
      * @throws ClientExceptionInterface
      * @throws ServerExceptionInterface
      */
-    private static function downloadDb(string $path, string $url): void
+    private function downloadDb(string $path, string $url): void
     {
-        $httpClient = HttpClient::create();
+        $httpClient = $this->di['http_client'];
         $response = $httpClient->request('GET', $url);
-        $filesystem = new Filesystem();
 
         if ($response->getStatusCode() === 200) {
-            $filesystem->dumpFile($path, $response->getContent());
+            $this->di['filesystem']->dumpFile($path, $response->getContent());
         } else {
             throw new \Exception("Got a {$response->getStatusCode()} status code when attempting to download {$url}.");
         }

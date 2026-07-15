@@ -5,7 +5,6 @@ use Random\RandomException;
 
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -104,6 +103,18 @@ abstract class Server_Manager
     }
 
     /**
+     * Credential field names whose stored values must be hidden in the API and admin UI.
+     * Managers that declare their form via {@see self::getForm()} should mark fields with
+     * `'secret' => true`; managers without a form schema should override this.
+     *
+     * @return string[]
+     */
+    public static function getSecretFields(): array
+    {
+        return [];
+    }
+
+    /**
      * Generates a username for an account based on the provided domain name.
      * Server managers may define this function to provide their own method for username generation depending on the specifics of the server they are integrated with.
      *
@@ -155,8 +166,6 @@ abstract class Server_Manager
      * Sets the logger object.
      *
      * @param Box_Log $value the logger object
-     *
-     * @return $this
      */
     public function setLog(Box_Log $value): static
     {

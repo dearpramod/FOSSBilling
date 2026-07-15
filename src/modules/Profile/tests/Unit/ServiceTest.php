@@ -174,8 +174,6 @@ test('updates client', function (): void {
         'postcode' => 'string',
         'city' => 'string',
         'state' => 'string',
-        'document_type' => 'passport',
-        'document_nr' => random_int(100000, 900000),
         'lang' => 'en_US',
         'notes' => 'string',
         'custom_1' => 'string',
@@ -188,6 +186,16 @@ test('updates client', function (): void {
         'custom_8' => 'string',
         'custom_9' => 'string',
         'custom_10' => 'string',
+        'custom_11' => 'string',
+        'custom_12' => 'string',
+        'custom_13' => 'string',
+        'custom_14' => 'string',
+        'custom_15' => 'string',
+        'custom_16' => 'string',
+        'custom_17' => 'string',
+        'custom_18' => 'string',
+        'custom_19' => 'string',
+        'custom_20' => 'string',
     ];
 
     $service = new Service();
@@ -353,4 +361,19 @@ test('logs out client', function (): void {
     $service->setDi($di);
     $result = $service->logoutClient();
     expect($result)->toBeTrue();
+});
+
+test('i18n::validateTimezone returns null for null and empty input', function (): void {
+    expect(FOSSBilling\i18n::validateTimezone(null))->toBeNull();
+    expect(FOSSBilling\i18n::validateTimezone(''))->toBeNull();
+});
+
+test('i18n::validateTimezone accepts any IANA identifier', function (): void {
+    expect(FOSSBilling\i18n::validateTimezone('America/New_York'))->toBe('America/New_York');
+    expect(FOSSBilling\i18n::validateTimezone('Asia/Tokyo'))->toBe('Asia/Tokyo');
+    expect(FOSSBilling\i18n::validateTimezone('UTC'))->toBe('UTC');
+});
+
+test('i18n::validateTimezone throws InformationException for unknown identifier', function (): void {
+    expect(fn (): ?string => FOSSBilling\i18n::validateTimezone('Mars/Olympus'))->toThrow(FOSSBilling\InformationException::class);
 });

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -226,9 +225,6 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $this->checkPermissions('invoice', 'manage_invoices');
 
         $model = $this->getDi()['db']->getExistingModelById('ClientOrder', $data['id'], 'Order not found');
-        if ($model->price <= 0) {
-            throw new InformationException('Order :id is free. No need to generate invoice.', [':id' => $model->id]);
-        }
 
         return $this->getService()->renewInvoice($model, $data);
     }
@@ -287,7 +283,9 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
-     * Send buyer reminders about upcoming payment.
+     * Legacy hook point for buyer payment reminders.
+     *
+     * Automatic reminder intervals are processed by batch_invoke_due_event().
      *
      * @return bool
      */
@@ -773,7 +771,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $client = $this->getDi()['db']->getExistingModelById('Client', $data['client_id'], 'Client not found');
         $payGateway = $this->getDi()['db']->getExistingModelById('PayGateway', $data['gateway_id'], 'Payment gateway not found');
 
-        if ($client->currency != $data['currency']) {
+        if (strtoupper((string) $client->currency) !== strtoupper((string) $data['currency'])) {
             throw new InformationException('Client currency must match subscription currency. Check if clients currency is defined.');
         }
         $subscriptionService = $this->getDi()['mod_service']('Invoice', 'Subscription');

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2026 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -149,13 +148,9 @@ class Service implements InjectionAwareInterface
      */
     public function getCurrencyByClientId(int $clientId): Currency
     {
-        $sql = 'SELECT currency FROM client WHERE id = :client_id';
-        $values = [':client_id' => $clientId];
+        $currencyCode = $this->currencyRepository->getClientCurrencyCode($clientId);
 
-        $db = $this->di['db'];
-        $currencyCode = $db->getCell($sql, $values);
-
-        if ($currencyCode === null || $currencyCode === '') {
+        if ($currencyCode === null) {
             $defaultCurrency = $this->currencyRepository->findDefault();
             if ($defaultCurrency === null) {
                 throw new \FOSSBilling\Exception('Default currency not found.');
@@ -455,8 +450,8 @@ class Service implements InjectionAwareInterface
                 $requestUrl = "https://open.er-api.com/v6/latest/$from_currency";
             }
 
-            $client = $this->di['http_client'];
-            $response = $client->request('GET', $requestUrl);
+            $httpClient = $this->di['http_client'];
+            $response = $httpClient->request('GET', $requestUrl);
             $array = $response->toArray();
 
             if ($array['result'] !== 'success') {
@@ -501,8 +496,8 @@ class Service implements InjectionAwareInterface
 
             $from_currency = urlencode($from);
 
-            $client = $this->di['http_client'];
-            $response = $client->request('GET', 'https://api.apilayer.com/currency_data/live', [
+            $httpClient = $this->di['http_client'];
+            $response = $httpClient->request('GET', 'https://api.apilayer.com/currency_data/live', [
                 'query' => [
                     'source' => $from_currency,
                 ],
@@ -537,8 +532,8 @@ class Service implements InjectionAwareInterface
 
             $from_currency = urlencode($from);
 
-            $client = $this->di['http_client'];
-            $response = $client->request('GET', 'https://api.apilayer.com/currency_data/live', [
+            $httpClient = $this->di['http_client'];
+            $response = $httpClient->request('GET', 'https://api.apilayer.com/currency_data/live', [
                 'query' => [
                     'access_key' => $key,
                     'source' => $from_currency,

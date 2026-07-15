@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -18,7 +17,12 @@ final readonly class Identity
 
     public function __construct(private object $identity)
     {
-        $this->type = str_replace('model_', '', strtolower($identity::class));
+        $this->type = self::typeFromObject($identity);
+    }
+
+    public static function typeFromObject(object $identity): string
+    {
+        return str_replace('model_', '', strtolower($identity::class));
     }
 
     public function getIdentity(): object

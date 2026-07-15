@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -23,13 +22,16 @@ class ServicePayGateway implements InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
 
-    public function __construct(private readonly ?Filesystem $filesystem = new Filesystem())
+    public function __construct(private ?Filesystem $filesystem = null)
     {
     }
 
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -383,14 +385,9 @@ class ServicePayGateway implements InjectionAwareInterface
     public function getAdapterConfig(\Model_PayGateway $pg): array
     {
         $class = $this->getAdapterClassName($pg);
-        if (!$this->filesystem->exists(Path::join(PATH_LIBRARY, 'Payment', 'Adapter', "{$pg->gateway}.php"))) {
-            if (!$this->filesystem->exists(Path::join(PATH_LIBRARY, 'Payment', 'Adapter', $pg->gateway, "{$pg->gateway}.php"))) {
-                throw new \FOSSBilling\Exception('Payment gateway :adapter was not found', [':adapter' => $pg->gateway]);
-            }
-        }
 
         if (!class_exists($class)) {
-            throw new \FOSSBilling\Exception("Payment gateway class $class was not found");
+            throw new \FOSSBilling\Exception('Payment gateway :adapter was not found', [':adapter' => $pg->gateway]);
         }
 
         if (!method_exists($class, 'getConfig')) {
@@ -408,8 +405,14 @@ class ServicePayGateway implements InjectionAwareInterface
         $class = "Payment_Adapter_{$pg->gateway}";
 
         if (!class_exists($class)) {
-            $file = Path::join(PATH_LIBRARY, 'Payment', 'Adapter', $pg->gateway, "{$pg->gateway}.php");
-            include $file;
+            $nestedFile = Path::join(PATH_LIBRARY, 'Payment', 'Adapter', $pg->gateway, "{$pg->gateway}.php");
+            $flatFile = Path::join(PATH_LIBRARY, 'Payment', 'Adapter', "{$pg->gateway}.php");
+
+            if ($this->filesystem->exists($nestedFile)) {
+                require_once $nestedFile;
+            } elseif ($this->filesystem->exists($flatFile)) {
+                require_once $flatFile;
+            }
         }
 
         return $class;

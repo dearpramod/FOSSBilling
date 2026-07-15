@@ -1,0 +1,8 @@
+{
+  "name": "run-meropanel-driver",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "playwright": "^1.61.0"
+  }
+}

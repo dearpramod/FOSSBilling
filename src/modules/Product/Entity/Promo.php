@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -13,6 +12,7 @@ declare(strict_types=1);
 namespace Box\Mod\Product\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use FOSSBilling\Doctrine\TimestampTrait;
 use FOSSBilling\Interfaces\ApiArrayInterface;
 use FOSSBilling\Interfaces\TimestampInterface;
 
@@ -21,6 +21,8 @@ use FOSSBilling\Interfaces\TimestampInterface;
 #[ORM\HasLifecycleCallbacks]
 class Promo implements ApiArrayInterface, TimestampInterface
 {
+    use TimestampTrait;
+
     final public const string ABSOLUTE = 'absolute';
     final public const string PERCENTAGE = 'percentage';
 
@@ -42,23 +44,29 @@ class Promo implements ApiArrayInterface, TimestampInterface
     #[ORM\Column(type: \Doctrine\DBAL\Types\Types::DECIMAL, precision: 18, scale: 2, nullable: true)]
     private ?string $value = null;
 
-    #[ORM\Column(name: 'maxuses', type: \Doctrine\DBAL\Types\Types::INTEGER, options: ['default' => 0])]
-    private int $maxUses = 0;
+    #[ORM\Column(name: 'maxuses', type: \Doctrine\DBAL\Types\Types::INTEGER, nullable: true, options: ['default' => 0])]
+    /** @phpstan-ignore property.unusedType (column is nullable in the DB) */
+    private ?int $maxUses = 0;
 
-    #[ORM\Column(type: \Doctrine\DBAL\Types\Types::INTEGER, options: ['default' => 0])]
-    private int $used = 0;
+    #[ORM\Column(type: \Doctrine\DBAL\Types\Types::INTEGER, nullable: true, options: ['default' => 0])]
+    /** @phpstan-ignore property.unusedType (column is nullable in the DB) */
+    private ?int $used = 0;
 
-    #[ORM\Column(name: 'freesetup', type: \Doctrine\DBAL\Types\Types::BOOLEAN, options: ['default' => false])]
-    private bool $freeSetup = false;
+    #[ORM\Column(name: 'freesetup', type: \Doctrine\DBAL\Types\Types::BOOLEAN, nullable: true, options: ['default' => false])]
+    /** @phpstan-ignore property.unusedType (column is nullable in the DB) */
+    private ?bool $freeSetup = false;
 
-    #[ORM\Column(name: 'once_per_client', type: \Doctrine\DBAL\Types\Types::BOOLEAN, options: ['default' => false])]
-    private bool $oncePerClient = false;
+    #[ORM\Column(name: 'once_per_client', type: \Doctrine\DBAL\Types\Types::BOOLEAN, nullable: true, options: ['default' => false])]
+    /** @phpstan-ignore property.unusedType (column is nullable in the DB) */
+    private ?bool $oncePerClient = false;
 
-    #[ORM\Column(type: \Doctrine\DBAL\Types\Types::BOOLEAN, options: ['default' => false])]
-    private bool $recurring = false;
+    #[ORM\Column(type: \Doctrine\DBAL\Types\Types::BOOLEAN, nullable: true, options: ['default' => false])]
+    /** @phpstan-ignore property.unusedType (column is nullable in the DB) */
+    private ?bool $recurring = false;
 
-    #[ORM\Column(type: \Doctrine\DBAL\Types\Types::BOOLEAN, options: ['default' => false])]
-    private bool $active = false;
+    #[ORM\Column(type: \Doctrine\DBAL\Types\Types::BOOLEAN, nullable: true, options: ['default' => false])]
+    /** @phpstan-ignore property.unusedType (column is nullable in the DB) */
+    private ?bool $active = false;
 
     #[ORM\Column(type: \Doctrine\DBAL\Types\Types::TEXT, nullable: true)]
     private ?string $products = null;
@@ -75,12 +83,6 @@ class Promo implements ApiArrayInterface, TimestampInterface
     #[ORM\Column(name: 'end_at', type: \Doctrine\DBAL\Types\Types::DATETIME_MUTABLE, nullable: true)]
     private ?\DateTime $endAt = null;
 
-    #[ORM\Column(name: 'created_at', type: \Doctrine\DBAL\Types\Types::DATETIME_MUTABLE, nullable: true)]
-    private ?\DateTime $createdAt = null;
-
-    #[ORM\Column(name: 'updated_at', type: \Doctrine\DBAL\Types\Types::DATETIME_MUTABLE, nullable: true)]
-    private ?\DateTime $updatedAt = null;
-
     public function toApiArray(): array
     {
         return [
@@ -89,34 +91,20 @@ class Promo implements ApiArrayInterface, TimestampInterface
             'description' => $this->description,
             'type' => $this->type,
             'value' => $this->value !== null ? (float) $this->value : null,
-            'maxuses' => $this->maxUses,
-            'used' => $this->used,
-            'freesetup' => $this->freeSetup,
-            'once_per_client' => $this->oncePerClient,
-            'recurring' => $this->recurring,
-            'active' => $this->active,
+            'maxuses' => $this->maxUses ?? 0,
+            'used' => $this->used ?? 0,
+            'freesetup' => $this->freeSetup ?? false,
+            'once_per_client' => $this->oncePerClient ?? false,
+            'recurring' => $this->recurring ?? false,
+            'active' => $this->active ?? false,
             'products' => $this->products,
             'periods' => $this->periods,
             'client_groups' => $this->clientGroups,
             'start_at' => $this->startAt?->format('Y-m-d H:i:s'),
             'end_at' => $this->endAt?->format('Y-m-d H:i:s'),
-            'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
-            'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
+            'created_at' => $this->getCreatedAt()?->format('Y-m-d H:i:s'),
+            'updated_at' => $this->getUpdatedAt()?->format('Y-m-d H:i:s'),
         ];
-    }
-
-    #[ORM\PrePersist]
-    public function onPrePersist(): void
-    {
-        $now = new \DateTime();
-        $this->createdAt ??= $now;
-        $this->updatedAt = $now;
-    }
-
-    #[ORM\PreUpdate]
-    public function updateTimestamp(): void
-    {
-        $this->updatedAt = new \DateTime();
     }
 
     public function getId(): ?int
@@ -174,7 +162,7 @@ class Promo implements ApiArrayInterface, TimestampInterface
 
     public function getMaxUses(): int
     {
-        return $this->maxUses;
+        return $this->maxUses ?? 0;
     }
 
     public function setMaxUses(?int $maxUses): self
@@ -186,7 +174,7 @@ class Promo implements ApiArrayInterface, TimestampInterface
 
     public function getUsed(): int
     {
-        return $this->used;
+        return $this->used ?? 0;
     }
 
     public function setUsed(?int $used): self
@@ -198,7 +186,7 @@ class Promo implements ApiArrayInterface, TimestampInterface
 
     public function isFreeSetup(): bool
     {
-        return $this->freeSetup;
+        return $this->freeSetup ?? false;
     }
 
     public function setFreeSetup(bool $freeSetup): self
@@ -210,7 +198,7 @@ class Promo implements ApiArrayInterface, TimestampInterface
 
     public function isOncePerClient(): bool
     {
-        return $this->oncePerClient;
+        return $this->oncePerClient ?? false;
     }
 
     public function setOncePerClient(bool $oncePerClient): self
@@ -222,7 +210,7 @@ class Promo implements ApiArrayInterface, TimestampInterface
 
     public function isRecurring(): bool
     {
-        return $this->recurring;
+        return $this->recurring ?? false;
     }
 
     public function setRecurring(bool $recurring): self
@@ -234,7 +222,7 @@ class Promo implements ApiArrayInterface, TimestampInterface
 
     public function isActive(): bool
     {
-        return $this->active;
+        return $this->active ?? false;
     }
 
     public function setActive(bool $active): self
@@ -302,25 +290,5 @@ class Promo implements ApiArrayInterface, TimestampInterface
         $this->endAt = $endAt;
 
         return $this;
-    }
-
-    public function getCreatedAt(): ?\DateTime
-    {
-        return $this->createdAt;
-    }
-
-    public function setCreatedAt(?\DateTime $createdAt): void
-    {
-        $this->createdAt = $createdAt;
-    }
-
-    public function getUpdatedAt(): ?\DateTime
-    {
-        return $this->updatedAt;
-    }
-
-    public function setUpdatedAt(?\DateTime $updatedAt): void
-    {
-        $this->updatedAt = $updatedAt;
     }
 }

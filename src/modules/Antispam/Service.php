@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -22,7 +21,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 class Service implements InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
-    private readonly Filesystem $filesystem;
+    private Filesystem $filesystem;
 
     public function __construct()
     {
@@ -32,6 +31,9 @@ class Service implements InjectionAwareInterface
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -52,6 +54,7 @@ class Service implements InjectionAwareInterface
                 'display_name' => __trans('Manage antispam settings'),
                 'description' => __trans('Allows the staff member to block and unblock IP addresses.'),
             ],
+            'manage_settings' => [],
         ];
     }
 
@@ -163,8 +166,8 @@ class Service implements InjectionAwareInterface
                     throw new \FOSSBilling\InformationException('You have to complete the CAPTCHA to continue');
                 }
 
-                $client = $di['http_client'];
-                $response = $client->request('POST', 'https://google.com/recaptcha/api/siteverify', [
+                $httpClient = $di['http_client'];
+                $response = $httpClient->request('POST', 'https://google.com/recaptcha/api/siteverify', [
                     'body' => [
                         'secret' => $config['captcha_recaptcha_privatekey'],
                         'response' => $params['g-recaptcha-response'],
@@ -206,8 +209,8 @@ class Service implements InjectionAwareInterface
                     throw new \FOSSBilling\InformationException('Please complete the CAPTCHA verification.');
                 }
 
-                $client = $di['http_client'];
-                $response = $client->request('POST', 'https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                $httpClient = $di['http_client'];
+                $response = $httpClient->request('POST', 'https://challenges.cloudflare.com/turnstile/v0/siteverify', [
                     'body' => [
                         'secret' => $config['turnstile_secret_key'],
                         'response' => $turnstile_response,
@@ -229,8 +232,8 @@ class Service implements InjectionAwareInterface
                     throw new \FOSSBilling\InformationException('Please complete the CAPTCHA verification.');
                 }
 
-                $client = $di['http_client'];
-                $response = $client->request('POST', 'https://hcaptcha.com/siteverify', [
+                $httpClient = $di['http_client'];
+                $response = $httpClient->request('POST', 'https://hcaptcha.com/siteverify', [
                     'body' => [
                         'secret' => $config['hcaptcha_secret_key'],
                         'response' => $hcaptcha_response,
@@ -288,9 +291,9 @@ class Service implements InjectionAwareInterface
     public function isInStopForumSpamDatabase(array $data): bool
     {
         $url = 'https://www.stopforumspam.com/api';
-        $client = $this->di['http_client'];
+        $httpClient = $this->di['http_client'];
         $queryParams = array_merge($data, ['f' => 'json']);
-        $response = $client->request(
+        $response = $httpClient->request(
             'GET',
             $url,
             ['query' => $queryParams]
@@ -358,8 +361,8 @@ class Service implements InjectionAwareInterface
         return $this->di['cache']->get('tempMailDB', function (ItemInterface $item) {
             $item->expiresAfter(86400); // The list is updated once every 24 hours, so we will cache it for that long
 
-            $client = $this->di['http_client'];
-            $response = $client->request('GET', 'https://raw.githubusercontent.com/7c/fakefilter/main/txt/data.txt');
+            $httpClient = $this->di['http_client'];
+            $response = $httpClient->request('GET', 'https://raw.githubusercontent.com/7c/fakefilter/main/txt/data.txt');
             $dbPath = Path::join(PATH_CACHE, 'tempEmailDB.txt');
 
             if ($response->getStatusCode() === 200) {

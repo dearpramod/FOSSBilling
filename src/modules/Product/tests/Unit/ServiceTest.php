@@ -676,17 +676,14 @@ test('create product', function (): void {
 
     $newProductId = 1;
 
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock->shouldReceive('getCell')->atLeast()->once()->andReturn(0);
-
     $toolMock = Mockery::mock(FOSSBilling\Tools::class);
     $toolMock->shouldReceive('slug')->atLeast()->once()->andReturn('title');
 
     $productRepo = Mockery::mock(ProductRepository::class);
+    $productRepo->shouldReceive('getMaxPriority')->once()->andReturn(0);
     $productRepo->shouldReceive('findOneBy')->once()->with(['slug' => 'title'])->andReturn(null);
 
     $di = container();
-    $di['db'] = $dbMock;
     $di['em'] = productTestCreateEntityManagerWithRepositories($productRepo, null, productTestCreateProductEntity($newProductId), productTestCreateProductPaymentEntity(1));
     $di['tools'] = $toolMock;
     $di['logger'] = new Box_Log();
@@ -790,7 +787,7 @@ test('update priority', function (): void {
     $productB = productTestCreateProductEntity(5);
 
     $productRepo = Mockery::mock(ProductRepository::class);
-    $productRepo->shouldReceive('find')->twice()->andReturnUsing(fn ($id) => match ($id) {
+    $productRepo->shouldReceive('find')->twice()->andReturnUsing(fn ($id): Product => match ($id) {
         1 => $productA,
         5 => $productB,
     });
@@ -830,22 +827,15 @@ test('update config', function (): void {
 
 test('get addons', function (): void {
     $service = new Service();
-    $addonsRows = [
-        [
-            'id' => 1,
-            'title' => 'testTitle',
-        ],
-    ];
-
     $expected = [
         1 => 'testTitle',
     ];
 
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock->shouldReceive('getAll')->atLeast()->once()->andReturn($addonsRows);
+    $productRepo = Mockery::mock(ProductRepository::class);
+    $productRepo->shouldReceive('getAddonPairs')->once()->andReturn($expected);
 
     $di = container();
-    $di['db'] = $dbMock;
+    $di['em'] = productTestCreateEntityManagerWithRepositories($productRepo);
     $di['logger'] = new Box_Log();
 
     $service->setDi($di);
@@ -1580,7 +1570,7 @@ test('compensateCheckoutPromoFailure deletes orphaned redemptions and decrements
     $promoRepo = Mockery::mock(PromoRepository::class);
     $promoRepo->shouldReceive('decrementUsage')
         ->once()
-        ->with(7, 2, Mockery::type(DateTimeInterface::class));
+        ->with(7, 1, Mockery::type(DateTimeInterface::class));
 
     $emMock = new class($promoRepo, $redemptionRepo) {
         public int $removeCalls = 0;
@@ -2134,7 +2124,7 @@ test('assert upgrade allowed by ids throws helpful exception', function (): void
 
     $serviceMock = Mockery::mock(Service::class)->makePartial();
     $serviceMock->shouldReceive('getUpgradablePairsByProductId')->once()->with(1)->andReturn([]);
-    $serviceMock->shouldReceive('findProductById')->twice()->andReturnUsing(fn ($id) => match ($id) {
+    $serviceMock->shouldReceive('findProductById')->twice()->andReturnUsing(fn ($id): Product => match ($id) {
         1 => $currentProduct,
         2 => $upgradeProduct,
     });

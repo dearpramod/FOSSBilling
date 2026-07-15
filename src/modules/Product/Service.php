@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -26,7 +25,6 @@ use Box\Mod\Product\Repository\PromoRedemptionRepository;
 use Box\Mod\Product\Repository\PromoRepository;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\QueryBuilder;
-use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
 use FOSSBilling\InjectionAwareInterface;
 use FOSSBilling\PaginationOptions;
 
@@ -182,47 +180,47 @@ class Service implements InjectionAwareInterface
 
     public function toApiArray(Product $model, $deep = true, $identity = null): array
     {
-        $config = json_decode($this->getProductConfigJson($model) ?? '', true) ?? [];
+        $config = json_decode($model->getConfig() ?? '', true) ?? [];
         $pricing = $this->getProductPricingArray($model);
         $starting_from = $this->getStartingFromPrice($model);
         $isAdmin = $identity instanceof \Model_Admin;
         $addons = $this->getAddonsApiArray($model, $isAdmin);
 
         $result = [
-            'id' => $this->getProductId($model),
-            'product_category_id' => $this->getProductCategoryId($model),
-            'type' => $this->getProductType($model),
-            'title' => $this->getProductTitle($model),
-            'slug' => $this->getProductSlug($model),
-            'description' => $this->getProductDescription($model),
+            'id' => $model->getId(),
+            'product_category_id' => $model->getProductCategoryId(),
+            'type' => $model->getType(),
+            'title' => $model->getTitle(),
+            'slug' => $model->getSlug(),
+            'description' => $model->getDescription(),
             'unit' => $this->getProductUnit($model),
-            'priority' => $this->getProductPriority($model),
+            'priority' => $model->getPriority(),
             'pricing' => $isAdmin ? $pricing : $this->getPublicPricing($pricing),
             'config' => $isAdmin ? $config : $this->getPublicConfig($config),
             'addons' => $addons,
 
             'price_starting_from' => $starting_from,
-            'icon_url' => $this->getProductIconUrl($model),
+            'icon_url' => $model->getIconUrl(),
 
             // stock control
-            'allow_quantity_select' => $this->isAllowQuantitySelect($model),
+            'allow_quantity_select' => $model->isAllowQuantitySelect(),
 
             // Exposed publicly so the order form can be fetched during guest checkout.
-            'form_id' => $this->getProductFormId($model),
+            'form_id' => $model->getFormId(),
         ];
 
         if ($isAdmin) {
-            $result['created_at'] = $this->formatDateTimeValue($this->getProductCreatedAt($model));
-            $result['updated_at'] = $this->formatDateTimeValue($this->getProductUpdatedAt($model));
+            $result['created_at'] = $this->formatDateTimeValue($model->getCreatedAt());
+            $result['updated_at'] = $this->formatDateTimeValue($model->getUpdatedAt());
             $result['addons'] = $addons;
-            $result['quantity_in_stock'] = $this->getProductQuantityInStock($model);
-            $result['stock_control'] = $this->isStockControlled($model);
+            $result['quantity_in_stock'] = $model->getQuantityInStock();
+            $result['stock_control'] = $model->isStockControl();
             $result['upgrades'] = $this->getUpgradablePairs($model);
-            $result['status'] = $this->getProductStatus($model);
-            $result['hidden'] = $this->isProductHidden($model);
-            $result['setup'] = $this->getProductSetup($model);
-            if ($this->getProductCategoryId($model)) {
-                $productCategory = $this->findProductCategoryById((int) $this->getProductCategoryId($model));
+            $result['status'] = $model->getStatus();
+            $result['hidden'] = $model->isHidden();
+            $result['setup'] = $model->getSetup();
+            if ($model->getProductCategoryId()) {
+                $productCategory = $this->findProductCategoryById((int) $model->getProductCategoryId());
                 $result['category'] = [
                     'id' => $productCategory->getId(),
                     'title' => $productCategory->getTitle(),
@@ -298,12 +296,12 @@ class Service implements InjectionAwareInterface
             return $service->getCartProductTitle($product, $config ?? []);
         }
 
-        return (string) $this->getProductTitle($product);
+        return (string) $product->getTitle();
     }
 
     public function validateSelectedAddonsForProduct(Product $product, array $addons): void
     {
-        $validAddons = json_decode($this->getProductAddonsJson($product) ?? '', true);
+        $validAddons = json_decode($product->getAddons() ?? '', true);
         if (empty($validAddons)) {
             $validAddons = [];
         }
@@ -314,7 +312,7 @@ class Service implements InjectionAwareInterface
             }
 
             $addon = $this->getAddonById((int) $addonId);
-            if (!$addon instanceof Product || $this->getProductStatus($addon) !== 'enabled' || !in_array((int) $addonId, $validAddons)) {
+            if (!$addon instanceof Product || $addon->getStatus() !== 'enabled' || !in_array((int) $addonId, $validAddons)) {
                 throw new \FOSSBilling\InformationException('One or more of your selected add-ons are invalid for the associated product.');
             }
         }
@@ -349,12 +347,12 @@ class Service implements InjectionAwareInterface
 
     public function getProductPricingArray(Product $product): array
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return $this->getDomainPricingArray();
         }
 
-        if ($this->getProductPaymentId($product)) {
-            $productPayment = $this->getProductPaymentById((int) $this->getProductPaymentId($product));
+        if ($product->getProductPaymentId()) {
+            $productPayment = $this->getProductPaymentById((int) $product->getProductPaymentId());
 
             return $this->toProductPaymentApiArray($productPayment);
         }
@@ -364,7 +362,7 @@ class Service implements InjectionAwareInterface
 
     public function getProductUnit(Product $product): string
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return 'year';
         }
 
@@ -390,7 +388,7 @@ class Service implements InjectionAwareInterface
 
     public function getRelatedProductDiscount(Product $product, array $items, ?array $config = null): float
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return $this->getDomainRelatedDiscount($items, $config ?? []);
         }
 
@@ -408,8 +406,7 @@ class Service implements InjectionAwareInterface
 
     public function createProduct($title, $type, $categoryId = null): int
     {
-        $sql = 'SELECT MAX(priority) FROM product LIMIT 1';
-        $priority = $this->di['db']->getCell($sql);
+        $priority = $this->getProductRepository()->getMaxPriority();
 
         $productPayment = $this->createDefaultProductPayment();
         $paymentId = (int) $productPayment->getId();
@@ -425,9 +422,7 @@ class Service implements InjectionAwareInterface
             ->setSlug($slug)
             ->setType($type)
             ->setSetup(self::SETUP_AFTER_PAYMENT)
-            ->setPriority((int) $priority + 10)
-            ->setUpdatedAt(new \DateTime())
-            ->setCreatedAt(new \DateTime());
+            ->setPriority($priority + 10);
 
         $this->di['em']->persist($model);
         $this->di['em']->flush();
@@ -446,56 +441,56 @@ class Service implements InjectionAwareInterface
             if (!isset($data['pricing']['type']) || !array_key_exists($data['pricing']['type'], $types)) {
                 throw new \FOSSBilling\InformationException('Pricing type is required');
             }
-            $productPayment = $this->getProductPaymentById((int) $this->getProductPaymentId($model));
+            $productPayment = $this->getProductPaymentById((int) $model->getProductPaymentId());
             $this->applyPricingToProductPayment($productPayment, $data['pricing']);
             $this->di['em']->flush();
         }
 
         if (isset($data['config']) && is_array($data['config'])) {
-            $current = json_decode($this->getProductConfigJson($model) ?? '', true) ?? [];
+            $current = json_decode($model->getConfig() ?? '', true) ?? [];
             $c = array_merge($current, $data['config']);
-            $this->setProductConfigJson($model, json_encode($c));
+            $model->setConfig(json_encode($c));
         }
 
-        $form_id = $data['form_id'] ?? $this->getProductFormId($model);
-        $productCategoryId = $data['product_category_id'] ?? $this->getProductCategoryId($model);
+        $form_id = $data['form_id'] ?? $model->getFormId();
+        $productCategoryId = $data['product_category_id'] ?? $model->getProductCategoryId();
 
-        $this->setProductCategoryIdValue($model, empty($productCategoryId) ? null : (int) $productCategoryId);
-        $this->setProductFormIdValue($model, empty($form_id) ? null : (int) $form_id);
-        $this->setProductIconUrlValue($model, $data['icon_url'] ?? $this->getProductIconUrl($model));
-        $this->setProductStatusValue($model, (string) ($data['status'] ?? $this->getProductStatus($model)));
-        $this->setProductHiddenValue($model, (bool) ($data['hidden'] ?? $this->isProductHidden($model)));
-        $this->setProductSlugValue($model, $data['slug'] ?? $this->getProductSlug($model));
-        $this->setProductSetupValue($model, (string) ($data['setup'] ?? $this->getProductSetup($model)));
+        $model->setProductCategoryId(empty($productCategoryId) ? null : (int) $productCategoryId);
+        $model->setFormId(empty($form_id) ? null : (int) $form_id);
+        $model->setIconUrl($data['icon_url'] ?? $model->getIconUrl());
+        $model->setStatus((string) ($data['status'] ?? $model->getStatus()));
+        $model->setHidden((bool) ($data['hidden'] ?? $model->isHidden()));
+        $model->setSlug($data['slug'] ?? $model->getSlug());
+        $model->setSetup((string) ($data['setup'] ?? $model->getSetup()));
         // remove empty value in data['upgrades];
         if (is_array($data['upgrades'] ?? null)) {
             $upgrades = array_values(array_filter($data['upgrades']));
             if (empty($upgrades)) {
-                $this->setProductUpgradesJson($model, null);
+                $model->setUpgrades(null);
             } else {
-                $this->setProductUpgradesJson($model, json_encode($upgrades));
+                $model->setUpgrades(json_encode($upgrades));
             }
         }
         if (is_array($data['addons'] ?? null)) {
             $addons = array_values(array_filter($data['addons']));
             if (empty($addons)) {
-                $this->setProductAddonsJsonValue($model, null);
+                $model->setAddons(null);
             } else {
-                $this->setProductAddonsJsonValue($model, json_encode($addons));
+                $model->setAddons(json_encode($addons));
             }
         }
 
-        $this->setProductTitleValue($model, $data['title'] ?? $this->getProductTitle($model));
-        $this->setProductStockControlValue($model, (bool) ($data['stock_control'] ?? $this->isStockControlled($model)));
-        $this->setProductAllowQuantitySelectValue($model, (bool) ($data['allow_quantity_select'] ?? $this->isAllowQuantitySelect($model)));
-        $this->setProductQuantityInStockValue($model, (int) ($data['quantity_in_stock'] ?? $this->getProductQuantityInStock($model)));
-        $this->setProductDescriptionValue($model, $data['description'] ?? $this->getProductDescription($model));
-        $this->setProductPluginValue($model, $data['plugin'] ?? $this->getProductPlugin($model));
-        $this->setProductUpdatedAtValue($model, new \DateTime());
+        $model->setTitle($data['title'] ?? $model->getTitle());
+        $model->setStockControl((bool) ($data['stock_control'] ?? $model->isStockControl()));
+        $model->setAllowQuantitySelect((bool) ($data['allow_quantity_select'] ?? $model->isAllowQuantitySelect()));
+        $model->setQuantityInStock((int) ($data['quantity_in_stock'] ?? $model->getQuantityInStock()));
+        $model->setDescription($data['description'] ?? $model->getDescription());
+        $model->setPlugin($data['plugin'] ?? $model->getPlugin());
+        $model->setUpdatedAt(new \DateTime());
 
         $this->di['em']->flush();
 
-        $this->di['logger']->info('Updated product #%s configuration', $this->getProductId($model));
+        $this->di['logger']->info('Updated product #%s configuration', $model->getId());
 
         return true;
     }
@@ -520,7 +515,7 @@ class Service implements InjectionAwareInterface
     public function updateConfig(Product $model, $data): bool
     {
         /* add new config value */
-        $config = json_decode($this->getProductConfigJson($model) ?? '', true) ?? [];
+        $config = json_decode($model->getConfig() ?? '', true) ?? [];
 
         if (isset($data['config']) && is_array($data['config'])) {
             $config = array_intersect_key((array) $config, $data['config']);
@@ -541,11 +536,11 @@ class Service implements InjectionAwareInterface
             $config[$data['new_config_name']] = $data['new_config_value'];
         }
 
-        $this->setProductConfigJson($model, json_encode($config));
-        $this->setProductUpdatedAtValue($model, new \DateTime());
+        $model->setConfig(json_encode($config));
+        $model->setUpdatedAt(new \DateTime());
         $this->di['em']->flush();
 
-        $this->di['logger']->info('Updated product #%s configuration', $this->getProductId($model));
+        $this->di['logger']->info('Updated product #%s configuration', $model->getId());
 
         return true;
     }
@@ -555,18 +550,7 @@ class Service implements InjectionAwareInterface
      */
     public function getAddons(): array
     {
-        $sql = 'SELECT id, title
-                FROM product
-                WHERE is_addon =1
-                ORDER by id asc';
-        $addons = $this->di['db']->getAll($sql);
-
-        $result = [];
-        foreach ($addons as $addon) {
-            $result[$addon['id']] = $addon['title'];
-        }
-
-        return $result;
+        return $this->getProductRepository()->getAddonPairs();
     }
 
     public function createAddon($title, $description = null, $setup = null, $status = null, $iconUrl = null): ?int
@@ -587,9 +571,7 @@ class Service implements InjectionAwareInterface
             ->setSetup($setup ?? self::SETUP_AFTER_PAYMENT)
             ->setIsAddon(true)
             ->setIconUrl($iconUrl)
-            ->setDescription($description)
-            ->setUpdatedAt(new \DateTime())
-            ->setCreatedAt(new \DateTime());
+            ->setDescription($description);
 
         $this->di['em']->persist($model);
         $this->di['em']->flush();
@@ -606,7 +588,7 @@ class Service implements InjectionAwareInterface
         if ($orderService->productHasOrders($product)) {
             throw new \FOSSBilling\InformationException('Cannot remove product which has active orders.');
         }
-        $id = $this->getProductId($product);
+        $id = $product->getId();
         $this->di['em']->remove($product);
         $this->di['em']->flush();
         $this->di['logger']->info('Deleted product #%s', $id);
@@ -616,7 +598,7 @@ class Service implements InjectionAwareInterface
 
     public function getPaginatedProducts(array $data, $identity = null): array
     {
-        return $this->paginateMappedQuery(
+        return $this->di['pager']->paginateMappedQuery(
             $this->getProductSearchQueryBuilder($data),
             PaginationOptions::fromArray($data),
             fn (Product $product): array => $this->toApiArray($product, false, $identity),
@@ -636,8 +618,7 @@ class Service implements InjectionAwareInterface
         $productCategory
             ->setTitle($title)
             ->setIconUrl($icon_url)
-            ->setDescription($description)
-            ->setUpdatedAt(new \DateTime());
+            ->setDescription($description);
         $this->di['em']->flush();
 
         $this->di['logger']->info('Updated product category #%s', $productCategory->getId());
@@ -650,9 +631,7 @@ class Service implements InjectionAwareInterface
         $model = (new ProductCategory())
             ->setTitle($title)
             ->setDescription($description)
-            ->setIconUrl($icon_url)
-            ->setUpdatedAt(new \DateTime())
-            ->setCreatedAt(new \DateTime());
+            ->setIconUrl($icon_url);
         $this->di['em']->persist($model);
         $this->di['em']->flush();
         $id = $model->getId();
@@ -688,12 +667,19 @@ class Service implements InjectionAwareInterface
         $pr = $this->getCategoryProducts($model);
 
         $type = null; // identified by first product in category
+<<<<<<< HEAD
         if (!$deep) {
             // Shallow mode: skip per-product API arrays (pricing lookups) — resolve only the
             // category type from the first product. Used by nav menus and back-links.
             $first = reset($pr);
             if ($first !== false) {
                 $type = $this->getProductType($first);
+=======
+        foreach ($pr as $p) {
+            $pa = $this->toApiArray($p, false, $identity);
+            if (reset($pr) == $p) {
+                $type = $p->getType();
+>>>>>>> 0.8.4
             }
         } else {
             foreach ($pr as $p) {
@@ -752,9 +738,13 @@ class Service implements InjectionAwareInterface
 
     public function getPaginatedProductCategories(array $data, $identity = null): array
     {
+<<<<<<< HEAD
         $deep = (bool) ($data['deep'] ?? true);
 
         return $this->paginateMappedQuery(
+=======
+        return $this->di['pager']->paginateMappedQuery(
+>>>>>>> 0.8.4
             $this->getProductCategorySearchQueryBuilder($data),
             PaginationOptions::fromArray($data),
             fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, $deep, $identity),
@@ -763,12 +753,12 @@ class Service implements InjectionAwareInterface
 
     public function getStartingFromPrice(Product $model)
     {
-        if ($this->getProductType($model) == self::DOMAIN) {
+        if ($model->getType() == self::DOMAIN) {
             return $this->getStartingDomainPrice();
         }
 
-        if ($this->getProductPaymentId($model)) {
-            $productPaymentModel = $this->getProductPaymentById((int) $this->getProductPaymentId($model));
+        if ($model->getProductPaymentId()) {
+            $productPaymentModel = $this->getProductPaymentById((int) $model->getProductPaymentId());
 
             return $this->getStartingPrice($productPaymentModel);
         }
@@ -781,9 +771,9 @@ class Service implements InjectionAwareInterface
      */
     public function getUpgradablePairs(Product $model): array
     {
-        $ids = json_decode($this->getProductUpgradesJson($model) ?? '', true);
+        $ids = json_decode($model->getUpgrades() ?? '', true);
         $pids = $this->getProductTitlesByIds($ids);
-        unset($pids[$this->getProductId($model)]);
+        unset($pids[$model->getId()]);
 
         return $pids;
     }
@@ -795,13 +785,13 @@ class Service implements InjectionAwareInterface
 
     public function canUpgradeTo(Product $model, Product $new): bool
     {
-        if ($this->getProductId($model) === $this->getProductId($new)) {
+        if ($model->getId() === $new->getId()) {
             return false;
         }
 
         $pairs = $this->getUpgradablePairs($model);
 
-        return array_key_exists($this->getProductId($new), $pairs);
+        return array_key_exists($new->getId(), $pairs);
     }
 
     public function assertUpgradeAllowedByIds(int $productId, int $upgradeProductId): void
@@ -854,7 +844,7 @@ class Service implements InjectionAwareInterface
     {
         $category = $this->getProductCategoryRepository()->findById($id);
         if (!$category instanceof ProductCategory) {
-            throw new \FOSSBilling\Exception('Category not found');
+            throw new \FOSSBilling\InformationException('Category not found');
         }
 
         return $category;
@@ -956,7 +946,7 @@ class Service implements InjectionAwareInterface
 
             $addon = $this->getAddonById($id);
             if (!$addon instanceof Product) {
-                error_log('Addon not found by id ' . $id);
+                $this->di['logger']->warning('Addon not found by id %s', $id);
 
                 continue;
             }
@@ -972,7 +962,7 @@ class Service implements InjectionAwareInterface
                 }
             }
 
-            $addonConfig['parent_id'] = $this->getProductId($parentProduct);
+            $addonConfig['parent_id'] = $parentProduct->getId();
             $selectedAddons[] = [
                 'product' => $addon,
                 'config' => $addonConfig,
@@ -985,8 +975,8 @@ class Service implements InjectionAwareInterface
     public function isStockAvailable(Product|int $product, $qty): bool
     {
         $resolvedProduct = $this->resolveStockProduct($product);
-        if ($this->isStockControlled($resolvedProduct)) {
-            return $this->getProductQuantityInStock($resolvedProduct) >= (int) $qty;
+        if ($resolvedProduct->isStockControl()) {
+            return $resolvedProduct->getQuantityInStock() >= (int) $qty;
         }
 
         return true;
@@ -995,18 +985,18 @@ class Service implements InjectionAwareInterface
     public function reduceStock(Product|int $product, $qty): bool
     {
         $resolvedProduct = $this->resolveStockProduct($product);
-        if (!$this->isStockControlled($resolvedProduct)) {
+        if (!$resolvedProduct->isStockControl()) {
             return true;
         }
 
         $quantity = (int) $qty;
-        $available = $this->getProductQuantityInStock($resolvedProduct);
+        $available = $resolvedProduct->getQuantityInStock();
         if ($available < $quantity) {
-            throw new \FOSSBilling\InformationException('Product :id is out of stock.', [':id' => $this->getProductId($resolvedProduct)], 831);
+            throw new \FOSSBilling\InformationException('Product :id is out of stock.', [':id' => $resolvedProduct->getId()], 831);
         }
 
-        $this->setProductQuantityInStockValue($resolvedProduct, $available - $quantity);
-        $this->setProductUpdatedAtValue($resolvedProduct, new \DateTime());
+        $resolvedProduct->setQuantityInStock($available - $quantity);
+        $resolvedProduct->setUpdatedAt(new \DateTime());
 
         $this->di['em']->flush();
 
@@ -1042,13 +1032,13 @@ class Service implements InjectionAwareInterface
      */
     public function getProductAddons(Product $model, bool $includeUnavailable = false): array
     {
-        $ids = $this->normalizeProductIds(json_decode($this->getProductAddonsJson($model) ?? '', true) ?? []);
+        $ids = $this->normalizeProductIds(json_decode($model->getAddons() ?? '', true) ?? []);
 
         if ($ids === []) {
             return [];
         }
 
-        return $this->getProductRepository()->findAddonsByIds($ids, (int) $this->getProductId($model), $includeUnavailable);
+        return $this->getProductRepository()->findAddonsByIds($ids, (int) $model->getId(), $includeUnavailable);
     }
 
     /**
@@ -1111,9 +1101,9 @@ class Service implements InjectionAwareInterface
         $line = $this->getProductOrderLineConfig($product, $config);
 
         return [
-            'product_id' => (int) $this->getProductId($product),
-            'form_id' => $this->getProductFormId($product),
-            'type' => $this->getProductType($product),
+            'product_id' => (int) $product->getId(),
+            'form_id' => $product->getFormId(),
+            'type' => $product->getType(),
             'quantity' => $line['quantity'],
             'unit' => $this->getProductUnit($product),
             'price' => $line['price'],
@@ -1145,22 +1135,22 @@ class Service implements InjectionAwareInterface
 
     public function toAddonArray(Product $model, $deep = true, bool $isAdmin = false): array
     {
-        $productPayment = $this->getProductPaymentById((int) $this->getProductPaymentId($model));
+        $productPayment = $this->getProductPaymentById((int) $model->getProductPaymentId());
         $pricing = $this->toProductPaymentApiArray($productPayment);
-        $config = json_decode($this->getProductConfigJson($model) ?? '', true) ?? [];
+        $config = json_decode($model->getConfig() ?? '', true) ?? [];
 
         $result = [
-            'id' => $this->getProductId($model),
-            'type' => $this->getProductType($model),
-            'title' => $this->getProductTitle($model),
-            'slug' => $this->getProductSlug($model),
-            'description' => $this->getProductDescription($model),
+            'id' => $model->getId(),
+            'type' => $model->getType(),
+            'title' => $model->getTitle(),
+            'slug' => $model->getSlug(),
+            'description' => $model->getDescription(),
             'unit' => $this->getProductUnit($model),
-            'plugin' => $this->getProductPlugin($model),
-            'allow_quantity_select' => $this->isAllowQuantitySelect($model),
-            'created_at' => $this->formatDateTimeValue($this->getProductCreatedAt($model)),
-            'updated_at' => $this->formatDateTimeValue($this->getProductUpdatedAt($model)),
-            'icon_url' => $this->getProductIconUrl($model),
+            'plugin' => $model->getPlugin(),
+            'allow_quantity_select' => $model->isAllowQuantitySelect(),
+            'created_at' => $this->formatDateTimeValue($model->getCreatedAt()),
+            'updated_at' => $this->formatDateTimeValue($model->getUpdatedAt()),
+            'icon_url' => $model->getIconUrl(),
 
             'pricing' => $isAdmin ? $pricing : $this->getPublicPricing($pricing),
             'config' => $isAdmin ? $config : $this->getPublicConfig($config),
@@ -1216,7 +1206,7 @@ class Service implements InjectionAwareInterface
     {
         $promo = $this->getPromoRepository()->find($id);
         if (!$promo instanceof Promo) {
-            throw new \FOSSBilling\Exception('Promo not found');
+            throw new \FOSSBilling\InformationException('Promo not found');
         }
 
         return $promo;
@@ -1368,6 +1358,9 @@ class Service implements InjectionAwareInterface
      * When the RedBean transaction rolls back, Doctrine-side changes persist
      * orphaned unless explicitly cleaned up.
      *
+     * Idempotent: safe to call multiple times. Returns early if redemptions
+     * were already cleaned up by a previous invocation.
+     *
      * @param int[] $orderIds      Order IDs from the rolled-back RedBean transaction
      * @param int   $reservedCount Number of successful reservePromoForOrder() calls
      */
@@ -1382,20 +1375,24 @@ class Service implements InjectionAwareInterface
             return;
         }
 
-        if ($orderIds !== []) {
-            $redemptions = $this->getPromoRedemptionRepository()->findBy([
-                'promoId' => $promoId,
-                'clientOrderId' => $orderIds,
-            ]);
-            foreach ($redemptions as $redemption) {
-                $this->di['em']->remove($redemption);
-            }
-            if ($redemptions !== []) {
-                $this->di['em']->flush();
-            }
+        if ($orderIds === []) {
+            return;
         }
 
-        $this->getPromoRepository()->decrementUsage($promoId, $reservedCount, new \DateTimeImmutable());
+        $redemptions = $this->getPromoRedemptionRepository()->findBy([
+            'promoId' => $promoId,
+            'clientOrderId' => $orderIds,
+        ]);
+        if ($redemptions === []) {
+            return;
+        }
+
+        foreach ($redemptions as $redemption) {
+            $this->di['em']->remove($redemption);
+        }
+        $this->di['em']->flush();
+
+        $this->getPromoRepository()->decrementUsage($promoId, count($redemptions), new \DateTimeImmutable());
     }
 
     /**
@@ -1416,7 +1413,7 @@ class Service implements InjectionAwareInterface
         $product = $this->findProductById((int) $order->product_id);
         $discountAmount = (float) $order->discount;
 
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             $config = json_decode($order->config ?? '', true) ?? [];
             $discountAmount = $this->getRenewalProductDiscount($product, $promo, $config);
 
@@ -1478,10 +1475,7 @@ class Service implements InjectionAwareInterface
         $result['invoice'] = null;
 
         if (!empty($result['client_id'])) {
-            $client = $this->di['db']->getRow(
-                'SELECT id, first_name, last_name, email FROM client WHERE id = :id',
-                [':id' => $result['client_id']]
-            );
+            $client = $this->getPromoRedemptionRepository()->findClientSummary((int) $result['client_id']);
 
             $result['client'] = [
                 'id' => (int) $result['client_id'],
@@ -1492,10 +1486,7 @@ class Service implements InjectionAwareInterface
         }
 
         if (!empty($result['client_order_id'])) {
-            $order = $this->di['db']->getRow(
-                'SELECT id, title, created_at FROM client_order WHERE id = :id',
-                [':id' => $result['client_order_id']]
-            );
+            $order = $this->getPromoRedemptionRepository()->findOrderSummary((int) $result['client_order_id']);
 
             $result['order'] = [
                 'id' => (int) $result['client_order_id'],
@@ -1505,10 +1496,7 @@ class Service implements InjectionAwareInterface
         }
 
         if (!empty($result['invoice_id'])) {
-            $invoice = $this->di['db']->getRow(
-                'SELECT id, serie_nr, status, created_at FROM invoice WHERE id = :id',
-                [':id' => $result['invoice_id']]
-            );
+            $invoice = $this->getPromoRedemptionRepository()->findInvoiceSummary((int) $result['invoice_id']);
 
             $result['invoice'] = [
                 'id' => (int) $result['invoice_id'],
@@ -1638,7 +1626,7 @@ class Service implements InjectionAwareInterface
             return true;
         }
 
-        return in_array($this->getProductId($product), $products);
+        return in_array($product->getId(), $products);
     }
 
     /**
@@ -1648,7 +1636,7 @@ class Service implements InjectionAwareInterface
      */
     public function getProductOrderLineConfig(Product $product, ?array $config = null): array
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return $this->getDomainOrderLineConfig($config ?? []);
         }
 
@@ -1668,7 +1656,7 @@ class Service implements InjectionAwareInterface
      */
     public function getProductRenewalLineConfig(Product $product, ?array $config = null): array
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return $this->getDomainRenewalLineConfig($config ?? []);
         }
 
@@ -1677,11 +1665,11 @@ class Service implements InjectionAwareInterface
 
     public function getProductSetupPrice(Product $product, ?array $config = null): float
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return 0.0;
         }
 
-        $pp = $this->getProductPaymentById((int) $this->getProductPaymentId($product));
+        $pp = $this->getProductPaymentById((int) $product->getProductPaymentId());
 
         if ($pp->getType() == ProductPayment::FREE) {
             return 0.0;
@@ -1703,11 +1691,11 @@ class Service implements InjectionAwareInterface
 
     public function getProductPrice(Product $product, ?array $config = null): float|int|string
     {
-        if ($this->getProductType($product) === self::DOMAIN) {
+        if ($product->getType() === self::DOMAIN) {
             return $this->getDomainProductPrice($config ?? []);
         }
 
-        $pp = $this->getProductPaymentById((int) $this->getProductPaymentId($product));
+        $pp = $this->getProductPaymentById((int) $product->getProductPaymentId());
 
         if ($pp->getType() == ProductPayment::FREE) {
             return 0.0;
@@ -1719,7 +1707,7 @@ class Service implements InjectionAwareInterface
 
         if ($pp->getType() == ProductPayment::RECURRENT) {
             if (!isset($config['period'])) {
-                throw new \FOSSBilling\Exception('Product :id payment type is recurrent, but period was not selected', [':id' => $this->getProductId($product)]);
+                throw new \FOSSBilling\Exception('Product :id payment type is recurrent, but period was not selected', [':id' => $product->getId()]);
             }
 
             $period = new \Box_Period((string) $config['period']);
@@ -1754,7 +1742,7 @@ class Service implements InjectionAwareInterface
     {
         $productPayment = $this->getProductPaymentRepository()->find($id);
         if (!$productPayment instanceof ProductPayment) {
-            throw new \FOSSBilling\Exception('Product payment not found');
+            throw new \FOSSBilling\InformationException('Product payment not found');
         }
 
         return $productPayment;
@@ -1860,7 +1848,7 @@ class Service implements InjectionAwareInterface
     {
         $product = $this->getProductRepository()->find($id);
         if (!$product instanceof Product) {
-            throw new \FOSSBilling\Exception('Product not found');
+            throw new \FOSSBilling\InformationException('Product not found');
         }
 
         return $product;
@@ -1868,107 +1856,12 @@ class Service implements InjectionAwareInterface
 
     public function getProductModuleService(Product $product): object
     {
-        $type = $this->getProductType($product);
+        $type = $product->getType();
         if ($type === null || $type === '') {
             throw new \FOSSBilling\Exception('Product type could not be determined.');
         }
 
         return $this->di['mod_service']('service' . $type);
-    }
-
-    private function getProductId(Product $product): ?int
-    {
-        return $product->getId();
-    }
-
-    private function getProductCategoryId(Product $product): ?int
-    {
-        return $product->getProductCategoryId();
-    }
-
-    private function getProductPaymentId(Product $product): ?int
-    {
-        return $product->getProductPaymentId();
-    }
-
-    private function getProductFormId(Product $product): ?int
-    {
-        return $product->getFormId();
-    }
-
-    private function getProductType(Product $product): ?string
-    {
-        return $product->getType();
-    }
-
-    private function getProductTitle(Product $product): ?string
-    {
-        return $product->getTitle();
-    }
-
-    private function getProductSlug(Product $product): ?string
-    {
-        return $product->getSlug();
-    }
-
-    private function getProductDescription(Product $product): ?string
-    {
-        return $product->getDescription();
-    }
-
-    private function getProductPriority(Product $product): ?int
-    {
-        return $product->getPriority();
-    }
-
-    private function getProductIconUrl(Product $product): ?string
-    {
-        return $product->getIconUrl();
-    }
-
-    private function isAllowQuantitySelect(Product $product): bool
-    {
-        return $product->isAllowQuantitySelect();
-    }
-
-    private function getProductQuantityInStock(Product $product): int
-    {
-        return $product->getQuantityInStock();
-    }
-
-    private function isStockControlled(Product $product): bool
-    {
-        return $product->isStockControl();
-    }
-
-    private function getProductStatus(Product $product): string
-    {
-        return $product->getStatus();
-    }
-
-    private function isProductHidden(Product $product): bool
-    {
-        return $product->isHidden();
-    }
-
-    private function getProductSetup(Product $product): string
-    {
-        return $product->getSetup();
-    }
-
-    private function getProductAddonsJson(Product $product): ?string
-    {
-        return $product->getAddons();
-    }
-
-    private function getProductPlugin(Product $product): ?string
-    {
-        return $product->getPlugin();
-    }
-
-    private function getProductConfigJson(Product $product): ?string
-    {
-        return $product->getConfig();
     }
 
     /**
@@ -1977,118 +1870,18 @@ class Service implements InjectionAwareInterface
     private function getProductValidationData(Product $product): array
     {
         return [
-            'id' => $this->getProductId($product),
-            'product_category_id' => $this->getProductCategoryId($product),
-            'product_payment_id' => $this->getProductPaymentId($product),
-            'form_id' => $this->getProductFormId($product),
-            'title' => $this->getProductTitle($product),
-            'description' => $this->getProductDescription($product),
+            'id' => $product->getId(),
+            'product_category_id' => $product->getProductCategoryId(),
+            'product_payment_id' => $product->getProductPaymentId(),
+            'form_id' => $product->getFormId(),
+            'title' => $product->getTitle(),
+            'description' => $product->getDescription(),
             'unit' => $this->getProductUnit($product),
-            'status' => $this->getProductStatus($product),
-            'config' => json_decode($this->getProductConfigJson($product) ?? '', true) ?? [],
-            'plugin' => $this->getProductPlugin($product),
-            'type' => $this->getProductType($product),
+            'status' => $product->getStatus(),
+            'config' => json_decode($product->getConfig() ?? '', true) ?? [],
+            'plugin' => $product->getPlugin(),
+            'type' => $product->getType(),
         ];
-    }
-
-    private function getProductUpgradesJson(Product $product): ?string
-    {
-        return $product->getUpgrades();
-    }
-
-    private function getProductCreatedAt(Product $product): mixed
-    {
-        return $product->getCreatedAt();
-    }
-
-    private function getProductUpdatedAt(Product $product): mixed
-    {
-        return $product->getUpdatedAt();
-    }
-
-    private function setProductCategoryIdValue(Product $product, ?int $value): void
-    {
-        $product->setProductCategoryId($value);
-    }
-
-    private function setProductFormIdValue(Product $product, ?int $value): void
-    {
-        $product->setFormId($value);
-    }
-
-    private function setProductIconUrlValue(Product $product, ?string $value): void
-    {
-        $product->setIconUrl($value);
-    }
-
-    private function setProductStatusValue(Product $product, string $value): void
-    {
-        $product->setStatus($value);
-    }
-
-    private function setProductHiddenValue(Product $product, bool $value): void
-    {
-        $product->setHidden($value);
-    }
-
-    private function setProductSlugValue(Product $product, ?string $value): void
-    {
-        $product->setSlug($value);
-    }
-
-    private function setProductSetupValue(Product $product, string $value): void
-    {
-        $product->setSetup($value);
-    }
-
-    private function setProductUpgradesJson(Product $product, ?string $value): void
-    {
-        $product->setUpgrades($value);
-    }
-
-    private function setProductAddonsJsonValue(Product $product, ?string $value): void
-    {
-        $product->setAddons($value);
-    }
-
-    private function setProductTitleValue(Product $product, ?string $value): void
-    {
-        $product->setTitle($value);
-    }
-
-    private function setProductStockControlValue(Product $product, bool $value): void
-    {
-        $product->setStockControl($value);
-    }
-
-    private function setProductAllowQuantitySelectValue(Product $product, bool $value): void
-    {
-        $product->setAllowQuantitySelect($value);
-    }
-
-    private function setProductQuantityInStockValue(Product $product, int $value): void
-    {
-        $product->setQuantityInStock($value);
-    }
-
-    private function setProductDescriptionValue(Product $product, ?string $value): void
-    {
-        $product->setDescription($value);
-    }
-
-    private function setProductPluginValue(Product $product, ?string $value): void
-    {
-        $product->setPlugin($value);
-    }
-
-    private function setProductConfigJson(Product $product, ?string $value): void
-    {
-        $product->setConfig($value);
-    }
-
-    private function setProductUpdatedAtValue(Product $product, \DateTime $value): void
-    {
-        $product->setUpdatedAt($value);
     }
 
     private function formatDateTimeValue(mixed $value): ?string
@@ -2100,6 +1893,7 @@ class Service implements InjectionAwareInterface
         return $value !== null ? (string) $value : null;
     }
 
+<<<<<<< HEAD
     /**
      * @param callable(object): array $mapper
      *
@@ -2127,13 +1921,14 @@ class Service implements InjectionAwareInterface
         ];
     }
 
+=======
+>>>>>>> 0.8.4
     public function getProductDiscount(Product $product, Promo $promo, ?array $config = null)
     {
         if (!$this->isPromoLinkedToProduct($promo, $product)) {
             return 0;
         }
 
-        // check if promo code applies to specific period only
         if (isset($config['period'])) {
             $periods = $this->getPeriods($promo);
             if (!empty($periods) && !in_array($config['period'], $periods)) {
@@ -2218,7 +2013,7 @@ class Service implements InjectionAwareInterface
     // Function to get all orders for a product
     public function getOrdersForProduct(Product $product)
     {
-        return $this->getProductOrderRepository()->getRowsByProductId((int) $this->getProductId($product));
+        return $this->getProductOrderRepository()->getRowsByProductId((int) $product->getId());
     }
 
     /**

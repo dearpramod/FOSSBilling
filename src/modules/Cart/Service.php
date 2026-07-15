@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -725,7 +724,7 @@ class Service implements InjectionAwareInterface
                             $orderService->activateOrder($order);
                         }
                     } catch (\Exception $e) {
-                        error_log($e->getMessage());
+                        $this->di['logger']->error('Order activation failed after checkout: %s', $e->getMessage());
                         $status = 'error';
                         $notes = "Order could not be activated after checkout due to error: {$e->getMessage()}.";
                         $orderService->orderStatusAdd($order, $status, $notes);
@@ -767,8 +766,6 @@ class Service implements InjectionAwareInterface
     /**
      * Function checks if product is related to other products in cart
      * If relation exists then count discount for this.
-     *
-     * @return float
      */
     protected function getRelatedItemsDiscount(\Model_Cart $cart, \Model_CartProduct $model): float
     {

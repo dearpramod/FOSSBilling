@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -27,6 +26,7 @@ class Server_Manager_Hestia extends Server_Manager
                             'label' => 'Access Key ID',
                             'placeholder' => 'ID for the access key you\'ve generated in Hestia.',
                             'required' => true,
+                            'secret' => true,
                         ],
                         [
                             'name' => 'accesshash',
@@ -34,6 +34,7 @@ class Server_Manager_Hestia extends Server_Manager
                             'label' => 'Secret Key',
                             'placeholder' => 'Secret key for the access key you\'ve generated in Hestia',
                             'required' => true,
+                            'secret' => true,
                         ],
                     ],
                 ],

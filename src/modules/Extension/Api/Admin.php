@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -12,6 +11,7 @@ declare(strict_types=1);
 
 namespace Box\Mod\Extension\Api;
 
+use Box\Mod\Extension\Entity\Extension;
 use FOSSBilling\Tools;
 use FOSSBilling\Validation\Api\RequiredParams;
 
@@ -182,7 +182,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
         $ext = $this->_getExtension($data);
 
-        $this->getDi()['events_manager']->fire(['event' => 'onBeforeAdminDeactivateExtension', 'params' => ['id' => $ext->id]]);
+        $this->getDi()['events_manager']->fire(['event' => 'onBeforeAdminDeactivateExtension', 'params' => ['id' => $ext->getId()]]);
 
         $service = $this->getService();
         $service->deactivate($ext);
@@ -273,16 +273,19 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['ext' => 'Parameter "ext" was not passed'])]
     public function config_save($data)
     {
-        return $this->getService()->setConfig($data);
+        $service = $this->getService();
+        $service->hasManagePermission($data['ext']);
+
+        return $service->setConfig($data);
     }
 
     #[RequiredParams(['id' => 'Extension ID was not passed', 'type' => 'Extension type was not passed'])]
     private function _getExtension($data)
     {
         $service = $this->getService();
-        $ext = $service->findExtension($data['type'], $data['id']);
-        if (!$ext instanceof \Model_Extension) {
-            throw new \FOSSBilling\Exception('Extension not found');
+        $ext = $service->getExtensionRepository()->findOneByTypeAndName($data['type'], $data['id']);
+        if (!$ext instanceof Extension) {
+            throw new \FOSSBilling\InformationException('Extension not found');
         }
 
         return $ext;

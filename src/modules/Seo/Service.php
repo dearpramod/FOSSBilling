@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -43,6 +42,7 @@ class Service implements InjectionAwareInterface
                 'display_name' => __trans('Manage SEO'),
                 'description' => __trans('Allows the staff member to ping search engines.'),
             ],
+            'manage_settings' => [],
         ];
     }
 

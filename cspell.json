@@ -53,7 +53,10 @@
         "customtest",
         "Customtest",
         "mysite",
-        "myhost"
+        "myhost",
+        "inversed",
+        "Autoresponder",
+        "initialises"
     ],
 
     "ignoreWords": [
@@ -423,6 +426,7 @@
         "Cypress",
         "CSRF",
         "undismissed",
+        "unmigrated",
         "filp",
         "phpunit",
         "passthru",
@@ -516,7 +520,17 @@
         "baselined",
         "endverbatim",
         "missingmodule",
-        "FOUC"
+        "FOUC",
+        "kbarticles",
+        "rdsh",
+        "uppercases",
+        "inpay",
+        "seti",
+        "unassigns",
+        "docstrings",
+        "tablesort",
+        "Brien",
+        "whsec"
     ],
     "ignorePaths": [
         "node_modules/**",

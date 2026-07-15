@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -19,8 +18,11 @@ use FOSSBilling\Environment;
 use FOSSBilling\Http\RequestFactory;
 use FOSSBilling\Security\AuthenticationRequiredException;
 use FOSSBilling\Security\EmailValidationRequiredException;
+use FOSSBilling\Version;
 use RedBeanPHP\Facade;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -222,6 +224,8 @@ $di['mod_service'] = $di->protect(fn ($mod, $sub = '') => $di['mod']($mod)->getS
  */
 $di['mod_config'] = $di->protect(fn ($name) => $di['mod']($name)->getConfig());
 
+$di['cookie_queue'] = fn (): FOSSBilling\Http\CookieQueue => new FOSSBilling\Http\CookieQueue();
+
 /*
  *
  * @param void
@@ -280,7 +284,14 @@ $di['cache'] = fn (): FilesystemAdapter => new FilesystemAdapter('sf_cache', 24 
 
 $di['rate_limit_cache'] = fn (): FilesystemAdapter => new FilesystemAdapter('rate_limit', 24 * 60 * 60, PATH_CACHE);
 
-$di['http_client'] = fn (): HttpClientInterface => HttpClient::create(['bindto' => BIND_TO]);
+$di['http_client'] = fn (): HttpClientInterface => HttpClient::create([
+    'bindto' => BIND_TO,
+    'headers' => [
+        'User-Agent' => 'FOSSBilling/' . Version::VERSION,
+    ],
+]);
+
+$di['filesystem'] = fn (): Filesystem => new Filesystem();
 
 $di['rate_limiter'] = function () use ($di) {
     $rateLimiter = new FOSSBilling\Security\RateLimiter();
@@ -609,7 +620,15 @@ $di['update_readiness'] = new FOSSBilling\UpdateReadinessCheck(
  * @return \Server_Manager The new server manager object that was just created.
  */
 $di['server_manager'] = $di->protect(function ($manager, $config) use ($di) {
-    $class = sprintf('Server_Manager_%s', ucfirst((string) $manager));
+    $managerName = ucfirst((string) $manager);
+    $class = sprintf('Server_Manager_%s', $managerName);
+
+    if (!class_exists($class)) {
+        $file = Path::join(PATH_LIBRARY, 'Server', 'Manager', $managerName . '.php');
+        if ($di['filesystem']->exists($file)) {
+            require_once $file;
+        }
+    }
 
     $s = new $class($config);
     $s->setLog($di['logger']);
@@ -685,7 +704,12 @@ $di['license_server'] = function () use ($di) {
  *
  * @return \FOSSBilling\GeoIP\Reader
  */
-$di['geoip'] = fn (): FOSSBilling\GeoIP\Reader => new FOSSBilling\GeoIP\Reader();
+$di['geoip'] = function () use ($di) {
+    $reader = new FOSSBilling\GeoIP\Reader();
+    $reader->setDi($di);
+
+    return $reader;
+};
 
 /*
  * @param void
@@ -701,14 +725,14 @@ $di['password'] = fn (): FOSSBilling\PasswordManager => new FOSSBilling\Password
  *
  * @return \Box_Translate The new translation object that was just created.
  */
-$di['translate'] = $di->protect(function ($textDomain = '') {
+$di['translate'] = $di->protect(function ($textDomain = '') use ($di) {
     $tr = new Box_Translate();
 
     if (!empty($textDomain)) {
         $tr->setDomain($textDomain);
     }
 
-    $locale = FOSSBilling\i18n::getActiveLocale();
+    $locale = FOSSBilling\i18n::getActiveLocale($di['request'], true, $di['cookie_queue']);
 
     $tr->setLocale($locale);
     $tr->setup();

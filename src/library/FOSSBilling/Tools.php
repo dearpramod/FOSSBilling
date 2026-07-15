@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -18,12 +17,11 @@ use Egulias\EmailValidator\Validation\MultipleValidationWithAnd;
 use Egulias\EmailValidator\Validation\RFCValidation;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
-use Symfony\Component\HttpClient\HttpClient;
 
 class Tools
 {
-    private readonly Filesystem $filesystem;
     protected ?\Pimple\Container $di = null;
+    private Filesystem $filesystem;
 
     public function __construct()
     {
@@ -33,6 +31,9 @@ class Tools
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -268,19 +269,11 @@ class Tools
         return $port === false ? $default : $port;
     }
 
-    public static function isHTTPS(): bool
-    {
-        $protocol = $_SERVER['HTTPS'] ?? $_SERVER['REQUEST_SCHEME'] ?? '';
-
-        // $_SERVER['HTTPS'] will be set to `on` to indicate HTTPS and REQUEST_SCHEME may be set to `https`, so either one means we are connected via HTTPS.
-        return strcasecmp((string) $protocol, 'on') === 0 || strcasecmp((string) $protocol, 'https') === 0;
-    }
-
     /**
      * Tries to fetch a list of possible interfaces (IPs) to bind to when making requests.
      * Attempts to make external requests for each interface & only works with IPv4.
      */
-    public static function listHttpInterfaces(): array
+    public function listHttpInterfaces(): array
     {
         // Fetch a list of IP addresses for local interfaces
         $validatedIps = [];
@@ -298,7 +291,7 @@ class Tools
         // For each of the found IPs, attempt a generic network request. If the request produces no errors, consider it valid
         foreach ($ips as $ip) {
             try {
-                self::getExternalIP(true, $ip);
+                $this->getExternalIP(true, $ip);
                 $validatedIps[] = $ip;
             } catch (\Exception) {
             }
@@ -363,15 +356,17 @@ class Tools
      *
      * @return ?string `null` if there was an error, otherwise an IP address will be returned
      */
-    public static function getExternalIP(bool $throw = true, ?string $bind = null): ?string
+    public function getExternalIP(bool $throw = true, ?string $bind = null): ?string
     {
         $services = ['https://api64.ipify.org', 'https://checkip.global.api.aws', 'https://ifconfig.io/ip'];
-        $bind ??= BIND_TO;
-        $client = HttpClient::create(['bindto' => $bind]);
+        $httpClient = $this->di['http_client'];
+        if ($bind !== null) {
+            $httpClient = $httpClient->withOptions(['bindto' => $bind]);
+        }
 
         foreach ($services as $service) {
             try {
-                $response = $client->request('GET', $service, [
+                $response = $httpClient->request('GET', $service, [
                     'timeout' => 2,
                 ]);
 
@@ -421,6 +416,10 @@ class Tools
      * Sanitize user content to prevent XSS attacks.
      * Uses Symfony's HTML Sanitizer component for robust protection.
      *
+     * Use this only for content that is stored and rendered as HTML.
+     * For Markdown content (e.g. ticket messages, KB articles), use sanitizeMarkdownContent() instead,
+     * since the HTML sanitizer incorrectly strips text that follows unrecognized tags like <foo>.
+     *
      * @param string $content   The content to sanitize. If empty, returns an empty string.
      * @param bool   $allowHtml Whether to allow safe HTML tags (default: true for rich content)
      *
@@ -451,6 +450,31 @@ class Tools
         $sanitizer = new \Symfony\Component\HtmlSanitizer\HtmlSanitizer($config);
 
         return trim($sanitizer->sanitize($content));
+    }
+
+    /**
+     * Sanitize Markdown content for storage.
+     *
+     * Unlike sanitizeContent(), this does NOT run an HTML sanitizer because the content is Markdown,
+     * not HTML. Running an HTML sanitizer on Markdown corrupts it: characters like < and > that users
+     * type as literal text get misinterpreted as unknown HTML elements and dropped together with all
+     * subsequent text.
+     *
+     * XSS protection for Markdown content is handled at render time by the markdown_to_html Twig
+     * filter, which is configured with html_input=escape so any raw HTML in the Markdown is safely
+     * escaped rather than executed.
+     *
+     * @param string $content the Markdown content to sanitize
+     *
+     * @return string Sanitized Markdown content safe for storage
+     */
+    public static function sanitizeMarkdownContent(string $content = ''): string
+    {
+        if (empty($content)) {
+            return '';
+        }
+
+        return trim(str_replace("\0", '', $content));
     }
 
     public static function validatePhoneCC(string|int $countryCode): int

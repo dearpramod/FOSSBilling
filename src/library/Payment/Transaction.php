@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -14,6 +13,8 @@ class Payment_Transaction
     final public const string STATUS_UNKNOWN = 'unknown';
     final public const string STATUS_PENDING = 'pending';
     final public const string STATUS_COMPLETE = 'complete';
+    final public const string STATUS_SUCCEEDED = 'succeeded';
+    final public const string STATUS_FAILED = 'failed';
 
     final public const string TXTYPE_PAYMENT = 'payment';
     final public const string TXTYPE_REFUND = 'refund';

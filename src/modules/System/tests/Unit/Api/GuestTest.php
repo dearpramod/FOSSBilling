@@ -13,7 +13,7 @@ declare(strict_types=1);
 use function Tests\Helpers\container;
 
 test('getDi returns set dependency injection container', function (): void {
-    $api = new Box\Mod\System\Api\Guest();
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
     $di = container();
     $api->setDi($di);
     $getDi = $api->getDi();
@@ -21,7 +21,7 @@ test('getDi returns set dependency injection container', function (): void {
 });
 
 test('company returns company data when public display is enabled', function (): void {
-    $api = new Box\Mod\System\Api\Guest();
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
     $companyData = ['companyName' => 'TestCo'];
 
     $authMock = Mockery::mock('\Box_Authorization');
@@ -53,7 +53,7 @@ test('company returns company data when public display is enabled', function ():
 });
 
 test('company filters sensitive data when public display is disabled', function (): void {
-    $api = new Box\Mod\System\Api\Guest();
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
     $companyData = [
         'companyName' => 'TestCo',
         'vat_number' => 'Test VAT',
@@ -103,7 +103,7 @@ test('company filters sensitive data when public display is disabled', function 
 });
 
 test('period_title returns period title string', function (): void {
-    $api = new Box\Mod\System\Api\Guest();
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
     $data = ['code' => 'periodCode'];
 
     $serviceMock = Mockery::mock(Box\Mod\System\Service::class);
@@ -121,7 +121,7 @@ test('period_title returns period title string', function (): void {
 });
 
 test('period_title returns dash when code is missing', function (): void {
-    $api = new Box\Mod\System\Api\Guest();
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
     $data = [];
     $expected = '-';
     $di = container();
@@ -132,7 +132,7 @@ test('period_title returns dash when code is missing', function (): void {
 });
 
 test('get_pending_messages returns and clears pending messages', function (): void {
-    $api = new Box\Mod\System\Api\Guest();
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
     $serviceMock = Mockery::mock(Box\Mod\System\Service::class);
     $messageArr = ['Important message to user'];
     $serviceMock
@@ -145,4 +145,37 @@ test('get_pending_messages returns and clears pending messages', function (): vo
     $api->setService($serviceMock);
     $result = $api->get_pending_messages();
     expect($result)->toBeArray()->toEqual($messageArr);
+});
+
+test('timezones returns the grouped IANA timezone list', function (): void {
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
+    $api->setDi(container());
+
+    $result = $api->timezones();
+
+    expect($result)->toBeArray();
+    expect($result)->toHaveKey('UTC');
+    expect($result['UTC'])->toContain('UTC');
+    expect($result)->toHaveKey('America');
+    expect($result['America'])->toContain('America/New_York');
+    expect($result)->toHaveKey('Europe');
+    expect($result['Europe'])->toContain('Europe/London');
+
+    // The list should not contain invalid or empty entries.
+    foreach ($result as $identifiers) {
+        expect($identifiers)->toBeArray();
+        foreach ($identifiers as $identifier) {
+            expect($identifier)->toBeString()->not->toBeEmpty();
+            expect(in_array($identifier, DateTimeZone::listIdentifiers(), true))->toBeTrue();
+        }
+    }
+});
+
+test('locale returns the active locale string', function (): void {
+    $api = apiEndpoint(new Box\Mod\System\Api\Guest());
+    $api->setDi(container());
+
+    $result = $api->locale();
+
+    expect($result)->toBeString()->not->toBeEmpty();
 });

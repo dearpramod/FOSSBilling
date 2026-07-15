@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -43,7 +42,7 @@ final class Dispatcher implements InjectionAwareInterface
             throw new Exception('Method :method must contain underscore', [':method' => $method], 710);
         }
 
-        $role = str_replace('model_', '', strtolower($identity::class));
+        $role = Identity::typeFromObject($identity);
         $parts = explode('_', $method);
         $mod = strtolower($parts[0]);
         unset($parts[0]);
@@ -58,7 +57,13 @@ final class Dispatcher implements InjectionAwareInterface
             throw new Exception('FOSSBilling module :mod is not installed/activated', [':mod' => $mod], 715);
         }
 
-        if ($role === 'admin') {
+        /*
+         * Disable permission checks when an update is pending finalization.
+         *
+         * This is to make sure update finalization still works when there are changes to the
+         * permission system and patches need to be applied before everything starts working again.
+         */
+        if ($role === 'admin' && !$this->isAllowedAdminFinalizationCall($mod, $method)) {
             $staffService = $this->getDi()['mod_service']('Staff');
             if (!$staffService->hasPermission($identity, $mod)) {
                 throw new Exception('You do not have access to the :mod module', [':mod' => $mod], 725);
@@ -95,6 +100,13 @@ final class Dispatcher implements InjectionAwareInterface
         $this->validateRequiredParams($api, $methodName, $data);
 
         return $api->{$methodName}(...$this->normalizeArguments($api, $methodName, $arguments));
+    }
+
+    private function isAllowedAdminFinalizationCall(string $class, string $method): bool
+    {
+        $finalization = $this->di['update_finalization'];
+
+        return $finalization->isRequired() && $finalization->isAdminApiCallAllowed($class, $method);
     }
 
     /**

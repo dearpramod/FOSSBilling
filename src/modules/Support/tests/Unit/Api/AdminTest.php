@@ -10,10 +10,92 @@
 
 declare(strict_types=1);
 
+use Box\Mod\Support\Entity\CannedResponse;
+use Box\Mod\Support\Entity\CannedResponseCategory;
+use Box\Mod\Support\Entity\Helpdesk;
+use Box\Mod\Support\Entity\KbArticle;
+use Box\Mod\Support\Entity\KbArticleCategory;
+use Box\Mod\Support\Entity\SupportTicket;
+use Box\Mod\Support\Repository\CannedResponseCategoryRepository;
+use Box\Mod\Support\Repository\CannedResponseRepository;
+use Box\Mod\Support\Repository\HelpdeskRepository;
+use Box\Mod\Support\Repository\KbArticleCategoryRepository;
+use Box\Mod\Support\Repository\KbArticleRepository;
+use Doctrine\ORM\QueryBuilder;
+
 use function Tests\Helpers\container;
 
+function adminSupportKbCategoryFixture(): KbArticleCategory
+{
+    return (new KbArticleCategory())
+        ->setTitle('category-title')
+        ->setSlug('category-slug');
+}
+
+function adminSupportKbArticleFixture(): KbArticle
+{
+    return (new KbArticle())
+        ->setCategory(adminSupportKbCategoryFixture())
+        ->setTitle('Title')
+        ->setSlug('article-slug');
+}
+
+function adminSupportSetEntityId(object $entity, int $id): void
+{
+    $property = new ReflectionProperty($entity, 'id');
+    $property->setValue($entity, $id);
+}
+
+function adminSupportCannedCategoryFixture(): CannedResponseCategory
+{
+    $category = (new CannedResponseCategory())
+        ->setTitle('Category 1');
+    adminSupportSetEntityId($category, 1);
+
+    return $category;
+}
+
+function adminSupportCannedResponseFixture(): CannedResponse
+{
+    $response = (new CannedResponse())
+        ->setCategory(adminSupportCannedCategoryFixture())
+        ->setTitle('Title')
+        ->setContent('Content');
+    adminSupportSetEntityId($response, 1);
+
+    return $response;
+}
+
+function adminHelpdeskFixture(): Helpdesk
+{
+    $helpdesk = (new Helpdesk())
+        ->setName('General')
+        ->setEmail('support@example.com')
+        ->setCanReopen(true)
+        ->setCloseAfter(24)
+        ->setSignature('Signature');
+    adminSupportSetEntityId($helpdesk, 1);
+
+    return $helpdesk;
+}
+
+function adminSupportCannedCategoryWithResponsesFixture(): CannedResponseCategory
+{
+    $category = adminSupportCannedCategoryFixture();
+    $response = (new CannedResponse())
+        ->setCategory($category)
+        ->setTitle('Title')
+        ->setContent('Content');
+    adminSupportSetEntityId($response, 1);
+
+    $responses = new ReflectionProperty($category, 'responses');
+    $responses->getValue($category)->add($response);
+
+    return $category;
+}
+
 test('ticket get list', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $simpleResultArr = [
         'list' => [
             ['id' => 1],
@@ -21,29 +103,23 @@ test('ticket get list', function (): void {
     ];
     $paginatorMock = Mockery::mock(FOSSBilling\Pagination::class)->makePartial();
     $paginatorMock
-    ->shouldReceive('getPaginatedResultSet')
+    ->shouldReceive('paginateMappedQuery')
     ->atLeast()->once()
     ->andReturn($simpleResultArr);
 
-    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('getSearchQuery')->atLeast()->once()
-        ->andReturn(['query', []]);
-    $serviceMock
-    ->shouldReceive('toApiArray')
-    ->atLeast()->once()
-    ->andReturn([]);
+    $qb = Mockery::mock(QueryBuilder::class);
+    $repo = Mockery::mock(Box\Mod\Support\Repository\SupportTicketRepository::class);
+    $repo->shouldReceive('getSearchQueryBuilder')->andReturn($qb);
 
-    $model = new Model_SupportTicket();
-    $model->loadBean(new Tests\Helpers\DummyBean());
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($model);
+    $em = Mockery::mock(Doctrine\ORM\EntityManagerInterface::class);
+    $em->shouldReceive('getRepository')->with(SupportTicket::class)->andReturn($repo);
+
+    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getSupportTicketRepository')->andReturn($repo);
 
     $di = container();
     $di['pager'] = $paginatorMock;
-    $di['db'] = $dbMock;
+    $di['em'] = $em;
 
     $api->setDi($di);
 
@@ -56,19 +132,15 @@ test('ticket get list', function (): void {
 });
 
 test('ticket get', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicket());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn(new SupportTicket());
     $serviceMock->shouldReceive('toApiArray')->atLeast()->once()
         ->andReturn([]);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -82,19 +154,15 @@ test('ticket get', function (): void {
 });
 
 test('ticket update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicket());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn(new SupportTicket());
     $serviceMock->shouldReceive('ticketUpdate')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -108,22 +176,19 @@ test('ticket update', function (): void {
 });
 
 test('ticket message update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicketMessage());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketMessageById')->atLeast()->once()
+        ->andReturn(new Box\Mod\Support\Entity\SupportTicketMessage());
     $serviceMock->shouldReceive('ticketMessageUpdate')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
+    $api->setIdentity(new Model_Admin());
 
     $data = [
         'id' => 1,
@@ -134,20 +199,40 @@ test('ticket message update', function (): void {
     expect($result)->toBeTrue();
 });
 
-test('ticket delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicket());
+test('ticket message history get list', function (): void {
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $message = new Box\Mod\Support\Entity\SupportTicketMessage();
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketMessageById')->atLeast()->once()
+        ->andReturn($message);
+    $serviceMock->shouldReceive('getMessageHistory')->atLeast()->once()
+        ->with($message)
+        ->andReturn([['id' => 1, 'content' => 'Old content']]);
+
+    $di = container();
+    $api->setDi($di);
+
+    $api->setService($serviceMock);
+
+    $data = [
+        'id' => 1,
+    ];
+    $result = $api->ticket_message_history_get_list($data);
+
+    expect($result)->toBe([['id' => 1, 'content' => 'Old content']]);
+});
+
+test('ticket delete', function (): void {
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+
+    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn(new SupportTicket());
     $serviceMock->shouldReceive('rm')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -161,19 +246,15 @@ test('ticket delete', function (): void {
 });
 
 test('ticket reply', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicket());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn(new SupportTicket());
     $serviceMock->shouldReceive('ticketReply')->atLeast()->once()
         ->andReturn(1);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -189,22 +270,17 @@ test('ticket reply', function (): void {
 });
 
 test('ticket close', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $ticket = new Model_SupportTicket();
-    $ticket->loadBean(new Tests\Helpers\DummyBean());
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($ticket);
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $ticket = new SupportTicket();
+    Tests\Helpers\setEntityId($ticket, 1);
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn($ticket);
     $serviceMock->shouldReceive('closeTicket')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -219,23 +295,17 @@ test('ticket close', function (): void {
 });
 
 test('ticket close already closed', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $ticket = new Model_SupportTicket();
-    $ticket->loadBean(new Tests\Helpers\DummyBean());
-    $ticket->status = Model_SupportTicket::CLOSED;
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($ticket);
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $ticket = new SupportTicket();
+    Tests\Helpers\setEntityId($ticket, 1);
+    $ticket->setStatus(SupportTicket::STATUS_CLOSED);
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('closeTicket')
-    ;
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn($ticket);
+    $serviceMock->shouldReceive('closeTicket');
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -249,26 +319,23 @@ test('ticket close already closed', function (): void {
 });
 
 test('ticket create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $clientModel = new Model_Client();
-    $clientModel->loadBean(new Tests\Helpers\DummyBean());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
-    $supportHelpdeskModel = new Model_SupportHelpdesk();
-    $supportHelpdeskModel->loadBean(new Tests\Helpers\DummyBean());
+    $helpdeskModel = adminHelpdeskFixture();
 
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($clientModel, $supportHelpdeskModel);
+    $repoMock = Mockery::mock(HelpdeskRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn($helpdeskModel);
 
     $randID = 1;
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class);
+    $serviceMock->shouldReceive('getHelpdeskRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('ticketCreateForAdmin')->atLeast()->once()
         ->andReturn($randID);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -287,29 +354,22 @@ test('ticket create', function (): void {
 });
 
 test('batch ticket auto close', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $ticket = new SupportTicket();
+    Tests\Helpers\setEntityId($ticket, 1);
+
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('getExpired')->atLeast()->once()
         ->andReturn([['id' => 1], ['id' => 2]]);
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn($ticket);
     $serviceMock->shouldReceive('autoClose')->atLeast()->once()
         ->andReturn(true);
 
-    $ticket = new Model_SupportTicket();
-    $ticket->loadBean(new Tests\Helpers\DummyBean());
-    $ticket->id = 1;
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($ticket);
-
     $api->setService($serviceMock);
     $di = container();
-    $di['db'] = $dbMock;
     $di['logger'] = $this->createStub('\Box_Log');
     $api->setDi($di);
-    $api->setService($serviceMock);
 
     $result = $api->batch_ticket_auto_close([]);
 
@@ -317,39 +377,33 @@ test('batch ticket auto close', function (): void {
 });
 
 test('batch ticket auto close not closed', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $ticket = new Model_SupportTicket();
-    $ticket->loadBean(new Tests\Helpers\DummyBean());
-    $ticket->id = 1;
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $ticket = new SupportTicket();
+    Tests\Helpers\setEntityId($ticket, 1);
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('getExpired')->atLeast()->once()
         ->andReturn([['id' => 1], ['id' => 2]]);
-    $serviceMock->shouldReceive('autoClose')->atLeast()->once()
-    ;
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($ticket);
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn($ticket);
+    $serviceMock->shouldReceive('autoClose')->atLeast()->once();
 
     $api->setService($serviceMock);
     $di = container();
     $di['logger'] = $this->createStub('\Box_Log');
-    $di['db'] = $dbMock;
     $api->setDi($di);
+
     $result = $api->batch_ticket_auto_close([]);
 
     expect($result)->toBeTrue();
 });
 
 test('ticket get statuses', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $statuses = [
-        Model_SupportTicket::OPENED => 'Open',
-        Model_SupportTicket::ONHOLD => 'On hold',
-        Model_SupportTicket::CLOSED => 'Closed',
+        SupportTicket::STATUS_OPEN => 'Open',
+        SupportTicket::STATUS_ONHOLD => 'On hold',
+        SupportTicket::STATUS_CLOSED => 'Closed',
     ];
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('getStatuses')
@@ -365,11 +419,11 @@ test('ticket get statuses', function (): void {
 });
 
 test('ticket get statuses titles set', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $statuses = [
-        Model_SupportTicket::OPENED => 'Open',
-        Model_SupportTicket::ONHOLD => 'On hold',
-        Model_SupportTicket::CLOSED => 'Closed',
+        SupportTicket::STATUS_OPEN => 'Open',
+        SupportTicket::STATUS_ONHOLD => 'On hold',
+        SupportTicket::STATUS_CLOSED => 'Closed',
     ];
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('getStatuses')->atLeast()->once()
@@ -388,16 +442,21 @@ test('ticket get statuses titles set', function (): void {
 });
 
 test('helpdesk get list', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $qbMock = Mockery::mock(QueryBuilder::class);
     $paginatorMock = Mockery::mock(FOSSBilling\Pagination::class)->makePartial();
     $paginatorMock
-    ->shouldReceive('getPaginatedResultSet')
+    ->shouldReceive('paginateDoctrineQuery')
     ->atLeast()->once()
     ->andReturn([]);
+    $repoMock = Mockery::mock(HelpdeskRepository::class);
+    $repoMock->shouldReceive('getSearchQueryBuilder')
+        ->atLeast()->once()
+        ->andReturn($qbMock);
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('helpdeskGetSearchQuery')->atLeast()->once()
-        ->andReturn(['query', []]);
+    $serviceMock->shouldReceive('getHelpdeskRepository')->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
     $di['pager'] = $paginatorMock;
@@ -413,10 +472,14 @@ test('helpdesk get list', function (): void {
 });
 
 test('helpdesk get pairs', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('helpdeskGetPairs')->atLeast()->once()
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(HelpdeskRepository::class);
+    $repoMock->shouldReceive('getPairs')->atLeast()->once()
         ->andReturn([]);
+
+    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getHelpdeskRepository')->atLeast()->once()
+        ->andReturn($repoMock);
 
     $api->setService($serviceMock);
 
@@ -427,19 +490,17 @@ test('helpdesk get pairs', function (): void {
 });
 
 test('helpdesk get', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportHelpdesk());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(HelpdeskRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminHelpdeskFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('helpdeskToApiArray')->atLeast()->once()
-        ->andReturn([]);
+    $serviceMock->shouldReceive('getHelpdeskRepository')->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -454,19 +515,19 @@ test('helpdesk get', function (): void {
 });
 
 test('helpdesk update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportHelpdesk());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(HelpdeskRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminHelpdeskFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getHelpdeskRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('helpdeskUpdate')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -481,7 +542,7 @@ test('helpdesk update', function (): void {
 });
 
 test('helpdesk create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('helpdeskCreate')->atLeast()->once()
         ->andReturn(1);
@@ -501,19 +562,19 @@ test('helpdesk create', function (): void {
 });
 
 test('helpdesk delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportHelpdesk());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(HelpdeskRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminHelpdeskFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getHelpdeskRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('helpdeskRm')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -528,35 +589,29 @@ test('helpdesk delete', function (): void {
 });
 
 test('canned get list', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $resultSet = [
         'list' => [
             0 => ['id' => 1],
         ],
     ];
+    $qbMock = Mockery::mock(QueryBuilder::class);
     $paginatorMock = Mockery::mock(FOSSBilling\Pagination::class)->makePartial();
     $paginatorMock
-    ->shouldReceive('getPaginatedResultSet')
+    ->shouldReceive('paginateDoctrineQuery')
     ->atLeast()->once()
     ->andReturn($resultSet);
+    $repoMock = Mockery::mock(CannedResponseRepository::class);
+    $repoMock->shouldReceive('getSearchQueryBuilder')
+        ->atLeast()->once()
+        ->andReturn($qbMock);
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('cannedGetSearchQuery')->atLeast()->once()
-        ->andReturn(['query', []]);
-    $serviceMock->shouldReceive('cannedToApiArray')->atLeast()->once()
-        ->andReturn([]);
-
-    $model = new Model_SupportPr();
-    $model->loadBean(new Tests\Helpers\DummyBean());
-    $dbMock = Mockery::mock('\Box_DAtabase');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($model);
+    $serviceMock->shouldReceive('getCannedResponseRepository')->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
     $di['pager'] = $paginatorMock;
-    $di['db'] = $dbMock;
 
     $api->setDi($di);
 
@@ -569,16 +624,20 @@ test('canned get list', function (): void {
 });
 
 test('canned pairs', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getAssoc')
-    ->atLeast()->once()
-    ->andReturn([1 => 'Title']);
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseRepository::class);
+    $repoMock->shouldReceive('getGroupedPairs')
+        ->atLeast()->once()
+        ->andReturn(['Category' => [1 => 'Title']]);
+
+    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getCannedResponseRepository')
+        ->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
+    $api->setService($serviceMock);
 
     $data = [];
     $result = $api->canned_pairs();
@@ -587,19 +646,17 @@ test('canned pairs', function (): void {
 });
 
 test('canned get', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportPr());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminSupportCannedResponseFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('cannedToApiArray')->atLeast()->once()
-        ->andReturn([]);
+    $serviceMock->shouldReceive('getCannedResponseRepository')->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -614,19 +671,19 @@ test('canned get', function (): void {
 });
 
 test('canned delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportPr());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminSupportCannedResponseFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getCannedResponseRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('cannedRm')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -641,7 +698,7 @@ test('canned delete', function (): void {
 });
 
 test('canned create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('cannedCreate')->atLeast()->once()
         ->andReturn(1);
@@ -663,19 +720,19 @@ test('canned create', function (): void {
 });
 
 test('canned update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminSupportCannedResponseFixture());
+
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getCannedResponseRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('cannedUpdate')->atLeast()->once()
         ->andReturn(true);
 
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportPr());
-
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -690,16 +747,20 @@ test('canned update', function (): void {
 });
 
 test('canned category pairs', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getAssoc')
-    ->atLeast()->once()
-    ->andReturn([1 => 'Category 1']);
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseCategoryRepository::class);
+    $repoMock->shouldReceive('getPairs')
+        ->atLeast()->once()
+        ->andReturn([1 => 'Category 1']);
+
+    $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getCannedResponseCategoryRepository')
+        ->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
+    $api->setService($serviceMock);
 
     $api->setIdentity(new Model_Admin());
 
@@ -712,19 +773,17 @@ test('canned category pairs', function (): void {
 });
 
 test('canned category get', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportPrCategory());
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseCategoryRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminSupportCannedCategoryWithResponsesFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $serviceMock->shouldReceive('cannedCategoryToApiArray')->atLeast()->once()
-        ->andReturn([]);
+    $serviceMock->shouldReceive('getCannedResponseCategoryRepository')->atLeast()->once()
+        ->andReturn($repoMock);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -736,25 +795,23 @@ test('canned category get', function (): void {
     $result = $api->canned_category_get($data);
 
     expect($result)->toBeArray();
+    expect($result['responses'])->toHaveCount(1);
 });
 
 test('canned category update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $supportCategory = new Model_SupportPrCategory();
-    $supportCategory->loadBean(new Tests\Helpers\DummyBean());
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($supportCategory);
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseCategoryRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminSupportCannedCategoryFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getCannedResponseCategoryRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('cannedCategoryUpdate')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
 
     $api->setDi($di);
 
@@ -771,22 +828,19 @@ test('canned category update', function (): void {
 });
 
 test('canned category delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $supportCategory = new Model_SupportPrCategory();
-    $supportCategory->loadBean(new Tests\Helpers\DummyBean());
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn($supportCategory);
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $repoMock = Mockery::mock(CannedResponseCategoryRepository::class);
+    $repoMock->shouldReceive('find')
+        ->atLeast()->once()
+        ->andReturn(adminSupportCannedCategoryFixture());
 
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $serviceMock->shouldReceive('getCannedResponseCategoryRepository')->atLeast()->once()
+        ->andReturn($repoMock);
     $serviceMock->shouldReceive('cannedCategoryRm')->atLeast()->once()
         ->andReturn(true);
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -801,7 +855,7 @@ test('canned category delete', function (): void {
 });
 
 test('canned category create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('cannedCategoryCreate')->atLeast()->once()
         ->andReturn(1);
@@ -820,19 +874,14 @@ test('canned category create', function (): void {
 });
 
 test('note create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('noteCreate')->atLeast()->once()
         ->andReturn(1);
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicket());
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn(new SupportTicket());
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -848,19 +897,14 @@ test('note create', function (): void {
 });
 
 test('note delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('noteRm')->atLeast()->once()
         ->andReturn(true);
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicketNote());
+    $serviceMock->shouldReceive('getTicketNoteById')->atLeast()->once()
+        ->andReturn(new Box\Mod\Support\Entity\SupportTicketNote());
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -875,19 +919,14 @@ test('note delete', function (): void {
 });
 
 test('task complete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $serviceMock = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $serviceMock->shouldReceive('ticketTaskComplete')->atLeast()->once()
         ->andReturn(true);
-
-    $dbMock = Mockery::mock('\Box_Database');
-    $dbMock
-    ->shouldReceive('getExistingModelById')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportTicket());
+    $serviceMock->shouldReceive('getTicketById')->atLeast()->once()
+        ->andReturn(new SupportTicket());
 
     $di = container();
-    $di['db'] = $dbMock;
     $api->setDi($di);
 
     $api->setService($serviceMock);
@@ -901,7 +940,7 @@ test('task complete', function (): void {
 });
 
 test('batch delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $activityMock = Mockery::mock(Box\Mod\Support\Api\Admin::class)->makePartial();
     $activityMock->shouldReceive('ticket_delete')->atLeast()->once()->andReturn(true);
 
@@ -917,10 +956,10 @@ test('batch delete', function (): void {
 */
 
 test('kb article get list', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $di = container();
 
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
     $adminApi->setDi($di);
 
     $data = [
@@ -929,11 +968,25 @@ test('kb article get list', function (): void {
         'cat' => 'category',
     ];
 
+    $qb = Mockery::mock(QueryBuilder::class);
+    $repo = Mockery::mock(KbArticleRepository::class);
+    $repo->shouldReceive('getSearchQueryBuilder')
+        ->once()
+        ->with('status', 'search', 'category')
+        ->andReturn($qb);
+
+    $pager = Mockery::mock(FOSSBilling\Pagination::class);
+    $pager->shouldReceive('paginateDoctrineQuery')
+        ->once()
+        ->with($qb, Mockery::type(FOSSBilling\PaginationOptions::class), null)
+        ->andReturn(['list' => []]);
+    $di['pager'] = $pager;
+    $adminApi->setDi($di);
+
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService
-    ->shouldReceive('kbSearchArticles')
-    ->atLeast()->once()
-    ->andReturn(['list' => []]);
+    $kbService->shouldReceive('getKbArticleRepository')
+        ->once()
+        ->andReturn($repo);
 
     $adminApi->setService($kbService);
 
@@ -942,18 +995,18 @@ test('kb article get list', function (): void {
 });
 
 test('kb article get', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportKbArticle());
+    $repo = Mockery::mock(KbArticleRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(adminSupportKbArticleFixture());
 
     $admin = new Model_Admin();
     $admin->loadBean(new Tests\Helpers\DummyBean());
@@ -962,15 +1015,13 @@ test('kb article get', function (): void {
 
     $di = container();
     $di['loggedin_admin'] = $admin;
-    $di['db'] = $db;
 
     $adminApi->setDi($di);
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService
-    ->shouldReceive('kbToApiArray')
-    ->atLeast()->once()
-    ->andReturn([]);
+    $kbService->shouldReceive('getKbArticleRepository')
+        ->once()
+        ->andReturn($repo);
     $adminApi->setService($kbService);
 
     $result = $adminApi->kb_article_get($data);
@@ -978,29 +1029,34 @@ test('kb article get', function (): void {
 });
 
 test('kb article get not found exception', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(false);
+    $repo = Mockery::mock(KbArticleRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(null);
+
+    $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $kbService->shouldReceive('getKbArticleRepository')
+        ->once()
+        ->andReturn($repo);
 
     $di = container();
-    $di['db'] = $db;
 
     $adminApi->setDi($di);
+    $adminApi->setService($kbService);
     expect(fn (): array => $adminApi->kb_article_get($data))->toThrow(FOSSBilling\Exception::class);
 });
 
 test('kb article create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $data = [
         'kb_article_category_id' => 1,
@@ -1026,8 +1082,8 @@ test('kb article create', function (): void {
 });
 
 test('kb article update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $data = [
         'id' => 1,
@@ -1055,26 +1111,29 @@ test('kb article update', function (): void {
 });
 
 test('kb article delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportKbArticle());
+    $article = adminSupportKbArticleFixture();
+    $repo = Mockery::mock(KbArticleRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn($article);
 
     $di = container();
-    $di['db'] = $db;
 
     $adminApi->setDi($di);
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService->shouldReceive('kbRm')->atLeast()->once();
+    $kbService->shouldReceive('getKbArticleRepository')
+        ->once()
+        ->andReturn($repo);
+    $kbService->shouldReceive('kbRm')->once()->with($article);
     $adminApi->setService($kbService);
 
     $result = $adminApi->kb_article_delete($data);
@@ -1082,21 +1141,23 @@ test('kb article delete', function (): void {
 });
 
 test('kb article delete not found exception', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(false);
+    $repo = Mockery::mock(KbArticleRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(null);
 
     $di = container();
-    $di['db'] = $db;
 
     $adminApi->setDi($di);
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
+    $kbService->shouldReceive('getKbArticleRepository')
+        ->once()
+        ->andReturn($repo);
     $kbService->shouldReceive('kbRm')->never()
     ;
     $adminApi->setService($kbService);
@@ -1105,8 +1166,8 @@ test('kb article delete not found exception', function (): void {
 });
 
 test('kb category get list', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $willReturn = [
         'pages' => 5,
@@ -1116,16 +1177,20 @@ test('kb category get list', function (): void {
         'list' => [],
     ];
 
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('getSearchQueryBuilder')
+        ->once()
+        ->andReturn(Mockery::mock(QueryBuilder::class));
+
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService
-    ->shouldReceive('kbCategoryGetSearchQuery')
-    ->atLeast()->once()
-    ->andReturn(['String', []]);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
 
     $pager = Mockery::mock(FOSSBilling\Pagination::class)->makePartial();
 
     $pager
-    ->shouldReceive('getPaginatedResultSet')
+    ->shouldReceive('paginateDoctrineQuery')
     ->atLeast()->once()
     ->andReturn($willReturn);
 
@@ -1141,26 +1206,24 @@ test('kb category get list', function (): void {
 });
 
 test('kb category get', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportKbArticleCategory());
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(adminSupportKbCategoryFixture());
 
     $di = container();
-    $di['db'] = $db;
     $di['validator'] = new FOSSBilling\Validate();
 
     $adminApi->setDi($di);
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService
-    ->shouldReceive('kbCategoryToApiArray')
-    ->atLeast()->once()
-    ->andReturn([]);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
     $adminApi->setService($kbService);
 
     $data = [
@@ -1171,8 +1234,8 @@ test('kb category get', function (): void {
 });
 
 test('kb category get id not set exception', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $dispatcher = new FOSSBilling\Api\Dispatcher();
 
@@ -1181,24 +1244,24 @@ test('kb category get id not set exception', function (): void {
 });
 
 test('kb category get not found exception', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(false);
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(null);
 
     $di = container();
 
-    $di['db'] = $db;
     $di['validator'] = new FOSSBilling\Validate();
     $adminApi->setDi($di);
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService->shouldReceive('kbCategoryToApiArray')->never()
-        ->andReturn([]);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
     $adminApi->setService($kbService);
 
     $data = [
@@ -1209,8 +1272,8 @@ test('kb category get not found exception', function (): void {
 });
 
 test('kb category create', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $kbService
@@ -1233,8 +1296,8 @@ test('kb category create', function (): void {
 });
 
 test('kb category update', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $kbService
@@ -1243,14 +1306,16 @@ test('kb category update', function (): void {
     ->andReturn(true);
     $adminApi->setService($kbService);
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportKbArticleCategory());
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(adminSupportKbCategoryFixture());
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
 
     $di = container();
-    $di['db'] = $db;
     $di['validator'] = new FOSSBilling\Validate();
 
     $adminApi->setDi($di);
@@ -1267,8 +1332,8 @@ test('kb category update', function (): void {
 });
 
 test('kb category update id not set', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $dispatcher = new FOSSBilling\Api\Dispatcher();
 
@@ -1277,22 +1342,24 @@ test('kb category update id not set', function (): void {
 });
 
 test('kb category update not found', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $kbService->shouldReceive('kbUpdateCategory')->never()
         ->andReturn(true);
     $adminApi->setService($kbService);
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(false);
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(null);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
 
     $di = container();
-    $di['db'] = $db;
     $di['validator'] = new FOSSBilling\Validate();
 
     $adminApi->setDi($di);
@@ -1308,8 +1375,8 @@ test('kb category update not found', function (): void {
 });
 
 test('kb category delete', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $kbService
@@ -1318,14 +1385,17 @@ test('kb category delete', function (): void {
     ->andReturn(true);
     $adminApi->setService($kbService);
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(new Model_SupportKbArticleCategory());
+    $category = adminSupportKbCategoryFixture();
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn($category);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
 
     $di = container();
-    $di['db'] = $db;
     $di['validator'] = new FOSSBilling\Validate();
 
     $adminApi->setDi($di);
@@ -1338,8 +1408,8 @@ test('kb category delete', function (): void {
 });
 
 test('kb category delete id not set', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $dispatcher = new FOSSBilling\Api\Dispatcher();
 
@@ -1348,22 +1418,24 @@ test('kb category delete id not set', function (): void {
 });
 
 test('kb category delete not found', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
     $kbService->shouldReceive('kbCategoryRm')->never()
         ->andReturn(true);
     $adminApi->setService($kbService);
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(false);
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('find')
+        ->once()
+        ->with(1)
+        ->andReturn(null);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
 
     $di = container();
-    $di['db'] = $db;
     $di['validator'] = new FOSSBilling\Validate();
 
     $adminApi->setDi($di);
@@ -1376,14 +1448,18 @@ test('kb category delete not found', function (): void {
 });
 
 test('kb category get pairs', function (): void {
-    $api = new Box\Mod\Support\Api\Admin();
-    $adminApi = new Box\Mod\Support\Api\Admin();
+    $api = apiEndpoint(new Box\Mod\Support\Api\Admin());
+    $adminApi = apiEndpoint(new Box\Mod\Support\Api\Admin());
+
+    $repo = Mockery::mock(KbArticleCategoryRepository::class);
+    $repo->shouldReceive('getPairs')
+        ->once()
+        ->andReturn([]);
 
     $kbService = Mockery::mock(Box\Mod\Support\Service::class)->makePartial();
-    $kbService
-    ->shouldReceive('kbCategoryGetPairs')
-    ->atLeast()->once()
-    ->andReturn([]);
+    $kbService->shouldReceive('getKbArticleCategoryRepository')
+        ->once()
+        ->andReturn($repo);
     $adminApi->setService($kbService);
 
     $result = $adminApi->kb_category_get_pairs([]);

@@ -12,6 +12,40 @@ declare(strict_types=1);
 
 use Tests\Support\StrictTemplateRenderer;
 
+test('cron settings renders when module config has not been saved', function (): void {
+    $renderer = new StrictTemplateRenderer();
+    $admin = new class {
+        public function __isset(string $name): bool
+        {
+            return $name === 'cron_info';
+        }
+
+        public function __get(string $name): mixed
+        {
+            return match ($name) {
+                'cron_info' => [
+                    'cron_path' => '/var/www/fossbilling/cron.php',
+                    'last_cron_exec' => null,
+                ],
+                default => null,
+            };
+        }
+
+        public function extension_config_get(array $data): array
+        {
+            return ['ext' => $data['ext']];
+        }
+    };
+
+    $html = $renderer->renderTemplate(PATH_MODS . '/Cron/templates/admin/mod_cron_settings.html.twig', [
+        'admin' => $admin,
+    ]);
+
+    expect($html)->toContain('Guest Cron Endpoint')
+        ->and($html)->not->toContain('checked="checked"')
+        ->and($html)->not->toContain('Guest Cron URL');
+});
+
 /*
  * Verify that every FOSSBilling template compiles and renders successfully under
  * `strict_variables => true`. This catches undefined variable/attribute/key access,
@@ -54,9 +88,10 @@ test('all templates render under strict_variables', function (): void {
         // A .baseline file exists, so we expect zero real-bug findings. Any
         // such finding fails the test. Test-infra findings are informational
         // only and never fail the test.
-        if (!empty($realBugs)) {
-            expect($realBugs)->toBeEmpty("New strict-variables findings detected:\n" . formatFindings($realBugs));
-        }
+        expect($realBugs)->toBeEmpty("New strict-variables findings detected:\n" . formatFindings($realBugs));
+    } else {
+        // No baseline: still assert so failures are never silent.
+        expect($realBugs)->toBeEmpty("Strict-variables real-bug findings detected (no baseline present):\n" . formatFindings($realBugs));
     }
 });
 
@@ -125,9 +160,7 @@ test('all email templates render under strict_variables', function (): void {
     file_put_contents($findingsFile, json_encode($findings, JSON_PRETTY_PRINT));
 
     if ($isBaseline) {
-        if (!empty($realBugs)) {
-            expect($realBugs)->toBeEmpty("New strict-variables findings in email templates:\n" . formatFindings($realBugs));
-        }
+        expect($realBugs)->toBeEmpty("New strict-variables findings in email templates:\n" . formatFindings($realBugs));
     }
 });
 

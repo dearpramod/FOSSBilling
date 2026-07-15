@@ -21,7 +21,7 @@ use function Tests\Helpers\container;
 use function Tests\Helpers\moduleService;
 
 test('gets dependency injection container', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $di = container();
     $api->setDi($di);
     $getDi = $api->getDi();
@@ -29,7 +29,7 @@ test('gets dependency injection container', function (): void {
 });
 
 test('gets invoice list', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('getSearchQuery')
         ->atLeast()->once()
@@ -53,7 +53,7 @@ test('gets invoice list', function (): void {
 });
 
 test('gets an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('toApiArray')
         ->atLeast()->once()
@@ -79,7 +79,7 @@ test('gets an invoice', function (): void {
 });
 
 test('marks invoice as paid', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
         'execute' => true,
@@ -127,7 +127,7 @@ test('marks invoice as paid', function (): void {
 });
 
 test('prepares an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'client_id' => 1,
     ];
@@ -160,7 +160,7 @@ test('prepares an invoice', function (): void {
 });
 
 test('approves an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -188,7 +188,7 @@ test('approves an invoice', function (): void {
 });
 
 test('refunds an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -216,7 +216,7 @@ test('refunds an invoice', function (): void {
 });
 
 test('updates an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -244,7 +244,7 @@ test('updates an invoice', function (): void {
 });
 
 test('deletes an invoice item', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -272,7 +272,7 @@ test('deletes an invoice item', function (): void {
 });
 
 test('deletes an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -300,7 +300,7 @@ test('deletes an invoice', function (): void {
 });
 
 test('creates renewal invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -328,11 +328,16 @@ test('creates renewal invoice', function (): void {
     expect($result)->toBeInt()->toBe($newInvoiceId);
 });
 
-test('throws exception when creating renewal invoice for free order', function (): void {
-    $api = new Admin();
+test('creates renewal invoice for free order', function (): void {
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
+    $newInvoiceId = 3;
+    $serviceMock = Mockery::mock(Service::class);
+    $serviceMock->shouldReceive('renewInvoice')
+        ->atLeast()->once()
+        ->andReturn($newInvoiceId);
 
     $dbMock = Mockery::mock('\Box_Database');
     $model = new Model_ClientOrder();
@@ -347,13 +352,14 @@ test('throws exception when creating renewal invoice for free order', function (
     $di['db'] = $dbMock;
 
     $api->setDi($di);
+    $api->setService($serviceMock);
 
-    expect(fn () => $api->renewal_invoice($data))
-        ->toThrow(FOSSBilling\Exception::class, sprintf('Order %d is free. No need to generate invoice.', $model->id));
+    $result = $api->renewal_invoice($data);
+    expect($result)->toBeInt()->toBe($newInvoiceId);
 });
 
 test('processes batch pay with credits', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('doBatchPayWithCredits')
         ->atLeast()->once()
@@ -366,7 +372,7 @@ test('processes batch pay with credits', function (): void {
 });
 
 test('pays invoice with credits', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -394,7 +400,7 @@ test('pays invoice with credits', function (): void {
 });
 
 test('generates batch invoices', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('generateInvoicesForExpiringOrders')
         ->atLeast()->once()
@@ -407,7 +413,7 @@ test('generates batch invoices', function (): void {
 });
 
 test('activates paid invoices in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('doBatchPaidInvoiceActivation')
         ->atLeast()->once()
@@ -420,7 +426,7 @@ test('activates paid invoices in batch', function (): void {
 });
 
 test('sends reminders in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('doBatchRemindersSend')
         ->atLeast()->once()
@@ -433,7 +439,7 @@ test('sends reminders in batch', function (): void {
 });
 
 test('invokes due event in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('doBatchInvokeDueEvent')
         ->atLeast()->once()
@@ -446,7 +452,7 @@ test('invokes due event in batch', function (): void {
 });
 
 test('sends reminder for an invoice', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -474,7 +480,7 @@ test('sends reminder for an invoice', function (): void {
 });
 
 test('gets invoice statuses', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $serviceMock = Mockery::mock(Service::class);
     $serviceMock->shouldReceive('counter')
         ->atLeast()->once()
@@ -487,7 +493,7 @@ test('gets invoice statuses', function (): void {
 });
 
 test('processes all transactions', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('processReceivedATransactions')
         ->atLeast()->once()
@@ -502,7 +508,7 @@ test('processes all transactions', function (): void {
 });
 
 test('processes a transaction', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -536,7 +542,7 @@ test('processes a transaction', function (): void {
 });
 
 test('updates a transaction', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -564,7 +570,7 @@ test('updates a transaction', function (): void {
 });
 
 test('creates a transaction', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $newTransactionId = 1;
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('create')
@@ -580,7 +586,7 @@ test('creates a transaction', function (): void {
 });
 
 test('deletes a transaction', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -608,7 +614,7 @@ test('deletes a transaction', function (): void {
 });
 
 test('gets a transaction', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -636,7 +642,7 @@ test('gets a transaction', function (): void {
 });
 
 test('gets transaction list', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('getSearchQuery')
         ->atLeast()->once()
@@ -660,7 +666,7 @@ test('gets transaction list', function (): void {
 });
 
 test('gets transaction statuses', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('counter')
         ->atLeast()->once()
@@ -676,7 +682,7 @@ test('gets transaction statuses', function (): void {
 });
 
 test('gets transaction status pairs', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('getStatusPairs')
         ->atLeast()->once()
@@ -692,7 +698,7 @@ test('gets transaction status pairs', function (): void {
 });
 
 test('gets transaction statuses list', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('getStatuses')
         ->atLeast()->once()
@@ -708,7 +714,7 @@ test('gets transaction statuses list', function (): void {
 });
 
 test('gets transaction gateway statuses', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('getGatewayStatuses')
         ->atLeast()->once()
@@ -724,7 +730,7 @@ test('gets transaction gateway statuses', function (): void {
 });
 
 test('gets transaction types', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $transactionService = Mockery::mock(ServiceTransaction::class);
     $transactionService->shouldReceive('getTypes')
         ->atLeast()->once()
@@ -740,7 +746,7 @@ test('gets transaction types', function (): void {
 });
 
 test('gets gateway list', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $gatewayService = Mockery::mock(ServicePayGateway::class);
     $gatewayService->shouldReceive('getSearchQuery')
         ->atLeast()->once()
@@ -764,7 +770,7 @@ test('gets gateway list', function (): void {
 });
 
 test('gets gateway pairs', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $gatewayService = Mockery::mock(ServicePayGateway::class);
     $gatewayService->shouldReceive('getPairs')
         ->atLeast()->once()
@@ -779,7 +785,7 @@ test('gets gateway pairs', function (): void {
 });
 
 test('gets available gateways', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $gatewayService = Mockery::mock(ServicePayGateway::class);
     $gatewayService->shouldReceive('getAvailable')
         ->atLeast()->once()
@@ -794,7 +800,7 @@ test('gets available gateways', function (): void {
 });
 
 test('installs a gateway', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'code' => 'PP',
     ];
@@ -813,7 +819,7 @@ test('installs a gateway', function (): void {
 });
 
 test('gets a gateway', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -841,7 +847,7 @@ test('gets a gateway', function (): void {
 });
 
 test('copies a gateway', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -869,7 +875,7 @@ test('copies a gateway', function (): void {
 });
 
 test('updates a gateway', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -897,7 +903,7 @@ test('updates a gateway', function (): void {
 });
 
 test('deletes a gateway', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -925,7 +931,7 @@ test('deletes a gateway', function (): void {
 });
 
 test('gets subscription list', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $subscriptionService = Mockery::mock(ServiceSubscription::class);
     $subscriptionService->shouldReceive('getSearchQuery')
         ->atLeast()->once()
@@ -949,7 +955,7 @@ test('gets subscription list', function (): void {
 });
 
 test('creates a subscription', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'client_id' => 1,
         'gateway_id' => 1,
@@ -983,7 +989,7 @@ test('creates a subscription', function (): void {
 });
 
 test('throws exception when creating subscription with currency mismatch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'client_id' => 1,
         'gateway_id' => 1,
@@ -1009,8 +1015,42 @@ test('throws exception when creating subscription with currency mismatch', funct
         ->toThrow(FOSSBilling\Exception::class, 'Client currency must match subscription currency. Check if clients currency is defined.');
 });
 
+test('creates a subscription with case-insensitive currency match', function (): void {
+    $api = apiEndpoint(new Admin());
+    $data = [
+        'client_id' => 1,
+        'gateway_id' => 1,
+        'currency' => 'usd',
+    ];
+    $newSubscriptionId = 2;
+    $subscriptionService = Mockery::mock(ServiceSubscription::class);
+    $subscriptionService->shouldReceive('create')
+        ->atLeast()->once()
+        ->andReturn($newSubscriptionId);
+
+    $dbMock = Mockery::mock('\Box_Database');
+    $model = new Model_PayGateway();
+    $model->loadBean(new Tests\Helpers\DummyBean());
+    $client = new Model_Client();
+    $client->loadBean(new Tests\Helpers\DummyBean());
+    $client->currency = 'USD';
+
+    $dbMock->shouldReceive('getExistingModelById')
+        ->atLeast()->once()
+        ->andReturn($client, $model);
+
+    $di = container();
+    $di['db'] = $dbMock;
+    $di['mod_service'] = $di->protect(moduleService(['invoice:subscription' => $subscriptionService]));
+
+    $api->setDi($di);
+
+    $result = $api->subscription_create($data);
+    expect($result)->toBeInt()->toBe($newSubscriptionId);
+});
+
 test('updates a subscription', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -1038,7 +1078,7 @@ test('updates a subscription', function (): void {
 });
 
 test('gets a subscription', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -1066,7 +1106,7 @@ test('gets a subscription', function (): void {
 });
 
 test('deletes a subscription', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -1094,7 +1134,7 @@ test('deletes a subscription', function (): void {
 });
 
 test('deletes a tax', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -1122,7 +1162,7 @@ test('deletes a tax', function (): void {
 });
 
 test('creates a tax', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $data = [
         'id' => 1,
     ];
@@ -1142,7 +1182,7 @@ test('creates a tax', function (): void {
 });
 
 test('gets tax list', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $taxService = Mockery::mock(ServiceTax::class);
     $taxService->shouldReceive('getSearchQuery')
         ->atLeast()->once()
@@ -1167,7 +1207,7 @@ test('gets tax list', function (): void {
 });
 
 test('deletes invoices in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $activityMock = Mockery::mock(Admin::class)->makePartial();
     $activityMock->shouldReceive('delete')->atLeast()->once()->andReturn(true);
 
@@ -1179,7 +1219,7 @@ test('deletes invoices in batch', function (): void {
 });
 
 test('deletes subscriptions in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $activityMock = Mockery::mock(Admin::class)->makePartial();
     $activityMock->shouldReceive('subscription_delete')->atLeast()->once()->andReturn(true);
 
@@ -1191,7 +1231,7 @@ test('deletes subscriptions in batch', function (): void {
 });
 
 test('deletes transactions in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $activityMock = Mockery::mock(Admin::class)->makePartial();
     $activityMock->shouldReceive('transaction_delete')->atLeast()->once()->andReturn(true);
 
@@ -1203,7 +1243,7 @@ test('deletes transactions in batch', function (): void {
 });
 
 test('deletes taxes in batch', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $activityMock = Mockery::mock(Admin::class)->makePartial();
     $activityMock->shouldReceive('tax_delete')->atLeast()->once()->andReturn(true);
 
@@ -1215,7 +1255,7 @@ test('deletes taxes in batch', function (): void {
 });
 
 test('gets a tax', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $taxService = Mockery::mock(ServiceTax::class);
     $taxService->shouldReceive('toApiArray')
         ->atLeast()->once()
@@ -1242,7 +1282,7 @@ test('gets a tax', function (): void {
 });
 
 test('updates a tax', function (): void {
-    $api = new Admin();
+    $api = apiEndpoint(new Admin());
     $taxService = Mockery::mock(ServiceTax::class);
     $taxService->shouldReceive('update')
         ->atLeast()->once()

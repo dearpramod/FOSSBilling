@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -76,7 +75,7 @@ final readonly class UpdateReadinessCheck
         // The install/ folder must be removable. We test it explicitly because
         // is_writable() on a directory does not guarantee the directory can be
         // deleted.
-        $issues = array_merge($issues, $this->checkRemovable($this->installDir, 'src/install/ (removed by the update)'));
+        $issues = array_merge($issues, $this->checkRemovable($this->installDir, 'install/ (removed by the update)'));
 
         return [
             'can_update' => $issues === [],

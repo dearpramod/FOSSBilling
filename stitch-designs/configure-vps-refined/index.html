@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Trial VPS Configuration | HostPanel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#131b2e",
+                        "error": "#ba1a1a",
+                        "outline": "#787587",
+                        "on-primary-fixed": "#190064",
+                        "primary": "#461dd0",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f8f9ff",
+                        "surface-tint": "#5c3de5",
+                        "on-secondary-fixed-variant": "#3f465c",
+                        "inverse-primary": "#c8bfff",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "on-secondary-container": "#5b6279",
+                        "surface-dim": "#cbdbf5",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eaf1ff",
+                        "tertiary": "#41495f",
+                        "outline-variant": "#c9c4d8",
+                        "primary-container": "#5f41e8",
+                        "on-primary-fixed-variant": "#4317cd",
+                        "surface": "#f8f9ff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "tertiary-fixed-dim": "#bec6e0",
+                        "on-surface-variant": "#484555",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed-dim": "#c8bfff",
+                        "on-tertiary-fixed-variant": "#3f465c",
+                        "background": "#f8f9ff",
+                        "on-secondary-fixed": "#141b2f",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#e0d9ff",
+                        "tertiary-fixed": "#dae2fd",
+                        "surface-container": "#e5eeff",
+                        "secondary-fixed": "#dbe1fd",
+                        "on-background": "#0b1c30",
+                        "inverse-surface": "#213145",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "on-tertiary-container": "#d5ddf7",
+                        "primary-fixed": "#e5deff",
+                        "secondary": "#575e75",
+                        "tertiary-container": "#596177",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary-fixed-dim": "#bfc6e1",
+                        "secondary-container": "#d8dffb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "12px",
+                        "gutter": "24px",
+                        "xl": "48px",
+                        "lg": "32px",
+                        "xs": "4px",
+                        "base": "8px",
+                        "sidebar_width": "260px",
+                        "md": "24px"
+                    },
+                    "fontFamily": {
+                        "h3": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-md": ["Inter"],
+                        "h2": ["Inter"],
+                        "h1": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "status": ["Inter"]
+                    },
+                    "fontSize": {
+                        "h3": ["18px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "h2": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "h1": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "status": ["12px", {"lineHeight": "16px", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-ring { ring: 2px solid #461dd0; }
+        .glass-card { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
+        input:focus, select:focus { outline: none; border-color: #461dd0; ring: 2px solid rgba(70, 29, 208, 0.2); }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased overflow-x-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen w-[260px] border-r border-slate-800 bg-slate-950 dark:bg-black flex flex-col h-full py-6 px-4 shadow-xl z-50">
+<div class="mb-10 px-4">
+<h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-indigo-500">dns</span>
+                HostPanel
+            </h1>
+<p class="text-xs text-slate-500 font-medium mt-1">Premium Hosting</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">home</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Home</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">dns</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">My Services</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600/10 text-indigo-400 border-l-4 border-indigo-500 transition-transform scale-95 active:scale-100 transition-transform" href="#">
+<span class="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Order Services</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">support_agent</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Support</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">menu_book</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Knowledge Base</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">newspaper</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">News</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">receipt_long</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Invoices</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">account_balance_wallet</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Credits &amp; Balance</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">person</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">mail</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Email History</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-slate-800 pt-4">
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+<span class="font-['Inter'] antialiased text-sm font-medium">Collapse</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 left-[260px] h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm z-40">
+<div class="flex items-center justify-between px-8 w-full h-full">
+<div class="flex items-center gap-6">
+<div class="relative focus-within:ring-2 focus-within:ring-indigo-500/20 rounded-lg">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-[20px]">search</span>
+<input class="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm w-64 focus:ring-2 focus:ring-indigo-500/20 transition-all" placeholder="Search services..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-lg transition-all text-slate-500">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-lg transition-all text-slate-500">
+<span class="material-symbols-outlined">shopping_cart</span>
+</button>
+<div class="flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-lg transition-all text-slate-500 cursor-pointer">
+<span class="material-symbols-outlined text-[20px]">currency_exchange</span>
+<span class="text-xs font-semibold">USD</span>
+</div>
+<button class="hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-lg transition-all text-slate-500">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<div class="ml-2 w-8 h-8 rounded-full overflow-hidden border border-slate-200">
+<img class="w-full h-full object-cover" data-alt="A professional studio headshot of a modern IT professional with a warm smile, wearing a clean charcoal grey sweater, set against a soft blurred office background with subtle blue and indigo lighting accents, reflecting a high-trust corporate environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIhSHuJ2NmbdCivVn1KyQF1HFfmgi20_XFRnKhxjB2pcDm-fL7bPcCvWmIirWCg_8uQ1UyGtWf6xCjZq3361k-87_LzF1j_vt0xO4rbkr-GEMxR0ZpI0HizS_L3n9J57hGjDLiKXdAQHxjjK1IDiORWwl5k5HRoFhpRFK2o6Sql6gkCVDlBYpqGuygEC7Tqjjp6Upf9cO5sJNqU0vshAJAetpeStZZbI3MgBTu3hzcmQ4Kg-IWX0gnmw"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-[260px] pt-16 min-h-screen">
+<div class="max-w-[1400px] mx-auto p-lg">
+<!-- Breadcrumbs & Header -->
+<div class="mb-gutter">
+<a class="text-indigo-600 font-medium text-body-md flex items-center gap-1 mb-base hover:underline" href="#">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                    All Plans
+                </a>
+<div class="flex items-end gap-3">
+<h1 class="font-h1 text-h1 text-on-background">Trial VPS</h1>
+<span class="mb-2 px-3 py-1 bg-primary-fixed-dim text-on-primary-fixed-variant rounded-full text-status font-status uppercase tracking-wide">Subscription</span>
+</div>
+</div>
+<!-- Bento Layout Content -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Left Configuration Column (8 columns) -->
+<div class="col-span-12 lg:col-span-8 space-y-gutter">
+<!-- Billing Cycle Section -->
+<section class="bg-white rounded-xl border border-outline-variant/30 shadow-[0_4px_12px_rgba(0,0,0,0.02)] p-gutter">
+<div class="flex items-center justify-between mb-lg">
+<h3 class="font-h3 text-h3 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">sync</span>
+                                Select billing cycle
+                            </h3>
+<span class="text-emerald-600 text-status font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+                                Longer plans save more
+                            </span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-base">
+<!-- Option 1: Monthly -->
+<label class="relative flex flex-col p-md border-2 border-primary rounded-xl bg-primary/5 cursor-pointer transition-all hover:border-primary">
+<input checked="" class="absolute top-4 right-4 w-5 h-5 text-primary border-outline focus:ring-primary" name="billing" type="radio" value="monthly"/>
+<div class="mb-4">
+<span class="text-on-surface-variant font-medium text-body-md">Every Month</span>
+</div>
+<div class="mt-auto">
+<div class="flex items-baseline gap-1">
+<span class="text-h2 font-h2">$5.99</span>
+<span class="text-on-surface-variant text-status">/mo</span>
+</div>
+</div>
+</label>
+<!-- Option 2: 3 Months -->
+<label class="relative flex flex-col p-md border border-outline-variant/50 rounded-xl bg-white cursor-pointer transition-all hover:border-primary/50 group">
+<input class="absolute top-4 right-4 w-5 h-5 text-primary border-outline focus:ring-primary" name="billing" type="radio" value="quarterly"/>
+<div class="mb-4">
+<span class="text-on-surface-variant font-medium text-body-md group-hover:text-primary transition-colors">Every 3 Months</span>
+</div>
+<div class="mt-auto">
+<div class="flex items-baseline gap-1">
+<span class="text-h2 font-h2">$27.99</span>
+<span class="text-on-surface-variant text-status">/qtr</span>
+</div>
+<div class="text-emerald-600 text-[11px] font-semibold mt-1">$9.33/mo equiv.</div>
+</div>
+</label>
+<!-- Option 3: Yearly -->
+<label class="relative flex flex-col p-md border border-outline-variant/50 rounded-xl bg-white cursor-pointer transition-all hover:border-primary/50 group">
+<div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full uppercase tracking-tighter">Best Value</div>
+<input class="absolute top-4 right-4 w-5 h-5 text-primary border-outline focus:ring-primary" name="billing" type="radio" value="yearly"/>
+<div class="mb-4">
+<span class="text-on-surface-variant font-medium text-body-md group-hover:text-primary transition-colors">Every Year</span>
+</div>
+<div class="mt-auto">
+<div class="flex items-baseline gap-1">
+<span class="text-h2 font-h2">$99.99</span>
+<span class="text-on-surface-variant text-status">/yr</span>
+</div>
+<div class="text-emerald-600 text-[11px] font-semibold mt-1">$8.33/mo equiv.</div>
+</div>
+</label>
+</div>
+</section>
+<!-- Main Configuration Card -->
+<section class="bg-white rounded-xl border border-outline-variant/30 shadow-[0_4px_12px_rgba(0,0,0,0.02)] overflow-hidden">
+<div class="flex items-center gap-3 p-md bg-surface-container-low border-b border-outline-variant/20">
+<span class="p-2 bg-white rounded-lg border border-outline-variant/20 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">description</span>
+</span>
+<div>
+<h4 class="font-h3 text-body-lg font-bold">Custom Configuration</h4>
+<p class="text-on-surface-variant text-xs">Fill in the details below to configure your order</p>
+</div>
+</div>
+<div class="p-gutter space-y-lg">
+<!-- Domain Name -->
+<div class="flex flex-col md:flex-row md:items-center gap-gutter">
+<div class="w-full md:w-1/3">
+<label class="font-h3 text-body-md block mb-1">Domain Name <span class="text-error">*</span></label>
+<p class="text-xs text-on-surface-variant italic">Enter your server primary domain</p>
+</div>
+<div class="w-full md:w-2/3">
+<input class="w-full px-4 py-3 bg-white border border-outline-variant rounded-lg text-body-md focus:border-primary transition-all shadow-sm" placeholder="example.hostpanel.com" type="text"/>
+</div>
+</div>
+<!-- Operating System -->
+<div class="flex flex-col md:flex-row md:items-center gap-gutter">
+<div class="w-full md:w-1/3">
+<label class="font-h3 text-body-md block mb-1">Linux OS <span class="text-error">*</span></label>
+<p class="text-xs text-on-surface-variant italic">Select your preferred distribution</p>
+</div>
+<div class="w-full md:w-2/3">
+<div class="relative">
+<select class="w-full px-4 py-3 bg-white border border-outline-variant rounded-lg text-body-md appearance-none focus:border-primary transition-all shadow-sm">
+<option>Ubuntu 24.04 LTS (Jammy Jellyfish)</option>
+<option>CentOS Stream 9</option>
+<option>Debian 12 Bookworm</option>
+<option>Fedora 40</option>
+</select>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Datacenter Selection -->
+<div class="flex flex-col md:flex-row gap-gutter">
+<div class="w-full md:w-1/3">
+<label class="font-h3 text-body-md block mb-1">Datacenter <span class="text-error">*</span></label>
+<p class="text-xs text-on-surface-variant italic">Choose a location near your users</p>
+</div>
+<div class="w-full md:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-base">
+<label class="flex items-center gap-3 p-md border-2 border-primary rounded-lg bg-primary/5 cursor-pointer shadow-sm">
+<input checked="" class="w-4 h-4 text-primary focus:ring-primary" name="datacenter" type="radio" value="kathmandu"/>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+<span class="text-body-md font-medium">Kathmandu, Nepal</span>
+</div>
+</label>
+<label class="flex items-center gap-3 p-md border border-outline-variant rounded-lg hover:border-primary/50 transition-all cursor-pointer shadow-sm">
+<input class="w-4 h-4 text-primary focus:ring-primary" name="datacenter" type="radio" value="singapore"/>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+<span class="text-body-md font-medium">Singapore</span>
+</div>
+</label>
+<label class="flex items-center gap-3 p-md border border-outline-variant rounded-lg hover:border-primary/50 transition-all cursor-pointer shadow-sm">
+<input class="w-4 h-4 text-primary focus:ring-primary" name="datacenter" type="radio" value="germany"/>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+<span class="text-body-md font-medium">Germany</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Footer Note -->
+<div class="p-md bg-surface-container-lowest border-t border-outline-variant/10">
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                                As the best VPS hosting provider, our solutions offer the prime flexibility to host everything from a simple website and application to a full-blown eCommerce site.
+                            </p>
+</div>
+</section>
+</div>
+<!-- Right Summary Sidebar (4 columns) -->
+<div class="col-span-12 lg:col-span-4">
+<div class="sticky top-gutter space-y-gutter">
+<!-- Order Summary Card -->
+<div class="bg-white rounded-xl border border-outline-variant shadow-lg overflow-hidden">
+<div class="p-md border-b border-outline-variant/30 flex justify-between items-center bg-slate-50">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">Order Summary</span>
+<span class="px-2 py-0.5 bg-white border border-outline-variant/50 rounded text-[10px] font-bold">USD</span>
+</div>
+<div class="p-gutter space-y-gutter">
+<div>
+<h5 class="font-h3 text-body-lg font-bold text-on-background">Trial VPS</h5>
+<div class="flex justify-between items-center mt-base">
+<span class="text-on-surface-variant text-body-md">Every Month plan</span>
+<span class="font-semibold text-on-background">$5.99</span>
+</div>
+</div>
+<div class="pt-gutter border-t border-slate-100">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">Total Due Today</span>
+<div class="text-[40px] font-black text-on-background mt-xs">$5.99</div>
+</div>
+<div class="space-y-sm">
+<button class="w-full flex items-center justify-center gap-2 text-primary font-semibold text-body-md hover:bg-primary/5 py-2 rounded-lg transition-all">
+<span class="material-symbols-outlined text-[20px]">sell</span>
+                                        Have a coupon code?
+                                        <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+<button class="w-full py-4 bg-primary text-white rounded-xl font-bold text-body-lg flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
+                                        Continue
+                                        <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<div class="flex items-center justify-center gap-2 pt-base">
+<span class="material-symbols-outlined text-emerald-500 text-[18px]">verified_user</span>
+<span class="text-[11px] font-semibold text-emerald-600">30-day money-back guarantee</span>
+</div>
+</div>
+<div class="bg-slate-50 p-md text-center">
+<p class="text-[10px] text-on-surface-variant leading-tight">
+                                    By ordering, you agree to our <a class="text-primary hover:underline" href="#">Terms of Service</a> and Privacy Policy. All taxes are calculated at checkout.
+                                </p>
+</div>
+</div>
+<!-- Mini Trust Map Card -->
+<div class="bg-white rounded-xl border border-outline-variant/30 p-md flex items-center gap-4">
+<div class="w-20 h-16 rounded-lg overflow-hidden flex-shrink-0">
+<div class="w-full h-full bg-cover bg-center" data-alt="A highly detailed 3D topographic map of Nepal with Kathmandu highlighted by a glowing blue dot. The map is rendered in a minimalist white architectural style with subtle indigo shadows and elegant line-work under soft professional lighting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCAAIwy5tI7RfsqHJesK7s0uwkMQEry9h1bl60IWRSZDEe0H-Qb3aGJEH1EHhSVn9lqAt2DeKipctHmT3t_qQABZxXB0C1UjlmdTNDwlunW8tXsngySQopi8gH-i8MH_5PJmIBOzUtHl45K1nEwNSiC7Gl03hazA7YcscgByhzfA8R78P5Ivmx69UliGCK8emVQtrAhib1O2nX1uyqY2s0jQKqInhd0kNTOcTm_iMKRWvNgzjf0sko8DQ')"></div>
+</div>
+<div>
+<p class="text-xs font-bold text-on-background uppercase tracking-tight">Active Region</p>
+<p class="text-body-md text-on-surface-variant">Kathmandu Cluster <br/><span class="text-[10px] font-medium text-emerald-500 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> 12ms average latency</span></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Background Decoration -->
+<div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+<div class="absolute -top-[20%] -right-[10%] w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-[10%] -left-[5%] w-[400px] h-[400px] bg-indigo-600/5 rounded-full blur-[100px]"></div>
+</div>
+<script>
+        // Simple interactive handling for the billing cards
+        const billingRadios = document.querySelectorAll('input[name="billing"]');
+        billingRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                billingRadios.forEach(r => {
+                    const parent = r.closest('label');
+                    parent.classList.remove('border-primary', 'bg-primary/5');
+                    parent.classList.add('border-outline-variant/50', 'bg-white');
+                });
+                if (e.target.checked) {
+                    const parent = e.target.closest('label');
+                    parent.classList.add('border-primary', 'bg-primary/5');
+                    parent.classList.remove('border-outline-variant/50', 'bg-white');
+                }
+            });
+        });
+
+        // Datacenter card highlight logic
+        const datacenterRadios = document.querySelectorAll('input[name="datacenter"]');
+        datacenterRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                datacenterRadios.forEach(r => {
+                    const parent = r.closest('label');
+                    parent.classList.remove('border-primary', 'bg-primary/5');
+                    parent.classList.add('border-outline-variant', 'bg-white');
+                });
+                if (e.target.checked) {
+                    const parent = e.target.closest('label');
+                    parent.classList.add('border-primary', 'bg-primary/5');
+                    parent.classList.remove('border-outline-variant', 'bg-white');
+                }
+            });
+        });
+    </script>
+</body></html>

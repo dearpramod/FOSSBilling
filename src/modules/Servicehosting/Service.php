@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -25,8 +24,10 @@ class Service implements InjectionAwareInterface
 {
     private const string PASSWORD_PLACEHOLDER = '********';
 
+    public const string CREDENTIAL_KEEP_SENTINEL = '__KEEP__';
+
     protected ?\Pimple\Container $di = null;
-    private readonly Filesystem $filesystem;
+    private Filesystem $filesystem;
 
     public function __construct()
     {
@@ -36,6 +37,9 @@ class Service implements InjectionAwareInterface
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -208,7 +212,7 @@ class Service implements InjectionAwareInterface
         }
 
         // Update the service's password to a placeholder value for security reasons
-        $model->pass = '********';
+        $model->pass = self::PASSWORD_PLACEHOLDER;
 
         // Save the service
         $this->di['db']->store($model);
@@ -318,7 +322,7 @@ class Service implements InjectionAwareInterface
         $adapter->createAccount($account);
 
         // Update the service's password to a placeholder value for security reasons
-        $model->pass = '********';
+        $model->pass = self::PASSWORD_PLACEHOLDER;
 
         // Save the service
         $this->di['db']->store($model);
@@ -603,13 +607,18 @@ class Service implements InjectionAwareInterface
             $result['max_accounts'] = $model->max_accounts;
             $result['manager'] = $model->manager;
             $result['config'] = json_decode($model->config ?? '', true) ?? [];
-            $result['username'] = $model->username;
-            $result['password'] = $model->password;
-            $result['accesshash'] = $model->accesshash;
             $result['port'] = Tools::normalizePort($model->port);
             $result['passwordLength'] = $model->passwordLength;
             $result['created_at'] = $model->created_at;
             $result['updated_at'] = $model->updated_at;
+
+            $secretFields = $this->getServerManagerSecretFields((string) $model->manager);
+            foreach ($secretFields as $field) {
+                $raw = $model->{$field} ?? null;
+                $result[$field] = null;
+                $result[$field . '_set'] = $raw !== null && $raw !== '';
+            }
+            $result['secret_fields'] = $secretFields;
         }
 
         return $result;
@@ -750,18 +759,87 @@ class Service implements InjectionAwareInterface
 
     public function getServerManagerConfig($manager)
     {
+        // Only ever load files belonging to a known server manager. $manager
+        // ultimately comes from admin-supplied input (server_create/server_update),
+        // so without this whitelist check a path-traversal value could reach
+        // require_once below.
+        if (!in_array($manager, $this->_getServerManagers(), true)) {
+            return [];
+        }
+
         $filename = Path::join(PATH_LIBRARY, 'Server', 'Manager', "{$manager}.php");
         if (!$this->filesystem->exists($filename)) {
             return [];
         }
 
         $classname = 'Server_Manager_' . $manager;
+        if (!class_exists($classname)) {
+            try {
+                require_once $filename;
+            } catch (\Throwable) {
+                return [];
+            }
+        }
+
         $method = 'getForm';
         if (!is_callable($classname . '::' . $method)) {
             return [];
         }
 
         return call_user_func([$classname, $method]);
+    }
+
+    /**
+     * Returns the credential field names for a given server manager.
+     * Combines the manager's own declarations with a defensive name-based
+     * fallback so a future manager that forgets to mark a field is still
+     * masked correctly.
+     *
+     * @return string[]
+     */
+    public function getServerManagerSecretFields(string $manager): array
+    {
+        $secrets = ['password', 'accesshash'];
+
+        // Same whitelist requirement as getServerManagerConfig() — $manager is
+        // admin-supplied and must not be usable to require_once an arbitrary file.
+        if (!in_array($manager, $this->_getServerManagers(), true)) {
+            return array_values(array_unique($secrets));
+        }
+
+        $filename = Path::join(PATH_LIBRARY, 'Server', 'Manager', "{$manager}.php");
+        if (!$this->filesystem->exists($filename)) {
+            return array_values(array_unique($secrets));
+        }
+
+        $classname = 'Server_Manager_' . $manager;
+        if (!class_exists($classname)) {
+            try {
+                require_once $filename;
+            } catch (\Throwable) {
+                return array_values(array_unique($secrets));
+            }
+        }
+
+        if (is_callable($classname . '::getSecretFields')) {
+            $declared = call_user_func([$classname, 'getSecretFields']);
+            if (is_array($declared)) {
+                $secrets = array_merge($secrets, $declared);
+            }
+        }
+
+        $form = $this->getServerManagerConfig($manager);
+        $formFields = $form['form']['credentials']['fields'] ?? [];
+        foreach ($formFields as $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            if (!empty($field['secret']) && !empty($field['name'])) {
+                $secrets[] = (string) $field['name'];
+            }
+        }
+
+        return array_values(array_unique($secrets));
     }
 
     public function getServerPairs(): array
@@ -807,6 +885,10 @@ class Service implements InjectionAwareInterface
 
     public function createServer($name, $ip, $manager, $data)
     {
+        if (!in_array($manager, $this->_getServerManagers(), true)) {
+            throw new Exception('Server manager :manager is not a valid server manager', [':manager' => $manager]);
+        }
+
         $model = $this->di['db']->dispense('ServiceHostingServer');
         $model->name = $name;
         $model->ip = $ip;
@@ -871,15 +953,20 @@ class Service implements InjectionAwareInterface
         $model->ns2 = $data['ns2'] ?? $model->ns2;
         $model->ns3 = $data['ns3'] ?? $model->ns3;
         $model->ns4 = $data['ns4'] ?? $model->ns4;
-        $model->manager = $data['manager'] ?? $model->manager;
+        if (isset($data['manager'])) {
+            if (!in_array($data['manager'], $this->_getServerManagers(), true)) {
+                throw new Exception('Server manager :manager is not a valid server manager', [':manager' => $data['manager']]);
+            }
+            $model->manager = $data['manager'];
+        }
         $port = Tools::normalizePort($data['port'] ?? null);
         $model->port = $port ?? $model->port;
         $model->config = isset($data['config']) ? json_encode($data['config']) : $model->config;
         $model->secure = $data['secure'] ?? $model->secure;
-        $model->username = $data['username'] ?? $model->username;
-        $model->password = $data['password'] ?? $model->password;
-        $model->accesshash = $data['accesshash'] ?? $model->accesshash;
-        $model->passwordLength = is_numeric($data['passwordLength'] ?? '') ? $data['passwordLength'] : $model->passwordLength;
+        $model->username = $this->normalizeCredential('username', $data['username'] ?? null, $model->username, $model->id, false);
+        $model->password = $this->normalizeCredential('password', $data['password'] ?? null, $model->password, $model->id, true);
+        $model->accesshash = $this->normalizeCredential('accesshash', $data['accesshash'] ?? null, $model->accesshash, $model->id, true);
+        $model->passwordLength = is_numeric($data['passwordLength'] ?? '') ? intval($data['passwordLength']) : $model->passwordLength;
         $model->updated_at = date('Y-m-d H:i:s');
 
         $this->di['db']->store($model);
@@ -887,6 +974,32 @@ class Service implements InjectionAwareInterface
         $this->di['logger']->info('Update hosting server %s', $model->id);
 
         return true;
+    }
+
+    /**
+     * Returns the value to store for a credential field. Blank, whitespace-only
+     * or {@see CREDENTIAL_KEEP_SENTINEL} inputs preserve the existing value;
+     * everything else replaces it. When `$audit` is true a successful rotation
+     * of `password` or `accesshash` is logged (the value itself is never logged).
+     */
+    private function normalizeCredential(string $field, mixed $incoming, mixed $existing, mixed $serverId, bool $audit): mixed
+    {
+        if ($incoming === null || !is_scalar($incoming)) {
+            return $existing;
+        }
+
+        $incoming = (string) $incoming;
+
+        if (trim($incoming) === '' || $incoming === self::CREDENTIAL_KEEP_SENTINEL) {
+            return $existing;
+        }
+
+        if ($audit && $incoming !== $existing) {
+            $adminId = $this->di['loggedin_admin']->id ?? 'unknown';
+            $this->di['logger']->info('Rotated %s for hosting server %s by admin %s', $field, (string) $serverId, (string) $adminId);
+        }
+
+        return $incoming;
     }
 
     /**
@@ -1013,11 +1126,10 @@ class Service implements InjectionAwareInterface
 
         if (is_array($inConfig)) {
             foreach ($inConfig as $key => $val) {
-                if (isset($config[$key])) {
-                    $config[$key] = $val;
-                }
-                if (isset($config[$key]) && empty($val)) {
+                if (empty($val)) {
                     unset($config[$key]);
+                } else {
+                    $config[$key] = $val;
                 }
             }
         }

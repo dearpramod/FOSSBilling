@@ -16,8 +16,7 @@ use function Tests\Helpers\container;
 use function Tests\Helpers\moduleService;
 
 test('email get list', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
-    $emailService = new Box\Mod\Email\Service();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $willReturn = [
         'list' => [
@@ -27,18 +26,22 @@ test('email get list', function (): void {
 
     $pager = Mockery::mock(FOSSBilling\Pagination::class)->makePartial();
     $pager
-    ->shouldReceive('getPaginatedResultSet')
-    ->atLeast()->once()
-    ->andReturn($willReturn);
+        ->shouldReceive('paginateDoctrineQuery')
+        ->atLeast()->once()
+        ->andReturn($willReturn);
+
+    $repo = Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class);
+    $qb = Mockery::mock(Doctrine\ORM\QueryBuilder::class);
+    $repo->shouldReceive('getSearchQueryBuilder')->andReturn($qb);
+
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getActivityClientEmailRepository')->andReturn($repo);
 
     $di = container();
     $di['pager'] = $pager;
 
     $adminApi->setDi($di);
-    $emailService->setDi($di);
-
-    $service = $emailService;
-    $adminApi->setService($service);
+    $adminApi->setService($emailService);
 
     $result = $adminApi->email_get_list([]);
     expect($result)->toBeArray();
@@ -48,7 +51,7 @@ test('email get list', function (): void {
 });
 
 test('email get', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
@@ -63,39 +66,28 @@ test('email get', function (): void {
     $created = date('Y-m-d H:i:s', time() - 86400);
     $updated = date('Y-m-d H:i:s');
 
-    $model = new Model_ActivityClientEmail();
-    $model->loadBean(new Tests\Helpers\DummyBean());
-    $model->id = $id;
-    $model->client_id = $client_id;
-    $model->sender = $sender;
-    $model->recipients = $recipients;
-    $model->subject = $subject;
-    $model->content_html = $content_html;
-    $model->content_text = $content_text;
-    $model->created_at = $created;
-    $model->updated_at = $updated;
+    $model = new Box\Mod\Email\Entity\ActivityClientEmail();
+    \Tests\Helpers\setEntityId($model, $id);
+    $model->setClientId($client_id);
+    $model->setSender($sender);
+    $model->setRecipients($recipients);
+    $model->setSubject($subject);
+    $model->setContentHtml($content_html);
+    $model->setContentText($content_text);
+    $model->setCreatedAt(new DateTime('-1 day'));
+    $model->setUpdatedAt(new DateTime());
 
-    $expected = [
-        'id' => $id,
-        'client_id' => $client_id,
-        'sender' => $sender,
-        'recipients' => $recipients,
-        'subject' => $subject,
-        'content_html' => $content_html,
-        'content_text' => $content_text,
-        'created_at' => $created,
-        'updated_at' => $updated,
-    ];
+    $expected = $model->toApiArray();
+
+    $repo = Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class);
+    $repo->shouldReceive('findOneByIdOrFail')
+        ->once()
+        ->with($data['id'])
+        ->andReturn($model);
 
     $service = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
-    $service
-    ->shouldReceive('getEmailById')
-    ->atLeast()->once()
-    ->andReturn($model);
-    $service
-    ->shouldReceive('toApiArray')
-    ->atLeast()->once()
-    ->andReturn($expected);
+    $service->shouldReceive('getActivityClientEmailRepository')->andReturn($repo);
+    $service->shouldNotReceive('toApiArray');
 
     $di = container();
     $adminApi->setDi($di);
@@ -108,7 +100,7 @@ test('email get', function (): void {
 });
 
 test('send', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'to' => 'to@example.com',
@@ -118,10 +110,6 @@ test('send', function (): void {
         'subject' => 'Subject',
         'content' => 'Content',
     ];
-
-    $model = new Model_ActivityClientEmail();
-    $model->loadBean(new Tests\Helpers\DummyBean());
-    $model->id = 1;
 
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService
@@ -140,31 +128,30 @@ test('send', function (): void {
 });
 
 test('resend', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $model = new Model_ActivityClientEmail();
-    $model->loadBean(new Tests\Helpers\DummyBean());
-    $model->id = 1;
+    $model = new Box\Mod\Email\Entity\ActivityClientEmail();
+    \Tests\Helpers\setEntityId($model, 1);
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn($model);
+    $repo = Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class);
+    $repo->shouldReceive('findOneByIdOrFail')
+        ->atLeast()->once()
+        ->with(1)
+        ->andReturn($model);
 
     $di = container();
-    $di['db'] = $db;
     $adminApi->setDi($di);
 
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getActivityClientEmailRepository')->andReturn($repo);
     $emailService
-    ->shouldReceive('resend')
-    ->atLeast()->once()
-    ->andReturn(true);
+        ->shouldReceive('resend')
+        ->atLeast()->once()
+        ->andReturn(true);
 
     $adminApi->setService($emailService);
 
@@ -174,77 +161,80 @@ test('resend', function (): void {
 });
 
 test('resend exception email not found', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(null);
+    $repo = Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class);
+    $repo->shouldReceive('findOneByIdOrFail')
+        ->andThrow(new FOSSBilling\InformationException('Email not found'));
 
     $di = container();
-    $di['db'] = $db;
     $adminApi->setDi($di);
 
-    $this->expectException(FOSSBilling\Exception::class);
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getActivityClientEmailRepository')->andReturn($repo);
+    $adminApi->setService($emailService);
+
+    $this->expectException(FOSSBilling\InformationException::class);
     $this->expectExceptionMessage('Email not found');
     $adminApi->email_resend($data);
 });
 
 test('delete exception email not found', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn(null);
+    $repo = Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class);
+    $repo->shouldReceive('findOneByIdOrFail')
+        ->andThrow(new FOSSBilling\InformationException('Email not found'));
 
     $di = container();
-    $di['db'] = $db;
     $adminApi->setDi($di);
 
-    $this->expectException(FOSSBilling\Exception::class);
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getActivityClientEmailRepository')->andReturn($repo);
+    $adminApi->setService($emailService);
+
+    $this->expectException(FOSSBilling\InformationException::class);
     $this->expectExceptionMessage('Email not found');
     $adminApi->email_delete($data);
 });
 
 test('email delete', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
-    $emailService = new Box\Mod\Email\Service();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
     ];
 
-    $model = new Model_ActivityClientEmail();
-    $model->loadBean(new Tests\Helpers\DummyBean());
-    $model->id = 1;
+    $model = new Box\Mod\Email\Entity\ActivityClientEmail();
+    \Tests\Helpers\setEntityId($model, 1);
 
-    $db = Mockery::mock('Box_Database');
-    $db
-    ->shouldReceive('findOne')
-    ->atLeast()->once()
-    ->andReturn($model);
-    $db
-    ->shouldReceive('trash')
-    ->atLeast()->once()
-    ->andReturn(true);
+    $em = Mockery::mock(Doctrine\ORM\EntityManagerInterface::class);
+    $em->shouldReceive('remove')->atLeast()->once();
+    $em->shouldReceive('flush')->atLeast()->once();
 
     $loggerStub = $this->createStub('\Box_Log');
 
     $di = container();
-    $di['db'] = $db;
+    $di['em'] = $em;
     $di['logger'] = $loggerStub;
     $adminApi->setDi($di);
+
+    $repo = Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class);
+    $repo->shouldReceive('findOneByIdOrFail')
+        ->atLeast()->once()
+        ->with(1)
+        ->andReturn($model);
+
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getActivityClientEmailRepository')->andReturn($repo);
 
     $adminApi->setService($emailService);
 
@@ -254,7 +244,7 @@ test('email delete', function (): void {
 });
 
 test('template get list', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $willReturn = [
         'list' => [
@@ -281,7 +271,7 @@ test('template get list', function (): void {
 });
 
 test('template get', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
@@ -304,7 +294,7 @@ test('template get', function (): void {
 });
 
 test('template delete', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
@@ -314,6 +304,10 @@ test('template delete', function (): void {
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService->shouldReceive('getTemplate')->atLeast()->once()->with(1)->andReturn($model);
     $emailService->shouldReceive('hasDefaultTemplate')->never();
+
+    $templateGroupRepo = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateGroupRepository::class);
+    $templateGroupRepo->shouldReceive('deleteAssociationsForTemplate')->atLeast()->once()->with(1);
+    $emailService->shouldReceive('getTemplateGroupRepository')->andReturn($templateGroupRepo);
 
     $loggerStub = $this->createStub('\Box_Log');
     $em = Mockery::mock(Doctrine\ORM\EntityManagerInterface::class);
@@ -331,7 +325,7 @@ test('template delete', function (): void {
 });
 
 test('template delete template not found', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $data = [
         'id' => 1,
@@ -350,7 +344,7 @@ test('template delete template not found', function (): void {
 });
 
 test('template create', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $modelId = 1;
 
@@ -377,7 +371,7 @@ test('template create', function (): void {
 });
 
 test('template send to not set exception', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $di = container();
     $adminApi->setDi($di);
@@ -386,7 +380,7 @@ test('template send to not set exception', function (): void {
 });
 
 test('template update', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $id = 1;
     $data = [
@@ -415,8 +409,95 @@ test('template update', function (): void {
     expect($result)->toBeTrue();
 });
 
+test('template group get list returns assigned groups', function (): void {
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
+
+    $id = 1;
+    $emailTemplateModel = new EmailTemplate('mod_staff_client_order', $id);
+
+    $group = new Box\Mod\Staff\Entity\AdminGroup();
+    Tests\Helpers\setEntityId($group, 5);
+    $group->setName('Support Staff');
+
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getTemplate')->atLeast()->once()->with($id)->andReturn($emailTemplateModel);
+    $emailService->shouldReceive('getTemplateGroupIds')->atLeast()->once()->with($emailTemplateModel)->andReturn([5]);
+
+    $adminGroupRepo = Mockery::mock(Box\Mod\Staff\Repository\AdminGroupRepository::class);
+    $adminGroupRepo->shouldReceive('findBy')->atLeast()->once()->with(['id' => [5]])->andReturn([$group]);
+
+    $staffService = Mockery::mock(Box\Mod\Staff\Service::class);
+    $staffService->shouldReceive('getAdminGroupRepository')->andReturn($adminGroupRepo);
+
+    $di = container();
+    $di['mod_service'] = $di->protect(moduleService(['staff' => $staffService]));
+    $adminApi->setService($emailService);
+    $adminApi->setDi($di);
+
+    $result = $adminApi->template_group_get_list(['id' => $id]);
+
+    expect($result)->toBe([
+        ['id' => 5, 'name' => 'Support Staff', 'protected' => false],
+    ]);
+});
+
+test('template group get list returns empty array when no groups are assigned', function (): void {
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
+
+    $id = 1;
+    $emailTemplateModel = new EmailTemplate('mod_staff_client_order', $id);
+
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getTemplate')->atLeast()->once()->with($id)->andReturn($emailTemplateModel);
+    $emailService->shouldReceive('getTemplateGroupIds')->atLeast()->once()->andReturn([]);
+
+    $di = container();
+    $adminApi->setService($emailService);
+    $adminApi->setDi($di);
+
+    $result = $adminApi->template_group_get_list(['id' => $id]);
+
+    expect($result)->toBe([]);
+});
+
+test('template group add assigns a group to a template', function (): void {
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
+
+    $id = 1;
+    $emailTemplateModel = new EmailTemplate('mod_staff_client_order', $id);
+
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getTemplate')->atLeast()->once()->with($id)->andReturn($emailTemplateModel);
+    $emailService->shouldReceive('addTemplateToGroup')->atLeast()->once()->with($emailTemplateModel, 5)->andReturn(true);
+
+    $di = container();
+    $adminApi->setService($emailService);
+    $adminApi->setDi($di);
+
+    $result = $adminApi->template_group_add(['id' => $id, 'group_id' => 5]);
+    expect($result)->toBeTrue();
+});
+
+test('template group remove unassigns a group from a template', function (): void {
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
+
+    $id = 1;
+    $emailTemplateModel = new EmailTemplate('mod_staff_client_order', $id);
+
+    $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $emailService->shouldReceive('getTemplate')->atLeast()->once()->with($id)->andReturn($emailTemplateModel);
+    $emailService->shouldReceive('removeTemplateFromGroup')->atLeast()->once()->with($emailTemplateModel, 5)->andReturn(true);
+
+    $di = container();
+    $adminApi->setService($emailService);
+    $adminApi->setDi($di);
+
+    $result = $adminApi->template_group_remove(['id' => $id, 'group_id' => 5]);
+    expect($result)->toBeTrue();
+});
+
 test('template reset', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $id = 1;
     $data = [
@@ -438,7 +519,7 @@ test('template reset', function (): void {
 });
 
 test('batch template generate', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService
     ->shouldReceive('templateBatchGenerate')
@@ -452,7 +533,7 @@ test('batch template generate', function (): void {
 });
 
 test('batch template disable', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService
     ->shouldReceive('templateBatchDisable')
@@ -466,7 +547,7 @@ test('batch template disable', function (): void {
 });
 
 test('batch template enable', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService
     ->shouldReceive('templateBatchEnable')
@@ -480,7 +561,7 @@ test('batch template enable', function (): void {
 });
 
 test('send test', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService
     ->shouldReceive('sendTemplate')
@@ -494,7 +575,7 @@ test('send test', function (): void {
 });
 
 test('batch sendmail', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService->shouldReceive('batchSend')->atLeast()->once();
 
@@ -516,7 +597,7 @@ test('batch sendmail', function (): void {
 });
 
 test('template send', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
     $emailService = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
     $emailService
     ->shouldReceive('sendTemplate')
@@ -579,7 +660,7 @@ test('batch delete', function (): void {
 });
 
 test('batch template delete skips built-in templates with defaults', function (): void {
-    $adminApi = new Box\Mod\Email\Api\Admin();
+    $adminApi = apiEndpoint(new Box\Mod\Email\Api\Admin());
 
     $builtinTemplate = new EmailTemplate('mod_email_test', 1);
     $builtinTemplate->setIsCustom(false);

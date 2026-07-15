@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -14,10 +13,22 @@ namespace Box\Mod\Security\Checks;
 
 use FOSSBilling\Enums\SecurityCheckResultEnum;
 use FOSSBilling\SecurityCheckResult;
-use Symfony\Component\HttpClient\HttpClient;
+use Pimple\Container;
 
 class webserver implements \FOSSBilling\Interfaces\SecurityCheckInterface
 {
+    protected ?Container $di = null;
+
+    public function setDi(Container $di): void
+    {
+        $this->di = $di;
+    }
+
+    public function getDi(): ?Container
+    {
+        return $this->di;
+    }
+
     // A list of URIs that should not respond with HTTP 200
     private array $testUris = [
         'config.php',
@@ -40,10 +51,10 @@ class webserver implements \FOSSBilling\Interfaces\SecurityCheckInterface
         $isOkay = true;
         $result = '';
 
-        $client = HttpClient::create();
+        $httpClient = $this->di['http_client'];
         foreach ($this->testUris as $uri) {
             $url = SYSTEM_URL . $uri;
-            $response = $client->request('GET', $url);
+            $response = $httpClient->request('GET', $url);
             if ($response->getStatusCode() === 200) {
                 $isOkay = false;
                 $result .= __trans(":url: returned HTTP 200 when it shouldn't have.", [':url:' => $url]) . "\n";

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace FOSSBilling;
 
+use Box\Mod\Extension\Entity\Extension;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
@@ -20,7 +21,7 @@ use Symfony\Component\Uid\Uuid;
 class UpdatePatcher implements InjectionAwareInterface
 {
     private ?\Pimple\Container $di = null;
-    private readonly Filesystem $filesystem;
+    private Filesystem $filesystem;
     private array $downloadableStorageMigrationMap = [];
 
     public function __construct()
@@ -31,6 +32,9 @@ class UpdatePatcher implements InjectionAwareInterface
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -480,6 +484,19 @@ class UpdatePatcher implements InjectionAwareInterface
             72 => 'patch72',
             73 => 'patch73',
             74 => 'patch74',
+            75 => 'patch75',
+            76 => 'patch76',
+            77 => 'patch77',
+            78 => 'patch78',
+            79 => 'patch79',
+            80 => 'patch80',
+            81 => 'patch81',
+            82 => 'patch82',
+            83 => 'patch83',
+            84 => 'patch84',
+            85 => 'patch85',
+            86 => 'patch86',
+            87 => 'patch87',
         ];
         ksort($patches, SORT_NATURAL);
 
@@ -635,13 +652,13 @@ class UpdatePatcher implements InjectionAwareInterface
             $ext_service = $this->di['mod_service']('extension');
             if ($ext_service->isExtensionActive('mod', 'kb')) {
                 $support_ext_config = $ext_service->getConfig('mod_support');
-                $support_ext_config['kb_enable'] = 'on';
+                $support_ext_config['kb_enable'] = true;
                 $ext_service->setConfig($support_ext_config);
             }
 
             // If the Kb extension exists, uninstall it.
-            $kb_ext = $ext_service->findExtension('mod', 'kb');
-            if ($kb_ext instanceof \Model_Extension) {
+            $kb_ext = $ext_service->getExtensionRepository()->findOneByTypeAndName('mod', 'kb');
+            if ($kb_ext instanceof Extension) {
                 $ext_service->deactivate($kb_ext);
                 $ext_service->uninstall('mod', 'kb');
             }
@@ -663,8 +680,8 @@ class UpdatePatcher implements InjectionAwareInterface
         try {
             $ext_service = $this->di['mod_service']('extension');
             // If the queue extension exists, uninstall it.
-            $queue_ext = $ext_service->findExtension('mod', 'queue');
-            if ($queue_ext instanceof \Model_Extension) {
+            $queue_ext = $ext_service->getExtensionRepository()->findOneByTypeAndName('mod', 'queue');
+            if ($queue_ext instanceof Extension) {
                 $ext_service->deactivate($queue_ext);
                 $ext_service->uninstall('mod', 'queue');
             }
@@ -762,17 +779,11 @@ class UpdatePatcher implements InjectionAwareInterface
     {
         // Drop updated_at column from activity tables
         // Activity logs are never meant to be updated, only created
-        $q = 'ALTER TABLE `activity_admin_history` DROP COLUMN `updated_at`;';
-        $this->executeSql($q);
-
-        $q = 'ALTER TABLE `activity_client_email` DROP COLUMN `updated_at`;';
-        $this->executeSql($q);
-
-        $q = 'ALTER TABLE `activity_client_history` DROP COLUMN `updated_at`;';
-        $this->executeSql($q);
-
-        $q = 'ALTER TABLE `activity_system` DROP COLUMN `updated_at`;';
-        $this->executeSql($q);
+        foreach (['activity_admin_history', 'activity_client_email', 'activity_client_history', 'activity_system'] as $table) {
+            if ($this->tableHasColumn($table, 'updated_at')) {
+                $this->executeSql(sprintf('ALTER TABLE `%s` DROP COLUMN `updated_at`;', $this->quoteIdentifier($table)));
+            }
+        }
     }
 
     private function patch46(): void
@@ -1102,8 +1113,8 @@ class UpdatePatcher implements InjectionAwareInterface
 
             $this->executeSql("DELETE FROM extension_meta WHERE extension = 'mod_spamchecker' AND meta_key = 'config'");
 
-            $spamcheckerExt = $extService->findExtension('mod', 'spamchecker');
-            if ($spamcheckerExt instanceof \Model_Extension) {
+            $spamcheckerExt = $extService->getExtensionRepository()->findOneByTypeAndName('mod', 'spamchecker');
+            if ($spamcheckerExt instanceof Extension) {
                 $extService->deactivate($spamcheckerExt);
                 $extService->uninstall('mod', 'spamchecker');
             }
@@ -1504,7 +1515,7 @@ class UpdatePatcher implements InjectionAwareInterface
         $expires = $this->computeInvoiceHashExpiration();
         $rows = $this->fetchAll(
             "SELECT id FROM invoice WHERE hash IS NOT NULL
-               AND (LENGTH(hash) < 30 OR LENGTH(hash) > 60 OR BINARY hash NOT REGEXP '^[a-f0-9]+$')"
+               AND (LENGTH(hash) < 30 OR LENGTH(hash) > 60 OR CONVERT(hash USING utf8mb4) COLLATE utf8mb4_bin NOT REGEXP '^[a-f0-9]+$')"
         );
         foreach ($rows as $row) {
             $this->executeSql(
@@ -1607,8 +1618,7 @@ class UpdatePatcher implements InjectionAwareInterface
             Path::join(PATH_CACHE, 'fallbackClassMap.php') => 'unlink',
         ]);
 
-        $schemaManager = $this->di['dbal']->createSchemaManager();
-        if (!$schemaManager->tablesExist(['promo_redemption'])) {
+        if (!$this->tableExists('promo_redemption')) {
             $this->executeSql(
                 "CREATE TABLE `promo_redemption` (
                     `id` bigint(20) NOT NULL AUTO_INCREMENT,
@@ -1636,6 +1646,7 @@ class UpdatePatcher implements InjectionAwareInterface
             );
         }
 
+        $schemaManager = $this->di['dbal']->createSchemaManager();
         $table = $schemaManager->introspectTable('promo_redemption');
         $columns = [];
 
@@ -1879,7 +1890,7 @@ class UpdatePatcher implements InjectionAwareInterface
         // Backfill hashes NULLed by the original revision of patch67.
         $expires = $this->computeInvoiceHashExpiration();
         $rows = $this->fetchAll(
-            "SELECT id FROM invoice WHERE hash IS NULL OR LENGTH(hash) < 30 OR LENGTH(hash) > 60 OR BINARY hash NOT REGEXP '^[a-f0-9]+$'"
+            "SELECT id FROM invoice WHERE hash IS NULL OR LENGTH(hash) < 30 OR LENGTH(hash) > 60 OR CONVERT(hash USING utf8mb4) COLLATE utf8mb4_bin NOT REGEXP '^[a-f0-9]+$'"
         );
         foreach ($rows as $row) {
             $this->executeSql(
@@ -1890,6 +1901,441 @@ class UpdatePatcher implements InjectionAwareInterface
                     'id' => $row['id'],
                 ]
             );
+        }
+    }
+
+    private function patch75(): void
+    {
+        // Drop the legacy `client.document_type` and `client.document_nr` columns.
+        // Existing values are copied into the first free `custom_N` slot on each client.
+        if (!$this->tableHasColumn('client', 'document_nr')) {
+            return;
+        }
+
+        $rows = $this->fetchAll(
+            "SELECT id, document_nr FROM `client` WHERE `document_nr` IS NOT NULL AND `document_nr` <> ''"
+        );
+
+        $customSlots = ['custom_1', 'custom_2', 'custom_3', 'custom_4', 'custom_5', 'custom_6', 'custom_7', 'custom_8', 'custom_9', 'custom_10'];
+
+        foreach ($rows as $row) {
+            $clientId = (int) $row['id'];
+            $documentNr = (string) $row['document_nr'];
+
+            $existing = $this->fetchAll(
+                'SELECT custom_1, custom_2, custom_3, custom_4, custom_5, custom_6, custom_7, custom_8, custom_9, custom_10 FROM client WHERE id = :id',
+                ['id' => $clientId]
+            );
+            $clientRow = $existing[0] ?? [];
+
+            $targetSlot = null;
+            foreach ($customSlots as $slot) {
+                if (($clientRow[$slot] ?? null) === null || $clientRow[$slot] === '') {
+                    $targetSlot = $slot;
+
+                    break;
+                }
+            }
+
+            if ($targetSlot !== null) {
+                $this->executeSql(
+                    sprintf('UPDATE `client` SET `%s` = :value WHERE id = :id', $targetSlot),
+                    ['value' => $documentNr, 'id' => $clientId]
+                );
+            } else {
+                $this->di['logger']->setChannel('update')->warning('patch75: client #%d has no free custom field slot; unmigrated document_nr was "%s".', $clientId, $documentNr);
+            }
+        }
+
+        $this->executeSql('ALTER TABLE `client` DROP COLUMN `document_type`, DROP COLUMN `document_nr`;');
+    }
+
+    private function patch76(): void
+    {
+        // The `activity_client_email` table was missing an `updated_at` column,
+        // but the Doctrine entity for it now expects one. Add the column for
+        // installations that were created before the entity was migrated.
+        if (!$this->tableHasColumn('activity_client_email', 'updated_at')) {
+            $this->executeSql('ALTER TABLE `activity_client_email` ADD COLUMN `updated_at` datetime DEFAULT NULL AFTER `created_at`');
+        }
+    }
+
+    private function patch77(): void
+    {
+        // The email queue table was renamed from `mod_email_queue` to
+        // `email_queue` when the `QueuedEmail` Doctrine entity was introduced.
+        // Rename it for installations that still use the legacy table name.
+        if ($this->tableExists('mod_email_queue') && !$this->tableExists('email_queue')) {
+            $this->executeSql('RENAME TABLE `mod_email_queue` TO `email_queue`');
+        }
+    }
+
+    private function patch78(): void
+    {
+        // Rework admin groups and permissions
+        //
+        // This patch migrates from individual admin-scoped permissions to group permissions.
+        // It allows admins to be a part of multiple groups,
+        // sets up a hierarchy between admin groups and creates
+        // a new protected group named Super Administrator.
+        //
+        // See https://github.com/FOSSBilling/FOSSBilling/pull/3821.
+        if (!$this->tableHasColumn('admin_group', 'system_name')) {
+            $this->executeSql('ALTER TABLE `admin_group` ADD COLUMN `system_name` VARCHAR(100) DEFAULT NULL AFTER `name`;');
+        }
+
+        if (!$this->tableHasColumn('admin_group', 'parent_id')) {
+            $this->executeSql('ALTER TABLE `admin_group` ADD COLUMN `parent_id` bigint(20) DEFAULT NULL AFTER `system_name`;');
+        }
+
+        if (!$this->tableHasColumn('admin_group', 'permissions')) {
+            $this->executeSql('ALTER TABLE `admin_group` ADD COLUMN `permissions` JSON AFTER `parent_id`;');
+        }
+
+        if (!$this->tableHasColumn('admin_group', 'protected')) {
+            $this->executeSql("ALTER TABLE `admin_group` ADD COLUMN `protected` TINYINT(1) DEFAULT '0' AFTER `permissions`;");
+        }
+
+        if (!$this->tableHasIndex('admin_group', 'system_name')) {
+            $this->executeSql('ALTER TABLE `admin_group` ADD UNIQUE INDEX `system_name` (`system_name`);');
+        }
+
+        if (!$this->tableHasIndex('admin_group', 'admin_group_parent_id_idx')) {
+            $this->executeSql('ALTER TABLE `admin_group` ADD KEY `admin_group_parent_id_idx` (`parent_id`);');
+        }
+
+        if (!$this->tableExists('admin_group_member')) {
+            $this->executeSql('CREATE TABLE `admin_group_member` (
+                `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                `admin_id` bigint(20) NOT NULL,
+                `admin_group_id` bigint(20) NOT NULL,
+                `created_at` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `admin_group_member_unique` (`admin_id`, `admin_group_id`),
+                KEY `admin_group_member_admin_id_idx` (`admin_id`),
+                KEY `admin_group_member_group_id_idx` (`admin_group_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;');
+        }
+
+        // Convert the existing admin group into the protected Super Administrator group.
+        $now = date('Y-m-d H:i:s');
+        $superAdminGroupId = $this->fetchOne("SELECT id FROM admin_group WHERE system_name = 'super_admin' LIMIT 1");
+        if (!$superAdminGroupId) {
+            $firstGroupId = $this->fetchOne('SELECT id FROM admin_group WHERE id = 1 LIMIT 1');
+            if ($firstGroupId) {
+                $this->executeSql(
+                    "UPDATE admin_group SET name = 'Super Administrator', system_name = 'super_admin', permissions = NULL, protected = 1, updated_at = :updated_at WHERE id = 1",
+                    ['updated_at' => $now],
+                );
+                $superAdminGroupId = 1;
+            } else {
+                $this->executeSql(
+                    "INSERT INTO admin_group (name, system_name, permissions, protected, created_at, updated_at) VALUES ('Super Administrator', 'super_admin', NULL, 1, :created_at, :updated_at)",
+                    ['created_at' => $now, 'updated_at' => $now],
+                );
+                $superAdminGroupId = (int) $this->getPdo()->lastInsertId();
+            }
+        } else {
+            $this->executeSql(
+                'UPDATE admin_group SET protected = 1, permissions = NULL, updated_at = :updated_at WHERE id = :id',
+                ['updated_at' => $now, 'id' => $superAdminGroupId],
+            );
+        }
+
+        $this->executeSql(
+            "INSERT INTO admin_group (name, system_name, parent_id, permissions, protected, created_at, updated_at) VALUES ('Migrated staff', 'migrated_staff', :parent_id, NULL, 0, :created_at, :updated_at)
+             ON DUPLICATE KEY UPDATE name = 'Migrated staff', parent_id = :parent_id, permissions = NULL, protected = 0, updated_at = :updated_at",
+            ['parent_id' => $superAdminGroupId, 'created_at' => $now, 'updated_at' => $now],
+        );
+        $migratedStaffGroupId = (int) $this->fetchOne("SELECT id FROM admin_group WHERE system_name = 'migrated_staff' LIMIT 1");
+
+        // Move legacy one-group-per-admin assignments into the new membership table before dropping the column.
+        $this->executeSql('
+            INSERT IGNORE INTO admin_group_member (admin_id, admin_group_id, created_at)
+            SELECT id, admin_group_id, :created_at
+            FROM admin
+            WHERE admin_group_id IS NOT NULL
+              AND (admin_group_id != :super_admin_group_id OR role = :role)
+        ', [
+            'created_at' => $now,
+            'super_admin_group_id' => $superAdminGroupId,
+            'role' => 'admin',
+        ]);
+
+        $this->executeSql('
+            INSERT IGNORE INTO admin_group_member (admin_id, admin_group_id, created_at)
+            SELECT id, :admin_group_id, :created_at
+            FROM admin
+            WHERE admin_group_id = :super_admin_group_id
+              AND (role IS NULL OR role != :role)
+        ', [
+            'admin_group_id' => $migratedStaffGroupId,
+            'created_at' => $now,
+            'super_admin_group_id' => $superAdminGroupId,
+            'role' => 'admin',
+        ]);
+
+        $this->executeSql('
+            INSERT IGNORE INTO admin_group_member (admin_id, admin_group_id, created_at)
+            SELECT id, :admin_group_id, :created_at
+            FROM admin
+            WHERE role = :role
+        ', [
+            'admin_group_id' => $superAdminGroupId,
+            'created_at' => $now,
+            'role' => 'admin',
+        ]);
+
+        // Drop legacy staff-level group ID columns after their data has been migrated.
+        if ($this->tableHasColumn('admin', 'admin_group_id')) {
+            if ($this->tableHasIndex('admin', 'admin_group_id_idx')) {
+                $this->executeSql('ALTER TABLE `admin` DROP INDEX `admin_group_id_idx`;');
+            }
+
+            $this->executeSql('ALTER TABLE `admin` DROP COLUMN `admin_group_id`;');
+        }
+
+        if (!$this->tableHasColumn('admin', 'system_name')) {
+            $this->executeSql('ALTER TABLE `admin` ADD COLUMN `system_name` varchar(100) DEFAULT NULL AFTER `id`;');
+        }
+
+        if ($this->tableHasColumn('admin', 'role')) {
+            $this->executeSql("
+                UPDATE `admin`
+                SET `system_name` = 'cron'
+                WHERE `role` = 'cron'
+                  AND (`system_name` IS NULL OR `system_name` = '')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM (SELECT `id` FROM `admin` WHERE `system_name` = 'cron' LIMIT 1) AS existing_cron
+                  )
+                ORDER BY `id` ASC
+                LIMIT 1;
+            ");
+            $this->executeSql('ALTER TABLE `admin` DROP COLUMN `role`;');
+        }
+
+        if (!$this->tableHasIndex('admin', 'system_name')) {
+            $this->executeSql('ALTER TABLE `admin` ADD UNIQUE KEY `system_name` (`system_name`);');
+        }
+
+        if ($this->tableHasColumn('admin', 'permissions')) {
+            $this->executeSql('ALTER TABLE `admin` DROP COLUMN `permissions`;');
+        }
+
+        if ($this->tableHasColumn('admin', 'protected')) {
+            $this->executeSql('ALTER TABLE `admin` DROP COLUMN `protected`;');
+        }
+    }
+
+    private function patch79(): void
+    {
+        // Create better default groups with sensible permissions
+        //
+        // This patch creates new default groups named Support Lead and Support Staff
+        // Support Lead is allowed to create/edit staff members and appoint them to groups below itself (in this case, the Support Staff group)
+        // Support Staff is allowed to access and manage support tickets without any additional permissions
+        //
+        // This is part of the admin groups and permissions rework. See https://github.com/FOSSBilling/FOSSBilling/pull/3821
+        $now = date('Y-m-d H:i:s');
+        $superAdminGroupId = $this->fetchOne("SELECT id FROM admin_group WHERE system_name = 'super_admin' LIMIT 1");
+        $supportLeadPermissions = json_encode([
+            'support' => [
+                'access' => true,
+                'view' => true,
+                'manage_tickets' => true,
+                'manage_helpdesk' => true,
+                'manage_canned' => true,
+                'manage_kb' => true,
+            ],
+            'staff' => [
+                'access' => true,
+                'view' => true,
+                'create_and_edit_staff' => true,
+                'reset_staff_password' => true,
+                'manage_groups' => true,
+                'manage_settings' => true,
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $this->executeSql(
+            "INSERT INTO admin_group (name, system_name, parent_id, permissions, protected, created_at, updated_at) VALUES ('Support Lead', 'support_lead', :parent_id, :permissions, 0, :created_at, :updated_at)
+             ON DUPLICATE KEY UPDATE name = 'Support Lead', parent_id = :parent_id, permissions = :permissions, protected = 0, updated_at = :updated_at",
+            ['parent_id' => $superAdminGroupId, 'permissions' => $supportLeadPermissions, 'created_at' => $now, 'updated_at' => $now],
+        );
+        $supportLeadGroupId = (int) $this->fetchOne("SELECT id FROM admin_group WHERE system_name = 'support_lead' LIMIT 1");
+
+        $supportStaffPermissions = json_encode([
+            'support' => [
+                'access' => true,
+                'view' => true,
+                'manage_tickets' => true,
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $this->executeSql(
+            "INSERT INTO admin_group (name, system_name, parent_id, permissions, protected, created_at, updated_at) VALUES ('Support Staff', 'support_staff', :parent_id, :permissions, 0, :created_at, :updated_at)
+             ON DUPLICATE KEY UPDATE name = 'Support Staff', parent_id = :parent_id, permissions = :permissions, protected = 0, updated_at = :updated_at",
+            ['parent_id' => $supportLeadGroupId, 'permissions' => $supportStaffPermissions, 'created_at' => $now, 'updated_at' => $now],
+        );
+    }
+
+    private function patch80(): void
+    {
+        // #3856 started requiring an explicit "manage_settings" permission to view or edit a
+        // module's settings (e.g. Scheduled Tasks), but existing staff groups that already had
+        // general access to those modules never had the new permission granted, silently
+        // locking non-super-admin staff out of settings pages they could previously use.
+        // Grant it wherever a group already had module access, to preserve prior behavior.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/3873
+        //
+        // The staff group form only submits checked checkboxes, so a group edited on or after
+        // #3856 (2026-06-28, when the manage_settings checkbox first existed) that has no
+        // manage_settings key made a deliberate choice to leave it unchecked, not a legacy gap.
+        // Restrict the backfill to groups untouched since before that date so we don't clobber
+        // an intentional choice, including the default groups patch79 just created above.
+        $modules = [
+            'activity', 'antispam', 'cookieconsent', 'cron', 'formbuilder',
+            'invoice', 'massmailer', 'order', 'orderbutton', 'seo', 'support', 'theme',
+        ];
+
+        $groups = $this->fetchAll('SELECT id, permissions FROM admin_group WHERE permissions IS NOT NULL AND updated_at < :cutoff', [
+            'cutoff' => '2026-06-28 00:00:00',
+        ]);
+
+        foreach ($groups as $group) {
+            $permissions = json_decode((string) $group['permissions'], true);
+            if (!is_array($permissions)) {
+                continue;
+            }
+
+            $changed = false;
+            foreach ($modules as $module) {
+                if (($permissions[$module]['access'] ?? false) && !isset($permissions[$module]['manage_settings'])) {
+                    $permissions[$module]['manage_settings'] = true;
+                    $changed = true;
+                }
+            }
+
+            if ($changed) {
+                $this->executeSql('UPDATE admin_group SET permissions = :permissions, updated_at = :updated_at WHERE id = :id', [
+                    'permissions' => json_encode($permissions),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                    'id' => $group['id'],
+                ]);
+            }
+        }
+    }
+
+    private function patch81(): void
+    {
+        // Per-user timezone for clients and staff. NULL falls back to the system `i18n.timezone` config.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/1028
+        if (!$this->tableHasColumn('client', 'timezone')) {
+            $this->executeSql('ALTER TABLE `client` ADD COLUMN `timezone` VARCHAR(64) DEFAULT NULL AFTER `lang`');
+        }
+        if (!$this->tableHasColumn('admin', 'timezone')) {
+            $this->executeSql('ALTER TABLE `admin` ADD COLUMN `timezone` VARCHAR(64) DEFAULT NULL AFTER `api_token`');
+        }
+    }
+
+    private function patch82(): void
+    {
+        // Per-staff-group restriction of "sent to staff" email notifications.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/1247
+        if (!$this->tableExists('email_template_group')) {
+            $this->executeSql('CREATE TABLE `email_template_group` (
+                `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                `email_template_id` bigint(20) NOT NULL,
+                `admin_group_id` bigint(20) NOT NULL,
+                `created_at` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `email_template_group_unique` (`email_template_id`, `admin_group_id`),
+                KEY `email_template_group_template_id_idx` (`email_template_id`),
+                KEY `email_template_group_group_id_idx` (`admin_group_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;');
+        }
+
+        // Backfill: templates already sent to staff must keep reaching everyone
+        // they used to reach, so link them to every staff group that already
+        // exists. Templates created after this patch runs are auto-assigned by
+        // Email\Service::assignAllGroupsToTemplate() when their row is first created.
+        $this->executeSql("INSERT INTO email_template_group (email_template_id, admin_group_id, created_at)
+            SELECT et.id, ag.id, NOW()
+            FROM email_template et
+            CROSS JOIN admin_group ag
+            WHERE et.action_code IN ('mod_staff_client_order', 'mod_staff_ticket_open', 'mod_staff_ticket_reply', 'mod_staff_ticket_close', 'mod_staff_client_signup')
+            AND NOT EXISTS (
+                SELECT 1 FROM email_template_group etg
+                WHERE etg.email_template_id = et.id AND etg.admin_group_id = ag.id
+            )");
+    }
+
+    private function patch83(): void
+    {
+        if (!$this->tableHasIndex('invoice_item', 'invoice_item_pending_renewal_idx')) {
+            $this->executeSql('ALTER TABLE `invoice_item` ADD INDEX `invoice_item_pending_renewal_idx` (`rel_id`(20), `type`, `task`, `status`, `invoice_id`)');
+        }
+    }
+
+    private function patch84(): void
+    {
+        // Admins can now edit ticket replies; this table snapshots a message's prior content on each edit.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/2317
+        if (!$this->tableExists('support_ticket_message_history')) {
+            $this->executeSql('CREATE TABLE `support_ticket_message_history` (
+                `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                `support_ticket_message_id` bigint(20) NOT NULL,
+                `admin_id` bigint(20) DEFAULT NULL,
+                `content` text,
+                `created_at` datetime DEFAULT NULL,
+                `updated_at` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `support_ticket_message_id_idx` (`support_ticket_message_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;');
+        }
+    }
+
+    private function patch85(): void
+    {
+        // Raises the client custom field cap from 10 to 20.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/3174
+        for ($i = 11; $i <= 20; ++$i) {
+            if (!$this->tableHasColumn('client', "custom_{$i}")) {
+                $this->executeSql("ALTER TABLE `client` ADD COLUMN `custom_{$i}` text");
+            }
+        }
+    }
+
+    private function patch86(): void
+    {
+        // Allows queued emails (e.g. invoice notifications) to carry a file attachment such as a PDF copy.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/1724
+        if (!$this->tableHasColumn('email_queue', 'attachment_name')) {
+            $this->executeSql('ALTER TABLE `email_queue` ADD COLUMN `attachment_name` varchar(255) DEFAULT NULL');
+        }
+
+        if (!$this->tableHasColumn('email_queue', 'attachment_content')) {
+            $this->executeSql('ALTER TABLE `email_queue` ADD COLUMN `attachment_content` longblob DEFAULT NULL');
+        }
+
+        if (!$this->tableHasColumn('email_queue', 'attachment_mime')) {
+            $this->executeSql('ALTER TABLE `email_queue` ADD COLUMN `attachment_mime` varchar(100) DEFAULT NULL');
+        }
+    }
+
+    private function patch87(): void
+    {
+        // Carries the same attachment (e.g. a PDF invoice) into the sent-email activity log, so
+        // resending a logged email (client or admin "resend") can reattach it.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/1724
+        if (!$this->tableHasColumn('activity_client_email', 'attachment_name')) {
+            $this->executeSql('ALTER TABLE `activity_client_email` ADD COLUMN `attachment_name` varchar(255) DEFAULT NULL');
+        }
+
+        if (!$this->tableHasColumn('activity_client_email', 'attachment_content')) {
+            $this->executeSql('ALTER TABLE `activity_client_email` ADD COLUMN `attachment_content` longblob DEFAULT NULL');
+        }
+
+        if (!$this->tableHasColumn('activity_client_email', 'attachment_mime')) {
+            $this->executeSql('ALTER TABLE `activity_client_email` ADD COLUMN `attachment_mime` varchar(100) DEFAULT NULL');
         }
     }
 

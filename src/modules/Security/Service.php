@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -46,6 +45,11 @@ class Service
                 'display_name' => __trans('Run security checks'),
                 'description' => __trans('Allows the staff member to run security checks on the FOSSBilling installation.'),
             ],
+            'manage_rate_limits' => [
+                'type' => 'bool',
+                'display_name' => __trans('Manage rate limits'),
+                'description' => __trans('Allows the staff member to review and reset IP-based rate limiter counters.'),
+            ],
         ];
     }
 
@@ -68,6 +72,9 @@ class Service
             }
 
             $newCheck = new $className();
+            if (method_exists($newCheck, 'setDi')) {
+                $newCheck->setDi($this->di);
+            }
             if ($newCheck instanceof SecurityCheckInterface) {
                 $checks[$checkID] = $newCheck;
             } else {
@@ -115,6 +122,9 @@ class Service
         }
 
         $check = new $class();
+        if (method_exists($check, 'setDi')) {
+            $check->setDi($this->di);
+        }
         if (!$check instanceof SecurityCheckInterface) {
             throw new InformationException('The check :checkName: does not seem to be a valid check.', [':checkName:' => $checkID]);
         }
@@ -159,6 +169,53 @@ class Service
             ],
             'country' => json_decode(json_encode($countryInfo), true),
             'asn' => json_decode(json_encode($asnInfo), true),
+        ];
+    }
+
+    public function getRateLimitStatus(): array
+    {
+        return [
+            'enabled' => $this->di['rate_limiter']->isEnabled(),
+        ];
+    }
+
+    public function getRateLimitList(?string $ip = null, ?string $search = null): array
+    {
+        $counters = $this->di['rate_limiter']->listIpCounters($ip);
+
+        if ($search === null || $search === '') {
+            return $counters;
+        }
+
+        $search = strtolower($search);
+
+        return array_values(array_filter(
+            $counters,
+            static fn (array $counter): bool => str_contains(strtolower((string) $counter['ip']), $search) || str_contains(strtolower((string) $counter['policy']), $search),
+        ));
+    }
+
+    public function resetRateLimitIp(string $ip, ?string $policy = null): array
+    {
+        $removed = $this->di['rate_limiter']->resetIp($ip, $policy);
+
+        $this->di['logger']->setChannel('security')->info('Rate limiter counters reset for IP %s%s', $ip, $policy ? " and policy {$policy}" : '');
+
+        return [
+            'ip' => $ip,
+            'policy' => $policy,
+            'removed' => $removed,
+        ];
+    }
+
+    public function resetAllRateLimits(): array
+    {
+        $cleared = $this->di['rate_limiter']->resetAll();
+
+        $this->di['logger']->setChannel('security')->warning('All rate limiter counters were reset');
+
+        return [
+            'cleared' => $cleared,
         ];
     }
 }

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 /**
  * Copyright 2022-2025 FOSSBilling
- * Copyright 2011-2021 BoxBilling, Inc.
  * SPDX-License-Identifier: Apache-2.0.
  *
  * @copyright FOSSBilling (https://www.fossbilling.org)
@@ -19,7 +18,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 class Validate
 {
     protected ?\Pimple\Container $di = null;
-    private readonly Filesystem $filesystem;
+    private Filesystem $filesystem;
 
     public function __construct()
     {
@@ -29,6 +28,9 @@ class Validate
     public function setDi(\Pimple\Container $di): void
     {
         $this->di = $di;
+        if (isset($di['filesystem'])) {
+            $this->filesystem = $di['filesystem'];
+        }
     }
 
     public function getDi(): ?\Pimple\Container
@@ -82,8 +84,8 @@ class Validate
         $validTlds = $this->di['cache']->get('validTlds', function (ItemInterface $item): array {
             $item->expiresAfter(86400);
 
-            $client = $this->di['http_client'];
-            $response = $client->request('GET', 'https://publicsuffix.org/list/public_suffix_list.dat');
+            $httpClient = $this->di['http_client'];
+            $response = $httpClient->request('GET', 'https://publicsuffix.org/list/public_suffix_list.dat');
             $dbPath = Path::join(PATH_CACHE, 'tlds.txt');
 
             if ($response->getStatusCode() === 200) {
