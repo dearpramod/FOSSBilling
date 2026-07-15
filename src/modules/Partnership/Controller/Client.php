@@ -27,9 +27,10 @@ class Client implements \FOSSBilling\InjectionAwareInterface
     public function register(\Box_App &$app): void
     {
         $app->get('/partnership-program', 'get_index', [], static::class);
+        $app->get('/partnership-program/', 'get_index', [], static::class);
     }
 
-    public function get_index(\Box_App $app): mixed
+    public function get_index(\Box_App $app)
     {
         if (!$this->di['auth']->isClientLoggedIn()) {
             return $app->redirect($this->di['url']->link('login'));

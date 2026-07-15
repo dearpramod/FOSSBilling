@@ -32,6 +32,12 @@ class Box_AppClient extends Box_App
                 $m->registerClientRoutes($this);
             }
 
+            // Register partnership-program routes explicitly (not module-prefix based)
+            if ($extensionService->isExtensionActive('mod', 'partnership')) {
+                $this->get('/partnership-program', 'get_index', [], \Box\Mod\Partnership\Controller\Client::class);
+                $this->get('/partnership-program/', 'get_index', [], \Box\Mod\Partnership\Controller\Client::class);
+            }
+
             // init index module manually
             $this->get('', 'get_index');
             $this->get('/', 'get_index');
