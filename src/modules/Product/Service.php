@@ -667,19 +667,12 @@ class Service implements InjectionAwareInterface
         $pr = $this->getCategoryProducts($model);
 
         $type = null; // identified by first product in category
-<<<<<<< HEAD
         if (!$deep) {
             // Shallow mode: skip per-product API arrays (pricing lookups) — resolve only the
             // category type from the first product. Used by nav menus and back-links.
             $first = reset($pr);
             if ($first !== false) {
                 $type = $this->getProductType($first);
-=======
-        foreach ($pr as $p) {
-            $pa = $this->toApiArray($p, false, $identity);
-            if (reset($pr) == $p) {
-                $type = $p->getType();
->>>>>>> 0.8.4
             }
         } else {
             foreach ($pr as $p) {
@@ -738,13 +731,9 @@ class Service implements InjectionAwareInterface
 
     public function getPaginatedProductCategories(array $data, $identity = null): array
     {
-<<<<<<< HEAD
         $deep = (bool) ($data['deep'] ?? true);
 
-        return $this->paginateMappedQuery(
-=======
         return $this->di['pager']->paginateMappedQuery(
->>>>>>> 0.8.4
             $this->getProductCategorySearchQueryBuilder($data),
             PaginationOptions::fromArray($data),
             fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, $deep, $identity),
@@ -1893,36 +1882,6 @@ class Service implements InjectionAwareInterface
         return $value !== null ? (string) $value : null;
     }
 
-<<<<<<< HEAD
-    /**
-     * @param callable(object): array $mapper
-     *
-     * @return array{pages:int,page:int,per_page:int,total:int,list:array<int, array>}
-     */
-    private function paginateMappedQuery(QueryBuilder $qb, PaginationOptions $pagination, callable $mapper): array
-    {
-        $offset = ($pagination->page - 1) * $pagination->perPage;
-        $qb->setFirstResult($offset)
-            ->setMaxResults($pagination->perPage);
-        $paginator = new DoctrinePaginator($qb, false);
-        $total = count($paginator);
-
-        $list = [];
-        foreach ($paginator as $entity) {
-            $list[] = $mapper($entity);
-        }
-
-        return [
-            'pages' => $total > 0 ? (int) ceil($total / $pagination->perPage) : 0,
-            'page' => $pagination->page,
-            'per_page' => $pagination->perPage,
-            'total' => $total,
-            'list' => $list,
-        ];
-    }
-
-=======
->>>>>>> 0.8.4
     public function getProductDiscount(Product $product, Promo $promo, ?array $config = null)
     {
         if (!$this->isPromoLinkedToProduct($promo, $product)) {
