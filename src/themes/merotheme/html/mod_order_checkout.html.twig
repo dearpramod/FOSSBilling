@@ -24,9 +24,9 @@
    runs after the full DOM is parsed — all inline scripts have already executed by then. #}
 function billingPage() {
     return {
-        activeTab: '{{ request.auth_tab|default(request.auth_error ? "login" : "register") }}',
+        activeTab: {{ request.auth_tab|default(request.auth_error ? "login" : "register")|json_encode|raw }},
         loading: false,
-        error: {{ request.auth_error|default('')|json_encode }},
+        error: {{ request.auth_error|default('')|json_encode|raw }},
 
         // Login fields
         loginEmail: '',
