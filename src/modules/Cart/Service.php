@@ -814,16 +814,21 @@ class Service implements InjectionAwareInterface
 
         // Local patch: partner clients get partner pricing (partnership module).
         // getPartnerPriceForCartItem() returns null when no partner rule applies.
-        $extensionService = $this->di['mod_service']('extension');
-        if ($extensionService->isExtensionActive('mod', 'partnership')) {
-            $partnerPrice = $this->di['mod_service']('partnership')->getPartnerPriceForCartItem(
-                (int) $productView['product_id'],
-                (string) $productView['type'],
-                is_array($config) ? $config : [],
-            );
-            if ($partnerPrice !== null) {
-                $price = $partnerPrice;
+        // Best-effort: any failure falls back to the standard price.
+        try {
+            $extensionService = $this->di['mod_service']('extension');
+            if ($extensionService->isExtensionActive('mod', 'partnership')) {
+                $partnerPrice = $this->di['mod_service']('partnership')->getPartnerPriceForCartItem(
+                    (int) $productView['product_id'],
+                    (string) $productView['type'],
+                    is_array($config) ? $config : [],
+                );
+                if ($partnerPrice !== null) {
+                    $price = $partnerPrice;
+                }
             }
+        } catch (\Throwable) {
+            // Partnership module unavailable — standard pricing applies.
         }
 
         [$discount_price, $discount_setup] = $this->getProductDiscount($model, $setup);
