@@ -63,6 +63,7 @@ class SourceDb
         $pdo = $this->pdo();
 
         $version = null;
+
         try {
             $stmt = $pdo->prepare("SELECT value FROM tblconfiguration WHERE setting = 'Version'");
             $stmt->execute();

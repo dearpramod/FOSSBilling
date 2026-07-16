@@ -81,14 +81,14 @@ class CurrencyImporter extends AbstractImporter
 
     protected function persist(array $payload): int
     {
+        // Currency is Doctrine-managed in 0.8.4 (no RedBean model) — plain insert.
         // Never flip the existing FOSSBilling default from an import.
-        $model = $this->di['db']->dispense('Currency');
-        $model->code = $payload['code'];
-        $model->is_default = 0;
-        $model->conversion_rate = $payload['conversion_rate'];
-        $model->created_at = date('Y-m-d H:i:s');
-        $model->updated_at = date('Y-m-d H:i:s');
+        $dbal = $this->di['dbal'];
+        $dbal->executeStatement(
+            'INSERT INTO currency (code, is_default, conversion_rate, created_at, updated_at) VALUES (?, 0, ?, ?, ?)',
+            [$payload['code'], $payload['conversion_rate'], date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]
+        );
 
-        return (int) $this->di['db']->store($model);
+        return (int) $dbal->lastInsertId();
     }
 }

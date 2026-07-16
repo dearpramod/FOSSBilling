@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0.
  */
 
 namespace Box\Mod\Whmcsmigration\Importer;

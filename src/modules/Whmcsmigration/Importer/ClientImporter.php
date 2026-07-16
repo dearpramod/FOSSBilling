@@ -43,7 +43,7 @@ class ClientImporter extends AbstractImporter
                 c.address1, c.address2, c.city, c.state, c.postcode, c.country,
                 c.phonenumber, c.credit, c.status, c.groupid, c.notes,
                 c.taxexempt, c.language,
-                NULLIF(c.datecreated, '0000-00-00') AS datecreated,
+                CAST(c.datecreated AS CHAR) AS datecreated,
                 c.created_at AS row_created_at,
                 cur.code AS currency_code
             FROM tblclients c
@@ -120,9 +120,9 @@ class ClientImporter extends AbstractImporter
      * Pure mapping of one joined WHMCS row → staged payload. Unit-test target:
      * everything DB-dependent is passed in.
      *
-     * @param array    $row             joined source row (see batchSql)
-     * @param array    $customFieldMap  {whmcs_field_id: 'custom_N'}
-     * @param array    $customValues    {whmcs_field_id: value}
+     * @param array     $row            joined source row (see batchSql)
+     * @param array     $customFieldMap {whmcs_field_id: 'custom_N'}
+     * @param array     $customValues   {whmcs_field_id: value}
      * @param ?callable $resolveGroupId fn(int $whmcsGroupId): ?int
      */
     public static function mapClientRow(array $row, array $customFieldMap, array $customValues, ?callable $resolveGroupId = null): array
@@ -132,10 +132,11 @@ class ClientImporter extends AbstractImporter
         $phone = Normalizer::splitPhone($row['phonenumber'] ?? null);
 
         $groupId = null;
-        if (!empty($row['groupid']) && $resolveGroupId !== null) {
-            $groupId = $resolveGroupId((int) $row['groupid']);
+        $whmcsGroupId = (int) ($row['groupid'] ?? 0);
+        if ($whmcsGroupId > 0 && $resolveGroupId !== null) {
+            $groupId = $resolveGroupId($whmcsGroupId);
             if ($groupId === null) {
-                $issues[] = "WHMCS client group #{$row['groupid']} was not imported — client left ungrouped";
+                $issues[] = "WHMCS client group #{$whmcsGroupId} is not committed yet — will be re-resolved at commit time";
             }
         }
 
@@ -191,6 +192,11 @@ class ClientImporter extends AbstractImporter
             ], $custom),
         ];
 
+        // Kept for commit-time re-resolution when groups commit after clients stage.
+        if ($whmcsGroupId > 0 && $groupId === null) {
+            $payload['whmcs_group_id'] = $whmcsGroupId;
+        }
+
         $credit = (float) ($row['credit'] ?? 0);
         if ($credit > 0) {
             $payload['balance'] = [
@@ -207,6 +213,11 @@ class ClientImporter extends AbstractImporter
     protected function persist(array $payload): int
     {
         $c = $payload['client'];
+
+        // Re-resolve the client group now that groups may have been committed.
+        if (empty($c['client_group_id']) && !empty($payload['whmcs_group_id'])) {
+            $c['client_group_id'] = $this->idMap->get('client_group', (int) $payload['whmcs_group_id']);
+        }
 
         $model = $this->di['db']->dispense('Client');
         foreach ($c as $column => $value) {

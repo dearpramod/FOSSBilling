@@ -1,0 +1,353 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}{{ 'WHMCS Migration'|trans }}{% endblock %}
+
+{% set active_menu = 'extensions' %}
+
+{% block content %}
+{% set params = admin.extension_config_get({ "ext": "mod_whmcsmigration" }) %}
+
+<div class="card mb-3">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title">{{ 'WHMCS Migration'|trans }}</h3>
+            <p class="card-subtitle">{{ 'Import your WHMCS installation part by part. Data is staged for review before anything is committed to FOSSBilling.'|trans }}</p>
+        </div>
+    </div>
+    <div class="card-body">
+        <h4>{{ '1. Connect to the WHMCS database'|trans }}</h4>
+        <p class="text-secondary">{{ 'Use a read-only MySQL user. A restored mysqldump works as well as a live replica — the module never writes to the source.'|trans }}</p>
+        <form method="post" action="{{ 'extension/config_save'|api_url }}" {{ fb_api_form({message: 'Connection settings saved'|trans}) }}>
+            <input type="hidden" name="ext" value="mod_whmcsmigration"/>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label">{{ 'Host'|trans }}</label>
+                    <input class="form-control" type="text" name="db_host" value="{{ params.db_host }}" placeholder="127.0.0.1" required>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">{{ 'Port'|trans }}</label>
+                    <input class="form-control" type="text" name="db_port" value="{{ params.db_port|default('3306') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">{{ 'Database'|trans }}</label>
+                    <input class="form-control" type="text" name="db_name" value="{{ params.db_name }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">{{ 'User'|trans }}</label>
+                    <input class="form-control" type="text" name="db_user" value="{{ params.db_user }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">{{ 'Password'|trans }}</label>
+                    <input class="form-control" type="password" name="db_password" value="{{ params.db_password }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end gap-2">
+                    <button class="btn btn-primary" type="submit">{{ 'Save'|trans }}</button>
+                    <button class="btn btn-outline-secondary" type="button" id="wm-test-connection">{{ 'Test'|trans }}</button>
+                </div>
+            </div>
+        </form>
+        <div id="wm-connection-result" class="mt-2"></div>
+    </div>
+</div>
+
+<div id="wm-parts"></div>
+
+{# ── Review modal ── #}
+<div class="modal fade" id="wm-review-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ 'Staged data preview'|trans }} — <span id="wm-review-entity"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="wm-review-body"></div>
+            <div class="modal-footer justify-content-between">
+                <div id="wm-review-pager"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ 'Close'|trans }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    'use strict';
+
+    var API = FOSSBilling.api.admin;
+    var BATCH = 250;
+    var partsEl = document.getElementById('wm-parts');
+    var state = null;          // last status() payload
+    var analyzed = {};         // part key -> analyze payload
+    var running = {};          // entity -> true while a loop runs
+
+    /* ---------- helpers ---------- */
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = (s === null || s === undefined) ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    function post(endpoint, params) {
+        return new Promise(function (resolve, reject) {
+            API.post(endpoint, params || {}, resolve, function (err) { reject(err); return false; });
+        });
+    }
+
+    /* ---------- connection test ---------- */
+
+    document.getElementById('wm-test-connection').addEventListener('click', function () {
+        var out = document.getElementById('wm-connection-result');
+        out.innerHTML = '<span class="text-secondary">{{ 'Testing…'|trans }}</span>';
+        post('whmcsmigration/connection_test').then(function (r) {
+            out.innerHTML = '<div class="alert alert-success mb-0">{{ 'Connected.'|trans }} WHMCS ' + esc(r.whmcs_version || '?')
+                + (r.has_tblusers ? '' : ' — <strong>{{ 'unsupported pre-8.0 schema'|trans }}</strong>') + '</div>';
+        }).catch(function (err) {
+            out.innerHTML = '<div class="alert alert-danger mb-0">' + esc(err.message) + '</div>';
+        });
+    });
+
+    /* ---------- parts rendering ---------- */
+
+    function entityLabel(e) {
+        return e.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }
+
+    function renderParts() {
+        if (!state) return;
+        var html = '';
+        Object.keys(state.parts).forEach(function (key) {
+            var part = state.parts[key];
+            html += '<div class="card mb-3" id="wm-part-' + key + '">';
+            html += '<div class="card-header d-flex justify-content-between align-items-center">';
+            html += '<h3 class="card-title mb-0">{{ 'Part'|trans }} ' + key + ' — ' + esc(part.label) + '</h3>';
+            if (part.done) {
+                html += '<span class="badge bg-success text-success-fg">{{ 'Done'|trans }}</span>';
+            } else if (part.locked) {
+                html += '<span class="badge bg-secondary text-secondary-fg">' + (part.implemented ? '{{ 'Locked — dependencies incomplete'|trans }}' : '{{ 'Coming in a later milestone'|trans }}') + '</span>';
+            }
+            html += '</div>';
+
+            if (!part.locked && part.entities.length) {
+                html += '<div class="card-body">';
+                html += '<div class="mb-2"><button class="btn btn-outline-primary btn-sm" data-wm-analyze="' + key + '">{{ 'Analyze'|trans }}</button></div>';
+                html += '<div id="wm-analysis-' + key + '"></div>';
+                html += '<table class="table table-sm align-middle mb-0"><thead><tr>'
+                    + '<th>{{ 'Entity'|trans }}</th><th>{{ 'Source'|trans }}</th><th>{{ 'Staged'|trans }}</th><th>{{ 'Committed'|trans }}</th><th>{{ 'Skipped'|trans }}</th><th>{{ 'Failed'|trans }}</th><th>{{ 'Status'|trans }}</th><th class="w-33"></th>'
+                    + '</tr></thead><tbody>';
+                part.entities.forEach(function (run) {
+                    html += renderEntityRow(run);
+                });
+                html += '</tbody></table></div>';
+            } else if (part.entities.length) {
+                html += '<div class="card-body text-secondary">' + part.entities.map(entityLabel).join(', ') + '</div>';
+            }
+            html += '</div>';
+        });
+        partsEl.innerHTML = html;
+        bindPartButtons();
+    }
+
+    function renderEntityRow(run) {
+        var e = run.entity;
+        var busy = !!running[e];
+        var canStage = !busy && run.total > 0 && run.status !== 'done';
+        var canCommit = !busy && run.staged > 0 && ['review', 'committing', 'staging'].indexOf(run.status) !== -1;
+        var pct = run.total > 0 ? Math.min(100, Math.round((run.last_offset / run.total) * 100)) : 0;
+
+        var controls = '';
+        controls += '<button class="btn btn-sm btn-outline-primary me-1" data-wm-stage="' + e + '"' + (canStage ? '' : ' disabled') + '>{{ 'Stage'|trans }}</button>';
+        controls += '<button class="btn btn-sm btn-outline-secondary me-1" data-wm-review="' + e + '"' + (run.staged > 0 ? '' : ' disabled') + '>{{ 'Review'|trans }}</button>';
+        controls += '<button class="btn btn-sm btn-primary me-1" data-wm-commit="' + e + '"' + (canCommit ? '' : ' disabled') + '>{{ 'Commit'|trans }}</button>';
+        controls += '<button class="btn btn-sm btn-outline-danger" data-wm-discard="' + e + '"' + (busy || run.staged === 0 ? ' disabled' : '') + '>{{ 'Discard'|trans }}</button>';
+
+        var statusBadge = {
+            pending: 'secondary', staging: 'info', review: 'warning',
+            committing: 'info', done: 'success', error: 'danger'
+        }[run.status] || 'secondary';
+
+        return '<tr>'
+            + '<td>' + entityLabel(e) + '</td>'
+            + '<td>' + run.total + '</td>'
+            + '<td>' + run.staged + '</td>'
+            + '<td>' + run.committed + '</td>'
+            + '<td>' + run.skipped + '</td>'
+            + '<td>' + (run.failed > 0 ? '<span class="text-danger">' + run.failed + '</span>' : '0') + '</td>'
+            + '<td><span class="badge bg-' + statusBadge + ' text-' + statusBadge + '-fg">' + esc(run.status) + '</span>'
+            + (busy ? ' <span class="text-secondary">' + pct + '%</span>' : '')
+            + '</td>'
+            + '<td class="text-end">' + controls + '</td>'
+            + '</tr>';
+    }
+
+    function bindPartButtons() {
+        partsEl.querySelectorAll('[data-wm-analyze]').forEach(function (btn) {
+            btn.addEventListener('click', function () { analyze(btn.getAttribute('data-wm-analyze')); });
+        });
+        partsEl.querySelectorAll('[data-wm-stage]').forEach(function (btn) {
+            btn.addEventListener('click', function () { runLoop(btn.getAttribute('data-wm-stage'), 'whmcsmigration/stage_batch'); });
+        });
+        partsEl.querySelectorAll('[data-wm-commit]').forEach(function (btn) {
+            btn.addEventListener('click', function () { runLoop(btn.getAttribute('data-wm-commit'), 'whmcsmigration/commit_batch'); });
+        });
+        partsEl.querySelectorAll('[data-wm-review]').forEach(function (btn) {
+            btn.addEventListener('click', function () { openReview(btn.getAttribute('data-wm-review'), 1); });
+        });
+        partsEl.querySelectorAll('[data-wm-discard]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (!confirm('{{ 'Discard all staged (uncommitted) rows for this entity?'|trans }}')) return;
+                post('whmcsmigration/discard', { entity: btn.getAttribute('data-wm-discard') }).then(refresh);
+            });
+        });
+    }
+
+    /* ---------- analyze ---------- */
+
+    function analyze(part) {
+        var box = document.getElementById('wm-analysis-' + part);
+        if (box) box.innerHTML = '<span class="text-secondary">{{ 'Analyzing…'|trans }}</span>';
+        post('whmcsmigration/analyze', { part: part }).then(function (r) {
+            analyzed[part] = r;
+            refresh().then(function () { renderAnalysis(part); });
+        }).catch(function (err) {
+            refresh().then(function () {
+                var b = document.getElementById('wm-analysis-' + part);
+                if (b) b.innerHTML = '<div class="alert alert-danger">' + esc(err.message) + '</div>';
+            });
+        });
+    }
+
+    function renderAnalysis(part) {
+        var r = analyzed[part];
+        var box = document.getElementById('wm-analysis-' + part);
+        if (!r || !box) return;
+        var html = '';
+        (r.warnings || []).forEach(function (w) {
+            html += '<div class="alert alert-warning py-2">' + esc(w) + '</div>';
+        });
+        if (part === 'A' && r.custom_fields && r.custom_fields.length) {
+            html += '<div class="card card-body mb-3"><strong>{{ 'Client custom field mapping'|trans }}</strong>'
+                + '<p class="text-secondary mb-2">{{ 'Choose which WHMCS custom fields land in client.custom_1 … custom_10. Unmapped fields are noted per client but not imported.'|trans }}</p>';
+            r.custom_fields.forEach(function (f) {
+                var current = (r.custom_field_map && r.custom_field_map[f.id]) || '';
+                html += '<div class="row g-2 align-items-center mb-1">'
+                    + '<div class="col-md-5">#' + f.id + ' — ' + esc(f.fieldname) + ' <span class="text-secondary">(' + f.value_count + ' {{ 'values'|trans }})</span></div>'
+                    + '<div class="col-md-3"><select class="form-select form-select-sm" data-wm-cf="' + f.id + '">'
+                    + '<option value="">{{ 'Do not import'|trans }}</option>';
+                for (var i = 1; i <= 10; i++) {
+                    html += '<option value="custom_' + i + '"' + (current === 'custom_' + i ? ' selected' : '') + '>custom_' + i + '</option>';
+                }
+                html += '</select></div></div>';
+            });
+            html += '<div class="mt-2"><button class="btn btn-sm btn-outline-primary" id="wm-save-cf-map">{{ 'Save mapping'|trans }}</button></div></div>';
+        }
+        box.innerHTML = html;
+
+        var saveBtn = document.getElementById('wm-save-cf-map');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function () {
+                var map = {};
+                box.querySelectorAll('[data-wm-cf]').forEach(function (sel) {
+                    if (sel.value) map[sel.getAttribute('data-wm-cf')] = sel.value;
+                });
+                post('whmcsmigration/save_custom_field_map', { map: JSON.stringify(map) }).then(function () {
+                    FOSSBilling.message('{{ 'Custom field mapping saved'|trans }}');
+                });
+            });
+        }
+    }
+
+    /* ---------- stage / commit loops ---------- */
+
+    function runLoop(entity, endpoint) {
+        if (running[entity]) return;
+        running[entity] = true;
+        renderParts();
+
+        function step() {
+            post(endpoint, { entity: entity, limit: BATCH }).then(function (r) {
+                refresh().then(function () {
+                    if (!r.done && running[entity]) {
+                        step();
+                    } else {
+                        running[entity] = false;
+                        refresh();
+                    }
+                });
+            }).catch(function (err) {
+                running[entity] = false;
+                refresh();
+                FOSSBilling.message(err.message, 'error');
+            });
+        }
+        step();
+    }
+
+    /* ---------- review modal ---------- */
+
+    function openReview(entity, page) {
+        document.getElementById('wm-review-entity').textContent = entityLabel(entity);
+        var body = document.getElementById('wm-review-body');
+        body.innerHTML = '<span class="text-secondary">{{ 'Loading…'|trans }}</span>';
+        new bootstrap.Modal(document.getElementById('wm-review-modal')).show();
+
+        post('whmcsmigration/staged_list', { entity: entity, page: page, per_page: 25 }).then(function (r) {
+            if (!r.list.length) {
+                body.innerHTML = '<p class="text-secondary mb-0">{{ 'Nothing staged.'|trans }}</p>';
+                return;
+            }
+            var cols = summaryColumns(entity);
+            var html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>WHMCS #</th>';
+            cols.forEach(function (c) { html += '<th>' + esc(c.label) + '</th>'; });
+            html += '<th>{{ 'Status'|trans }}</th><th>{{ 'Notes'|trans }}</th></tr></thead><tbody>';
+            r.list.forEach(function (row) {
+                html += '<tr><td>' + row.whmcs_id + '</td>';
+                cols.forEach(function (c) { html += '<td>' + esc(c.get(row.payload) || '—') + '</td>'; });
+                html += '<td><span class="badge bg-' + (row.status === 'staged' ? 'warning' : row.status === 'committed' ? 'success' : 'secondary')
+                    + ' text-secondary-fg">' + esc(row.status) + '</span></td>';
+                html += '<td class="text-secondary small">' + (row.issues || []).map(esc).join('<br>') + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+            body.innerHTML = html;
+
+            var pager = document.getElementById('wm-review-pager');
+            pager.innerHTML = '{{ 'Page'|trans }} ' + r.page + ' / ' + r.pages + ' (' + r.total + ') ';
+            if (r.page > 1) pager.innerHTML += '<button class="btn btn-sm btn-outline-secondary ms-2" id="wm-prev">&laquo;</button>';
+            if (r.page < r.pages) pager.innerHTML += '<button class="btn btn-sm btn-outline-secondary ms-1" id="wm-next">&raquo;</button>';
+            var prev = document.getElementById('wm-prev'); if (prev) prev.addEventListener('click', function () { openReview(entity, r.page - 1); });
+            var next = document.getElementById('wm-next'); if (next) next.addEventListener('click', function () { openReview(entity, r.page + 1); });
+        });
+    }
+
+    function summaryColumns(entity) {
+        if (entity === 'client') {
+            return [
+                { label: '{{ 'Email'|trans }}', get: function (p) { return p.client && p.client.email; } },
+                { label: '{{ 'Name'|trans }}', get: function (p) { return p.client ? ((p.client.first_name || '') + ' ' + (p.client.last_name || '')).trim() : ''; } },
+                { label: '{{ 'Status'|trans }}', get: function (p) { return p.client && p.client.status; } },
+                { label: '{{ 'Credit'|trans }}', get: function (p) { return p.balance ? p.balance.amount : ''; } }
+            ];
+        }
+        if (entity === 'currency') {
+            return [
+                { label: '{{ 'Code'|trans }}', get: function (p) { return p.code; } },
+                { label: '{{ 'Rate'|trans }}', get: function (p) { return p.conversion_rate; } }
+            ];
+        }
+        return [{ label: '{{ 'Title'|trans }}', get: function (p) { return p.title || JSON.stringify(p).slice(0, 80); } }];
+    }
+
+    /* ---------- status refresh ---------- */
+
+    function refresh() {
+        return post('whmcsmigration/status').then(function (r) {
+            state = r;
+            renderParts();
+            Object.keys(analyzed).forEach(renderAnalysis);
+        });
+    }
+
+    refresh();
+});
+</script>
+{% endblock %}

@@ -56,7 +56,7 @@ abstract class AbstractImporter implements ImporterInterface
      * Pure transform of one source row.
      *
      * @return array{payload: array, issues: string[], needs_mapping?: bool, skip?: string}
-     *                skip: reason string — row is counted skipped, not staged
+     *                                                                                      skip: reason string — row is counted skipped, not staged
      */
     abstract protected function transform(array $row): array;
 
@@ -100,6 +100,7 @@ abstract class AbstractImporter implements ImporterInterface
             try {
                 if ($this->idMap->has($this->entity(), $whmcsId) || $this->isStaged($whmcsId)) {
                     ++$result['skipped'];
+
                     continue;
                 }
 
@@ -112,6 +113,7 @@ abstract class AbstractImporter implements ImporterInterface
                     if (isset($t['map_to'])) {
                         $this->idMap->set($this->entity(), $whmcsId, (int) $t['map_to']);
                     }
+
                     continue;
                 }
 
@@ -128,7 +130,7 @@ abstract class AbstractImporter implements ImporterInterface
                     ]
                 );
                 $status === 'staged' ? ++$result['staged'] : ++$result['needs_mapping'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 ++$result['failed'];
                 $errors[] = ['whmcs_id' => $whmcsId, 'level' => 'error', 'message' => $e->getMessage()];
             }
@@ -188,7 +190,7 @@ abstract class AbstractImporter implements ImporterInterface
                 );
                 $dbal->commit();
                 ++$result['committed'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $dbal->rollBack();
                 ++$result['failed'];
                 $errors[] = ['whmcs_id' => (int) $row['whmcs_id'], 'level' => 'commit_error', 'message' => $e->getMessage()];
