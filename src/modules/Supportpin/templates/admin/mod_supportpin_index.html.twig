@@ -9,7 +9,7 @@
 {% block breadcrumbs %}
 <ol class="breadcrumb">
     <li class="breadcrumb-item">
-        <a href="{{ ''|alink }}"><svg class="icon"><use xlink:href="#home"/></svg></a>
+        <a href="{{ ''|url }}"><svg class="icon"><use xlink:href="#home"/></svg></a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">{{ 'Support PIN Lookup'|trans }}</li>
 </ol>
@@ -106,7 +106,7 @@
 (function () {
     'use strict';
 
-    const adminBase = {{ ''|alink|json_encode }};
+    const adminBase = {{ ''|url|json_encode }};
     const input = document.getElementById('pin-input');
     const btn = document.getElementById('btn-lookup');
     const resultCard = document.getElementById('result-card');

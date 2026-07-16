@@ -27,7 +27,7 @@
                                     {% endif %}
                                 </td>
                                 <td align="right" valign="middle">
-                                    <a href="{{ 'dashboard'|link }}" style="background-color:#0f172a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:10px 18px;border-radius:6px;display:inline-block">My Account</a>
+                                    <a href="{{ 'dashboard'|url }}" style="background-color:#0f172a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:10px 18px;border-radius:6px;display:inline-block">My Account</a>
                                 </td>
                             </tr>
                         </table>
@@ -43,7 +43,7 @@
 	<p>Hello {{ c.first_name }} {{ c.last_name }},</p>
 	<p>Your <strong>{{ order.title }}</strong> is now unsuspended.</p>
 
-    <p>You may <a href="{{'login'|link({'email' : c.email }) }}" target="_blank">login</a> or <a href="{{ 'order/service/manage'|link }}/{{ order.id }}" target="_blank">manage your order.</a>
+    <p>You may <a href="{{'login'|url({'email' : c.email }) }}" target="_blank">login</a> or <a href="{{ 'order/service/manage'|url }}/{{ order.id }}" target="_blank">manage your order.</a>
 
                     </td>
                 </tr>

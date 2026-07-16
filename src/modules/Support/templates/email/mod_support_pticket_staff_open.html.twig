@@ -27,7 +27,7 @@
                                     {% endif %}
                                 </td>
                                 <td align="right" valign="middle">
-                                    <a href="{{ 'admin'|alink }}" style="background-color:#0f172a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:10px 18px;border-radius:6px;display:inline-block">Admin Panel</a>
+                                    <a href="{{ ''|url(area: 'admin') }}" style="background-color:#0f172a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:10px 18px;border-radius:6px;display:inline-block">Admin Panel</a>
                                 </td>
                             </tr>
                         </table>
@@ -45,10 +45,10 @@
 
     <p>{{ticket.messages[0].content}}</p>
 
-    <p>You can track and respond to this conversation <a href="{{'support/contact-us/conversation'|link }}/{{ ticket.hash }}" target="_blank">here</a></p>
+    <p>You can track and respond to this conversation <a href="{{'support/contact-us/conversation'|url }}/{{ ticket.hash }}" target="_blank">here</a></p>
     <p>Please do not reply to this email directly. Use the link provided above.</p>
 
-    <p>You may <a href="{{'admin/staff/login'|link({'email' : c.email }) }}" target="_blank">login</a> or <a href="{{'admin/staff/profile'|link}}" target="_blank">edit your profile.</a>
+    <p>You may <a href="{{'admin/staff/login'|url({'email' : c.email }) }}" target="_blank">login</a> or <a href="{{'admin/staff/profile'|url}}" target="_blank">edit your profile.</a>
 
                     </td>
                 </tr>

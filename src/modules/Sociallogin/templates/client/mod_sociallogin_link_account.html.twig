@@ -80,7 +80,7 @@
                     </svg>
                 </button>
 
-                <a href="{{ 'login'|link }}"
+                <a href="{{ 'login'|url }}"
                    class="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-400 hover:text-white text-sm font-medium transition-all flex items-center justify-center">
                     Cancel — go back to sign in
                 </a>
@@ -89,7 +89,7 @@
         </div>
 
         <div class="text-center mt-6">
-            <a href="{{ '/'|link }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
+            <a href="{{ '/'|url }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
         </div>
 
     </div>
@@ -107,7 +107,7 @@
     var errBox  = document.getElementById('link-error');
     var token   = '{{ token|e('js') }}';
     var apiUrl  = window.location.origin + '/api/guest/sociallogin/confirm_account_link';
-    var dashUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|link|e('js') }}{% endif %}';
+    var dashUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|url|e('js') }}{% endif %}';
 
     function showError(msg) {
         errBox.textContent = msg;

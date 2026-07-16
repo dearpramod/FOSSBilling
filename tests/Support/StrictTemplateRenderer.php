@@ -324,7 +324,10 @@ final class StrictTemplateRenderer
                 'CSRFToken' => 'test',
                 'FOSSBillingVersion' => '0.0.0',
                 'default_currency' => 'USD',
-                'app_area' => 'email',
+                // The real email env sets no app_area global; the url filter then
+                // falls back to client links. 'client' mirrors that at test time
+                // ('email' is not a valid AppArea and made every |url use throw).
+                'app_area' => 'client',
                 'current_theme' => 'admin_default',
                 'theme' => ['code' => 'admin_default', 'name' => 'admin_default', 'url' => '/themes/admin_default/'],
                 'settings' => $stub,

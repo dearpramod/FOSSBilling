@@ -261,7 +261,7 @@
                         <input type="checkbox" id="tos" name="agree_tos" value="1" required
                                class="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0">
                         <label for="tos" class="text-xs text-gray-400 leading-relaxed">
-                            I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|link }}" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Terms of Service</a>
+                            I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Terms of Service</a>
                         </label>
                     </div>
                     {% endif %}
@@ -281,13 +281,13 @@
             <div class="mt-6 text-center border-t border-white/5 pt-5">
                 <p class="text-sm text-gray-500">
                     Already have an account?
-                    <a href="{{ 'login'|link }}" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Sign in</a>
+                    <a href="{{ 'login'|url }}" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Sign in</a>
                 </p>
             </div>
         </div>
 
         <div class="text-center mt-6">
-            <a href="{{ '/'|link }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
+            <a href="{{ '/'|url }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
         </div>
 
     </div>
@@ -323,7 +323,7 @@
         errBox.textContent = '';
     }
 
-    var afterUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|link|e('js') }}{% endif %}';
+    var afterUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|url|e('js') }}{% endif %}';
 
     function setLoading(loading) {
         btn.disabled = loading;

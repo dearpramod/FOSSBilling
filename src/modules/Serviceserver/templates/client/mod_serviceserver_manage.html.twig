@@ -25,7 +25,7 @@
         {{ 'Your server is being set up. Credentials and access details will appear here once provisioning is complete.'|trans }}
       </p>
     </div>
-    <a href="{{ '/support'|link }}"
+    <a href="{{ '/support'|url }}"
        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-sm text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
@@ -97,7 +97,7 @@
         </div>
         {% endif %}
         {% if order.unpaid_invoice_id %}
-        <a href="{{ 'invoice'|link }}/{{ _unpaid_hash }}"
+        <a href="{{ 'invoice'|url }}/{{ _unpaid_hash }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-xs font-semibold transition-all hover:opacity-90"
            style="background:linear-gradient(135deg,#f59e0b,#d97706); box-shadow:0 4px 14px rgba(245,158,11,0.35);">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,7 +255,7 @@
             </svg>
             <p class="text-xs text-indigo-300 leading-relaxed">
               {{ 'Your root password and full credentials were sent to your registered email at provisioning. Check your inbox or'|trans }}
-              <a href="{{ '/support'|link }}" class="underline underline-offset-2 hover:text-white transition-colors">{{ 'contact support'|trans }}</a>
+              <a href="{{ '/support'|url }}" class="underline underline-offset-2 hover:text-white transition-colors">{{ 'contact support'|trans }}</a>
               {{ 'if you need a password reset.'|trans }}
             </p>
           </div>
@@ -438,7 +438,7 @@
           {% endif %}
           {% if order.unpaid_invoice_id %}
           <div class="pt-2">
-            <a href="{{ 'invoice'|link }}/{{ _unpaid_hash }}"
+            <a href="{{ 'invoice'|url }}/{{ _unpaid_hash }}"
                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
                style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 12px rgba(245,158,11,0.28);">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -462,7 +462,7 @@
           </h3>
         </div>
         <nav class="py-1.5">
-          <a href="{{ '/support'|link }}"
+          <a href="{{ '/support'|url }}"
              class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all group">
             <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/[0.06] group-hover:border-indigo-500/30 group-hover:bg-indigo-500/10 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -471,7 +471,7 @@
             </span>
             {{ 'Open Support Ticket'|trans }}
           </a>
-          <a href="{{ '/order/service'|link }}"
+          <a href="{{ '/order/service'|url }}"
              class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all group">
             <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/[0.06] group-hover:border-indigo-500/30 group-hover:bg-indigo-500/10 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,7 +480,7 @@
             </span>
             {{ 'All My Services'|trans }}
           </a>
-          <a href="{{ '/order'|link }}"
+          <a href="{{ '/order'|url }}"
              class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all group">
             <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/[0.06] group-hover:border-indigo-500/30 group-hover:bg-indigo-500/10 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -540,7 +540,7 @@
           </span>
         </div>
         <div class="col-span-2 sm:col-span-1 flex justify-end">
-          <a href="{{ '/order/service/manage'|link }}/{{ addon.id }}"
+          <a href="{{ '/order/service/manage'|url }}/{{ addon.id }}"
              class="text-xs px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all">
             {{ 'Manage'|trans }}
           </a>
