@@ -238,7 +238,7 @@
                             </a>
                         {% endif %}
                         <div class="border-t border-white/[0.05] mt-1 pt-1">
-                            <a href="{{ '/order/domain-tlds'|url }}" @click="open=false"
+                            <a href="{{ '/order/domain-transfer'|url }}" @click="open=false"
                                class="flex items-center gap-2 px-4 py-2 text-xs text-indigo-400 hover:text-indigo-300 hover:bg-white/[0.04] transition-all">
                                 <svg class="icon" style="width:0.75rem;height:0.75rem"><use href="#arrows-exchange" /></svg>
                                 Transfer a Domain
@@ -516,7 +516,7 @@
                      class="ml-11 mt-1 space-y-0.5 border-l border-white/[0.06] pl-3">
                     {% for category in serviceCategories.list %}
                         {%- set _mci = _nav_type_icons[category.type]|default({'color': 'text-indigo-400', 'icon': 'apps'}) -%}
-                        {%- set mobileCatHref = (category.type == 'domain') ? ('/order/domain-tlds'|url) : (('/order/' ~ (category.title|lower|replace({' ': '-', '/': '-'})|trim('-')))|url) -%}
+                        {%- set mobileCatHref = (category.type == 'domain') ? ('/order/domain-registration'|url) : (('/order/' ~ (category.title|lower|replace({' ': '-', '/': '-'})|trim('-')))|url) -%}
                     <a href="{{ mobileCatHref }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 nav-link">
                         <svg class="icon {{ _mci.color }} flex-shrink-0" style="width:0.875rem;height:0.875rem"><use href="#{{ _mci.icon }}" /></svg>
                         {{ category.title }}
@@ -527,7 +527,7 @@
                         All Plans
                     </a>
                     {% endfor %}
-                    <a href="{{ '/order/domain-tlds'|url }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-indigo-400 hover:text-indigo-300 hover:bg-white/5">
+                    <a href="{{ '/order/domain-transfer'|url }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-indigo-400 hover:text-indigo-300 hover:bg-white/5">
                         <svg class="icon flex-shrink-0" style="width:0.875rem;height:0.875rem"><use href="#arrows-exchange" /></svg>
                         Transfer a Domain
                     </a>

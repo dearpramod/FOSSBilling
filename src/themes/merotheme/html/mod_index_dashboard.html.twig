@@ -28,7 +28,7 @@
         {# Domain search bar with TLD selector #}
         <div class="max-w-3xl mx-auto mb-10 relative z-10" x-data="{ q: '', tld: '.com', showTlds: false }">
             <div class="rounded-2xl border border-white/[0.10] bg-white/[0.04] backdrop-blur-sm p-2">
-                <form @submit.prevent="if(q.trim().length >= 2) window.location.href='{{ '/order/domain-tlds'|url }}' + '?register_sld=' + encodeURIComponent(q.trim().replace(/\.[a-z]+$/i, '')) + '&register_tld=' + encodeURIComponent(tld);"
+                <form @submit.prevent="if(q.trim().length >= 2) window.location.href='{{ '/order/domain-registration'|url }}' + '?register_sld=' + encodeURIComponent(q.trim().replace(/\.[a-z]+$/i, '')) + '&register_tld=' + encodeURIComponent(tld);"
                       class="flex items-center gap-2">
                     <label for="hero-domain-input" class="sr-only">Search for a domain name</label>
                     <input id="hero-domain-input" type="text" x-model="q" x-ref="domainInput" placeholder="Enter your desired domain name" autocomplete="off" spellcheck="false" inputmode="url"
@@ -82,7 +82,7 @@
         {# Transfer link #}
         <p class="text-sm text-gray-500">
             Already bought a domain?
-            <a href="{{ '/order/domain-tlds'|url }}" class="font-semibold hover:underline transition-colors" style="color: var(--color-primary);">Transfer it?</a>
+            <a href="{{ '/order/domain-transfer'|url }}" class="font-semibold hover:underline transition-colors" style="color: var(--color-primary);">Transfer it?</a>
         </p>
     </div>
 </section>
@@ -121,7 +121,7 @@
                     'color': 'violet',
                     'title': 'Domain Names',
                     'desc': 'Register or transfer your perfect domain with instant activation.',
-                    'link': '/order/domain-tlds'|url,
+                    'link': '/order/domain-registration'|url,
                     'link_text': 'Search Domains'
                 },
                 {

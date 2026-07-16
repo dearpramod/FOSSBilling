@@ -192,7 +192,7 @@
     {% block head %}{% endblock %}
 </head>
 
-{% set orderServicesActive = 'order/domain-tlds' in request.uri or (request.uri starts with '/order' and 'service' not in request.uri and 'checkout' not in request.uri) %}
+{% set orderServicesActive = 'order/domain-registration' in request.uri or 'order/domain-transfer' in request.uri or (request.uri starts with '/order' and 'service' not in request.uri and 'checkout' not in request.uri) %}
 {% set normalizedPath = (request_path|default(request.uri|default('/')))|trim('/')|lower %}
 {% set isDashboardRoute = normalizedPath == '' or normalizedPath starts with 'dashboard' %}
 <body class="bg-[#f8f9ff] text-[#0b1c30] font-sans h-full {% block body_class %}{% endblock %}" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sb_collapsed') === '1', helpOpen: false, orderServicesOpen: {{ orderServicesActive ? 'true' : 'false' }}, darkMode: localStorage.getItem('merovps_theme') === 'dark' }" x-init="document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light'); $watch('sidebarCollapsed', function(v){ localStorage.setItem('sb_collapsed', v ? '1' : '0'); document.documentElement.setAttribute('data-sb', v ? 'collapsed' : 'expanded'); }); $watch('darkMode', function(v){ var t = v ? 'dark' : 'light'; localStorage.setItem('merovps_theme', t); document.documentElement.setAttribute('data-theme', t); });">
