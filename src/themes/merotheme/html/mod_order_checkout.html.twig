@@ -13,7 +13,8 @@
 {# Period-grouped totals for the order summary sidebar #}
 {% set period_totals = {} %}
 {% for item in cart.items %}
-    {% set pk = item.period | period_title %}
+    {# one-time items carry no "period" key — group them under their own label #}
+    {% set pk = item.period is defined ? (item.period | period_title) : 'One-time' %}
     {% set period_totals = period_totals | merge({(pk): (period_totals[pk] | default(0)) + item.total}) %}
 {% endfor %}
 
@@ -347,7 +348,7 @@ function orderCheckout() {
                         </div>
                         <div class="min-w-0">
                             <p class="text-sm font-semibold text-white truncate">{{ item.title }}</p>
-                            {% if item.period %}
+                            {% if item.period|default(false) %}
                             <p class="text-xs text-gray-400 mt-0.5">{{ item.period | period_title }}</p>
                             {% endif %}
                         </div>
@@ -945,7 +946,7 @@ function orderCheckout() {
                         </div>
                         <div class="min-w-0">
                             <p class="text-sm font-semibold text-white truncate">{{ item.title }}</p>
-                            {% if item.period %}
+                            {% if item.period|default(false) %}
                             <p class="text-xs text-gray-400 mt-0.5">{{ item.period | period_title }}</p>
                             {% endif %}
                         </div>

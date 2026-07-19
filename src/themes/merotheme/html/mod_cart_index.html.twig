@@ -255,7 +255,7 @@ function cartPage() {
                             <span class="text-sm font-semibold text-white">Total</span>
                             <span class="text-xl font-bold text-indigo-400">{{ (cart.total + cart_tax) | money_convert }}</span>
                         </div>
-                        <p class="text-xs text-gray-600 mt-1">Billed in {{ currentCurrency.title }}</p>
+                        <p class="text-xs text-gray-600 mt-1">Billed in {{ currentCurrency.name }}</p>
                     </div>
 
                     {# Currency selector — guest only #}
