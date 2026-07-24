@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 use Random\RandomException;
 use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 
 /**
  * cPanel API.
@@ -96,10 +97,11 @@ class Server_Manager_Whm extends Server_Manager
 
             try {
                 $response = $this->request($action, $params);
-                if (isset($response->data->url)) {
-                    return $response->data->url;
+                $ssoUrl = $response->data->url ?? null;
+                if (is_string($ssoUrl) && str_starts_with($ssoUrl, 'https://')) {
+                    return $ssoUrl;
                 }
-                $this->getLog()->error('Unexpected API response: ' . print_r($response, true));
+                $this->getLog()->error('Unexpected or non-HTTPS SSO URL in WHM cPanel API response');
 
                 return 'https://' . $this->_config['host'] . '/cpanel';
             } catch (Server_Exception $e) {
@@ -133,11 +135,12 @@ class Server_Manager_Whm extends Server_Manager
             try {
                 // Call the request function
                 $response = $this->request($action, $params);
-                // Check if the response is an object and access it accordingly
-                if (isset($response->data->url)) {
-                    return $response->data->url;
+                // Validate URL is HTTPS before returning (prevents open-redirect to attacker-controlled server)
+                $ssoUrl = $response->data->url ?? null;
+                if (is_string($ssoUrl) && str_starts_with($ssoUrl, 'https://')) {
+                    return $ssoUrl;
                 }
-                $this->getLog()->error('Unexpected API response: ' . print_r($response, true));
+                $this->getLog()->error('Unexpected or non-HTTPS SSO URL in WHM reseller API response');
 
                 return 'https://' . $this->_config['host'] . '/whm';
             } catch (Server_Exception $e) {
@@ -179,7 +182,8 @@ class Server_Manager_Whm extends Server_Manager
     public function generateUsername(string $domain): string
     {
         $processedDomain = strtolower((string) preg_replace('/[^A-Za-z0-9]/', '', $domain));
-        $username = substr($processedDomain, 0, 7) . random_int(0, 9);
+        // 4 hex chars (65 536 combinations) instead of a single digit (10) to reduce collision probability.
+        $username = substr($processedDomain, 0, 4) . bin2hex(random_bytes(2));
 
         // WHM doesn't allow usernames to start with "test", so replace it with a random string if it does (test3456 would then become something like a62f93456).
         if (str_starts_with($username, 'test')) {
@@ -272,7 +276,7 @@ class Server_Manager_Whm extends Server_Manager
 
         // Send the request to the WHM API
         $json = $this->request($action, $varHash);
-        $result = ($json->result[0]->status == 1);
+        $result = (isset($json->result[0]->status) && $json->result[0]->status == 1);
 
         // If the account is a reseller account and was successfully created, set up the reseller and assign the ACL list
         if ($result && $account->getReseller()) {
@@ -586,14 +590,11 @@ class Server_Manager_Whm extends Server_Manager
             'verify_peer' => $verifyTls,
             'verify_host' => $verifyTls,
             'timeout' => 90, // Account creation can timeout if set too low - see #1086.
-            // Local patch: cap total transfer time below PHP's 30s max_execution_time
-            // so an unreachable WHM host surfaces as a catchable TransportException
-            // instead of a fatal timeout during checkout.
-            'max_duration' => 28,
+            'max_duration' => 28, // WHM unreachable from localhost; prevents 30s fatal.
         ]);
 
-        // Construct the request URL
-        $url = ($this->_config['secure'] ? 'https' : 'http') . '://' . $this->_config['host'] . ':' . $this->_config['port'] . '/json-api/' . $action;
+        // Always use HTTPS — WHM tokens must never travel over plain HTTP.
+        $url = 'https://' . $this->_config['host'] . ':' . $this->_config['port'] . '/json-api/' . $action;
 
         // Construct the authorization header
         $username = $this->_config['username'];
@@ -602,8 +603,8 @@ class Server_Manager_Whm extends Server_Manager
         $authHeader = (!empty($accessHash)) ? 'WHM ' . $username . ':' . $accessHash
             : 'Basic ' . $username . ':' . $password;
 
-        // Log the request
-        $this->getLog()->debug(sprintf('Requesting WHM server action "%s" with params "%s" ', $action, print_r($params, true)));
+        // Log the action only — never log params (may contain passwords or tokens).
+        $this->getLog()->debug(sprintf('Requesting WHM server action "%s"', $action));
 
         // Send the request and handle any errors
         try {
@@ -611,18 +612,15 @@ class Server_Manager_Whm extends Server_Manager
                 'headers' => ['Authorization' => $authHeader],
                 'body' => $params,
             ]);
-
-            // Decode the response from JSON into a PHP variable.
-            // getContent() is inside the try block so max_duration timeouts
-            // (TransportExceptionInterface) become a catchable Server_Exception.
-            $body = $response->getContent();
-        } catch (HttpExceptionInterface|\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $error) {
+        } catch (HttpExceptionInterface|TransportExceptionInterface $error) {
             $e = new Server_Exception('HttpClientException: :error', [':error' => $error->getMessage()]);
             $this->getLog()->error($e->getMessage());
 
             throw $e;
         }
 
+        // Decode the response from JSON into a PHP variable
+        $body = $response->getContent();
         $json = json_decode($body);
 
         // Check the response for errors and throw a Server_Exception if any are found

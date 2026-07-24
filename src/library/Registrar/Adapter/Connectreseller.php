@@ -350,6 +350,9 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
         if (empty($epp)) {
             throw new Registrar_Exception('An EPP/authorization code is required to transfer :domain. Please obtain the auth code from the current registrar and try again.', [':domain' => $domain->getName()]);
         }
+        if (strlen($epp) > 256 || !preg_match('/^[\x20-\x7E]+$/', $epp)) {
+            throw new Registrar_Exception('The EPP/authorization code contains invalid characters or is too long.');
+        }
 
         $customerId = $this->_getOrCreateCustomerId($domain);
 
@@ -510,8 +513,10 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
         if (empty($authCode)) {
             $domainNameId = $data['domainNameId'] ?? $this->_getDomainNameId($domain->getName());
             $result = $this->_makeRequest('ViewEPPCode', ['domainNameId' => (int) $domainNameId]);
-            $authCode = $result['responseData']['DomainSecretKey']
-                ?? (is_string($result['responseData'] ?? null) ? $result['responseData'] : null);
+            $authCode = $result['responseData']['DomainSecretKey'] ?? null;
+            if (!is_string($authCode) && is_string($result['responseData'] ?? null)) {
+                $authCode = $result['responseData'];
+            }
         }
 
         if (empty($authCode)) {

@@ -191,7 +191,7 @@ class Service implements InjectionAwareInterface
         $search = (isset($data['search']) && !empty($data['search'])) ? $data['search'] : null;
         $client_id = (isset($data['client_id']) && !empty($data['client_id'])) ? $data['client_id'] : null;
         $group_id = (isset($data['group_id']) && !empty($data['group_id'])) ? $data['group_id'] : null;
-        $id = (isset($data['id']) && !empty($data['id'])) ? $data['id'] : null;
+        $id = (isset($data['id']) && !empty($data['id'])) ? (int) $data['id'] : null;
         $status = (isset($data['status']) && !empty($data['status'])) ? $data['status'] : null;
         $name = (isset($data['name']) && !empty($data['name'])) ? $data['name'] : null;
         $company = (isset($data['company']) && !empty($data['company'])) ? $data['company'] : null;
