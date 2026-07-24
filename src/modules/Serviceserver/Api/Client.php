@@ -49,7 +49,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
         }
 
         $result = $this->getService()->toApiArray($model);
-        unset($result['root_password']);
+        unset($result['root_password'], $result['client_id']);
 
         return $result;
     }

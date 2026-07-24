@@ -1,9 +1,9 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
 
 {# ── Pre-fetch category data so meta_title can use it (skipped on single-product pages) ── #}
+{% set currency = guest.cart_get_currency %}
 {% if not request.product %}
 {% set all_categories = guest.product_category_get_list({'per_page': 100}) %}
-{% set currency = guest.cart_get_currency %}
 {% set currency_fmt_js = currency.symbol|default(currency.code|default('')) ~ '__PRICE__' %}
 
 {# ── Determine which categories to show (used in both hero and product grid) ── #}
@@ -74,13 +74,20 @@
         </span>
     </div>
 
-    {# Check for a per-product override first: mod_serviceserver_order_form_{id}.html.twig #}
-    {% set service_order_tpl_product = 'mod_service' ~ product.type ~ '_order_form_' ~ product.id ~ '.html.twig' %}
-    {% set service_order_tpl = guest.system_template_exists({ 'file': service_order_tpl_product })
-        ? service_order_tpl_product
-        : 'mod_service' ~ product.type ~ '_order_form.html.twig' %}
-    {% if guest.system_template_exists({ 'file': service_order_tpl }) %}
-        {{ include(service_order_tpl) }}
+    {# Optional per-product or shared order form override.
+       Filenames are hardcoded — product.type is NOT interpolated to prevent path injection. #}
+    {% set _tpl_product = 'mod_serviceserver_order_form_' ~ product.id ~ '.html.twig' %}
+    {% set _tpl_type    = 'mod_serviceserver_order_form.html.twig' %}
+    {% set _resolved_tpl = null %}
+    {% if product.type == 'server' %}
+        {% if guest.system_template_exists({ 'file': _tpl_product }) %}
+            {% set _resolved_tpl = _tpl_product %}
+        {% elseif guest.system_template_exists({ 'file': _tpl_type }) %}
+            {% set _resolved_tpl = _tpl_type %}
+        {% endif %}
+    {% endif %}
+    {% if _resolved_tpl %}
+        {{ include(_resolved_tpl) }}
     {% else %}
 
     {% include 'partial_order_product_component.html.twig' %}
@@ -248,7 +255,6 @@
 
         {# ═══ RIGHT COLUMN — sticky white sidebar (Stitch) ═══ #}
         <div class="ord-srv-sidebar self-start">
-            {% set currency = guest.cart_get_currency %}
             <div class="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden sticky top-6 ord-srv-sidebar-card">
 
                 {# Header row #}

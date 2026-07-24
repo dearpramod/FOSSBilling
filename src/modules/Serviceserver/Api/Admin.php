@@ -55,10 +55,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $model = $this->getService()->getServiceByOrderId((int) $data['order_id']);
 
         if ($model === null) {
-            $order = $this->di['db']->load('ClientOrder', (int) $data['order_id']);
-            if (!$order instanceof \Model_ClientOrder) {
-                throw new \FOSSBilling\Exception('Order #:id not found', [':id' => $data['order_id']]);
-            }
+            $order = $this->di['db']->getExistingModelById('ClientOrder', (int) $data['order_id'], 'Order #:id not found');
             $model = $this->di['db']->dispense('service_server');
             $model->order_id = $order->id;
             $model->client_id = $order->client_id;

@@ -48,9 +48,9 @@ class Service implements InjectionAwareInterface
             `created_at`    datetime             DEFAULT NULL,
             `updated_at`    datetime             DEFAULT NULL,
             PRIMARY KEY (`id`),
-            KEY `idx_client_id` (`client_id`),
-            KEY `idx_order_id`  (`order_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+            UNIQUE KEY `uq_order_id`  (`order_id`),
+            KEY `idx_client_id` (`client_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 
         $this->di['db']->exec($sql);
 
@@ -106,7 +106,7 @@ class Service implements InjectionAwareInterface
         $form = $formbuilderService->getForm($product['form_id']);
 
         foreach ($form['fields'] as $field) {
-            if ($field['required'] == 1) {
+            if ($field['required'] === 1 || $field['required'] === '1') {
                 $field_name = $field['name'];
                 $labelLower = strtolower(trim((string) $field['label']));
                 $satisfied = isset($data[$field_name]) && $data[$field_name] !== '';
@@ -126,7 +126,7 @@ class Service implements InjectionAwareInterface
                 }
             }
 
-            if ($field['readonly'] == 1) {
+            if ($field['readonly'] === 1 || $field['readonly'] === '1') {
                 $field_name = $field['name'];
                 if (isset($data[$field_name]) && $data[$field_name] != $field['default_value']) {
                     throw new \FOSSBilling\InformationException('Field :field is read only. You cannot change its value', [':field' => $field['label']], 5468);
@@ -245,9 +245,7 @@ class Service implements InjectionAwareInterface
 
     public function getServiceByOrderId(int $orderId): ?OODBBean
     {
-        $order = $this->di['db']->getExistingModelById('ClientOrder', $orderId, 'Order not found');
-
-        return $this->di['db']->findOne('service_server', 'order_id = ?', [$order->id]) ?: null;
+        return $this->di['db']->findOne('service_server', 'order_id = ?', [$orderId]) ?: null;
     }
 
     public function update(OODBBean $model, array $data): bool

@@ -223,7 +223,8 @@
               {% if srv.ip %}
               <div class="flex items-center gap-1.5">
                 <span class="text-sm font-mono font-semibold text-white">{{ srv.ip }}</span>
-                <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent)" title="{{ 'Copy IP'|trans }}"
+                <button onclick="(function(b){var t=b.previousElementSibling;navigator.clipboard.writeText(t.textContent).then(function(){b.title='Copied!';b.classList.add('text-indigo-400');setTimeout(function(){b.title='{{ 'Copy IP'|trans }}';b.classList.remove('text-indigo-400');},1500);})})(this)"
+                        title="{{ 'Copy IP'|trans }}"
                         class="p-1 rounded-lg text-gray-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -237,7 +238,8 @@
               <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1.5">{{ 'Hostname'|trans }}</p>
               <div class="flex items-center gap-1.5">
                 <span class="text-sm font-mono font-semibold text-white truncate">{{ srv.hostname }}</span>
-                <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent)" title="{{ 'Copy hostname'|trans }}"
+                <button onclick="(function(b){var t=b.previousElementSibling;navigator.clipboard.writeText(t.textContent.trim()).then(function(){b.title='Copied!';b.classList.add('text-indigo-400');setTimeout(function(){b.title='{{ 'Copy hostname'|trans }}';b.classList.remove('text-indigo-400');},1500);})})(this)"
+                        title="{{ 'Copy hostname'|trans }}"
                         class="p-1 rounded-lg text-gray-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all flex-shrink-0">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
