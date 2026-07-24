@@ -1,0 +1,15 @@
+{# Inlined FOUC-prevention script. Restores dark/light theme and sidebar
+   collapsed state from localStorage before first paint. Must run in <head>
+   before any stylesheet. Kept in a partial so both layouts share it. #}
+<script>
+    (function () {
+        try {
+            var c = localStorage.getItem('sb_collapsed');
+            if (c === '1') document.documentElement.setAttribute('data-sb', 'collapsed');
+        } catch (_) {}
+        try {
+            var t = localStorage.getItem('merovps_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        } catch (_) {}
+    })();
+</script>

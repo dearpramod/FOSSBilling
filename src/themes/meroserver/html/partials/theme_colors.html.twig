@@ -1,0 +1,70 @@
+{# ── Brand color system ──────────────────────────────────────────────────
+   Single source of truth for theme colors, included in <head> of every layout.
+
+   Emits CSS custom properties derived from admin theme settings:
+     --color-primary / --color-secondary           configured hex values
+     --color-primary-rgb / --color-secondary-rgb   "r,g,b" — legacy rgba(var(..),a) usage
+     --brand-50 … --brand-950                      "r g b" channels, primary scale
+     --brand2-50 … --brand2-900                    "r g b" channels, secondary scale
+
+   tailwind.config.js maps the indigo palette onto --brand-* and the violet
+   palette onto --brand2-*, so every indigo-*/violet-* utility (including
+   opacity modifiers like bg-indigo-500/10) follows the configured brand
+   colors. theme.css light-mode counter-rules reference the same vars.
+
+   The static values below are the stock indigo/violet defaults and act as
+   a no-JS fallback; the inline script overrides them synchronously (before
+   first paint) with tints/shades computed from the configured colors. #}
+{# MeroVPS brand: primary #5271ff (blue), secondary #224dda (deep blue) #}
+{% set pc = settings.primary_color|default('#5271ff') %}
+{% set sc = settings.secondary_color|default('#224dda') %}
+<style>
+    :root {
+        --color-primary: {{ pc }};
+        --color-primary-container: {{ pc }};
+        --color-on-primary-container: #ffffff;
+        --color-secondary: {{ sc }};
+        --color-primary-rgb: 82,113,255;
+        --color-secondary-rgb: 34,77,218;
+        /* Primary scale anchored at 500 = #5271ff (82 113 255) */
+        --brand-50: 241 243 255; --brand-100: 227 232 255; --brand-200: 200 210 255;
+        --brand-300: 169 184 255; --brand-400: 127 150 255; --brand-500: 82 113 255;
+        --brand-600: 71 97 219;  --brand-700: 59 81 184;   --brand-800: 48 66 148;
+        --brand-900: 36 50 112;  --brand-950: 23 32 71;
+        /* Secondary scale anchored at 600 = #224dda (34 77 218) */
+        --brand2-50: 237 241 252; --brand2-100: 220 227 249; --brand2-200: 183 197 243;
+        --brand2-300: 136 159 235; --brand2-400: 100 130 229; --brand2-500: 65 102 223;
+        --brand2-600: 34 77 218;   --brand2-700: 29 65 183;  --brand2-900: 19 42 120;
+    }
+</style>
+<script>
+    (function () {
+        function ch(h) {
+            h = String(h).replace('#', '');
+            if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+            if (!/^[0-9a-fA-F]{6}$/.test(h)) { return null; }
+            return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+        }
+        // w > 0 → tint toward white by w; w < 0 → shade toward black by |w|
+        function mix(c, w) {
+            return c.map(function (v) { return Math.round(w >= 0 ? v + (255 - v) * w : v * (1 + w)); });
+        }
+        var s = document.documentElement.style;
+        function scale(prefix, rgbVar, hex, tbl) {
+            var c = ch(hex);
+            if (!c) { return; }
+            s.setProperty(rgbVar, c.join(','));
+            for (var k in tbl) { s.setProperty(prefix + k, mix(c, tbl[k]).join(' ')); }
+        }
+        // Primary scale is anchored at 500, secondary at 600 (matches the
+        // stock indigo-500 / violet-600 defaults the theme was designed with).
+        scale('--brand-', '--color-primary-rgb', '{{ pc }}', {
+            50: 0.92, 100: 0.84, 200: 0.68, 300: 0.50, 400: 0.26, 500: 0,
+            600: -0.14, 700: -0.28, 800: -0.42, 900: -0.56, 950: -0.72
+        });
+        scale('--brand2-', '--color-secondary-rgb', '{{ sc }}', {
+            50: 0.92, 100: 0.84, 200: 0.68, 300: 0.46, 400: 0.30, 500: 0.14,
+            600: 0, 700: -0.16, 900: -0.45
+        });
+    })();
+</script>

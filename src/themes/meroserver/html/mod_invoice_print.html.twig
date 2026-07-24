@@ -1,0 +1,827 @@
+{% set nr      = invoice.serie_nr ?? (invoice.serie ~ "%05s"|format(invoice.nr)) %}
+{% set seller  = invoice.seller %}
+{% set buyer   = invoice.buyer %}
+{% set company = guest.system_company %}
+{% set active_locale = guest.system_locale|default('en')|replace({'_': '-'}) %}
+
+<!DOCTYPE html>
+<html lang="{{ active_locale }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Invoice {{ nr }}</title>
+    <link rel="shortcut icon" href="{{ company.favicon_url }}">
+    <style>
+        :root { --color-primary: #6366f1; --color-secondary: #7c3aed; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 13px;
+            color: #1e293b;
+            background: #f1f5f9;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .page {
+            background: #fff;
+            max-width: 820px;
+            margin: 24px auto;
+            padding: 0;
+            box-shadow: 0 1px 12px rgba(0,0,0,0.06);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .page-body { padding: 40px 44px 32px; }
+
+        /* ── Top accent bar ── */
+        .accent-bar {
+            height: 4px;
+            background: linear-gradient(90deg, var(--color-primary) 0%, rgb(var(--brand-400)) 50%, rgb(var(--brand-300)) 100%);
+        }
+
+        /* ── Header ── */
+        .inv-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 28px;
+        }
+        .inv-brand h1 {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .inv-brand .inv-number {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1e293b;
+            letter-spacing: -0.02em;
+        }
+        .inv-logo img {
+            max-height: 48px;
+            max-width: 160px;
+            object-fit: contain;
+        }
+        .inv-logo-text {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--color-primary);
+        }
+
+        /* ── Print button ── */
+        .btn-print {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 9px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            letter-spacing: 0.2px;
+            margin-top: 4px;
+        }
+        .btn-print:hover { background: #1e293b; }
+        .btn-print svg { flex-shrink: 0; }
+
+        /* ── Meta strip ── */
+        .inv-meta {
+            display: flex;
+            gap: 0;
+            margin-bottom: 28px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .inv-meta-item {
+            flex: 1;
+            padding: 12px 16px;
+            border-right: 1px solid #e2e8f0;
+        }
+        .inv-meta-item:last-child { border-right: none; }
+        .inv-meta-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            margin-bottom: 3px;
+        }
+        .inv-meta-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .badge-paid { color: #16a34a; font-weight: 700; }
+        .badge-unpaid { color: #d97706; font-weight: 700; }
+        .badge-other { color: #6b7280; font-weight: 700; }
+
+        /* ── Parties ── */
+        .parties {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 28px;
+        }
+        .party {
+            flex: 1;
+        }
+        .party-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #94a3b8;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .party-label.from { border-bottom-color: var(--color-primary); }
+        .party-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        .party-sub {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.7;
+        }
+        .party-sub a {
+            color: var(--color-primary);
+            text-decoration: none;
+        }
+        .party-highlight {
+            font-size: 12px;
+            color: var(--color-primary);
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        /* ── Items table ── */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .items-table thead th {
+            background: #0f172a;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            padding: 10px 14px;
+            text-align: left;
+        }
+        .items-table thead th.text-right { text-align: right; }
+        .items-table thead th.text-center { text-align: center; }
+        .items-table tbody tr {
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .items-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .items-table tbody tr:last-child { border-bottom: none; }
+        .items-table tbody td {
+            padding: 12px 14px;
+            vertical-align: top;
+            font-size: 13px;
+        }
+        .items-table tbody td.text-right { text-align: right; }
+        .items-table tbody td.text-center { text-align: center; }
+        .item-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        .item-period {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+        .item-type-label {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+        .item-sub {
+            font-size: 12px;
+            color: #64748b;
+            padding-left: 12px;
+            border-left: 2px solid #e2e8f0;
+            margin-top: 2px;
+        }
+        .items-table tfoot td {
+            background: #f1f5f9;
+            border-top: 2px solid #e2e8f0;
+            padding: 12px 14px;
+            font-size: 14px;
+            font-weight: 800;
+            color: #1e293b;
+        }
+
+        /* ── Totals ── */
+        .totals-wrap {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 24px;
+        }
+        .totals-table {
+            min-width: 240px;
+            border-collapse: collapse;
+        }
+        .totals-table td {
+            padding: 5px 0;
+            font-size: 13px;
+        }
+        .totals-table .row-label { color: #64748b; text-align: left; padding-right: 24px; }
+        .totals-table .row-value { text-align: right; font-weight: 600; color: #1e293b; }
+        .total-row td {
+            border-top: 2px solid #1e293b;
+            padding-top: 10px;
+            font-size: 15px;
+            font-weight: 800;
+            color: #1e293b;
+        }
+        .total-row .row-value { color: var(--color-primary); }
+
+        /* ── Notes ── */
+        .notes-box {
+            margin-top: 16px;
+            padding: 14px 16px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #92400e;
+            line-height: 1.6;
+        }
+
+        /* ── Footer ── */
+        .inv-footer {
+            background: #0f172a;
+            padding: 28px 44px 20px;
+            text-align: center;
+        }
+        .inv-footer-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+        .inv-footer-tagline {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 16px;
+        }
+        .inv-footer hr {
+            border: none;
+            border-top: 1px solid #1e293b;
+            margin: 0 0 12px;
+        }
+        .inv-footer-contact {
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+        .inv-footer-contact a { color: #94a3b8; text-decoration: none; }
+        .inv-footer-contact span { margin: 0 8px; }
+        .inv-footer-copy {
+            font-size: 11px;
+            color: #475569;
+        }
+
+        /* ── Clean professional document treatment ── */
+        :root {
+            --color-primary: #5271ff;
+            --invoice-ink: #171b2d;
+            --invoice-muted: #778093;
+            --invoice-line: #e7e9ef;
+            --invoice-soft: #f8f9fc;
+        }
+
+        body {
+            color: var(--invoice-ink);
+            background: #eef0f4;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 12.5px;
+            line-height: 1.5;
+        }
+
+        .page {
+            max-width: 900px;
+            margin: 28px auto;
+            border: 1px solid #e4e6eb;
+            border-radius: 10px;
+            box-shadow: 0 16px 45px rgba(20, 28, 52, .08);
+        }
+
+        .page-body {
+            min-height: 760px;
+            padding: 46px 50px 38px;
+        }
+
+        .accent-bar {
+            height: 4px;
+            background: var(--color-primary);
+        }
+
+        .inv-header {
+            align-items: center;
+            margin-bottom: 36px;
+        }
+
+        .inv-brand h1 {
+            margin-bottom: 5px;
+            color: var(--invoice-muted);
+            font-size: 10px;
+            letter-spacing: .14em;
+        }
+
+        .inv-brand .inv-number {
+            color: var(--invoice-ink);
+            font-size: 28px;
+            font-weight: 750;
+            letter-spacing: -.035em;
+        }
+
+        .inv-logo img {
+            max-width: 150px;
+            max-height: 46px;
+        }
+
+        .inv-logo-text {
+            color: var(--invoice-ink);
+            font-size: 19px;
+            letter-spacing: -.02em;
+        }
+
+        .btn-print {
+            margin-top: 6px;
+            padding: 8px 14px;
+            border: 1px solid #dfe3ea;
+            border-radius: 8px;
+            color: #424a5d;
+            background: #fff;
+            box-shadow: 0 2px 7px rgba(20,28,52,.05);
+        }
+
+        .btn-print:hover {
+            color: var(--color-primary);
+            border-color: #cbd4ff;
+            background: #f7f8ff;
+        }
+
+        .inv-meta {
+            margin-bottom: 34px;
+            border-width: 1px 0;
+            border-color: var(--invoice-line);
+            border-radius: 0;
+        }
+
+        .inv-meta-item {
+            padding: 14px 16px;
+            border-color: var(--invoice-line);
+        }
+
+        .inv-meta-item:first-child { padding-left: 0; }
+        .inv-meta-item:last-child { padding-right: 0; }
+
+        .inv-meta-label {
+            color: #929aac;
+            font-size: 9px;
+            letter-spacing: .11em;
+        }
+
+        .inv-meta-value {
+            color: #333a4c;
+            font-size: 12px;
+        }
+
+        .badge-paid,
+        .badge-unpaid,
+        .badge-other {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            letter-spacing: .04em;
+        }
+
+        .badge-paid { color: #087f5b; background: #e8f8f1; }
+        .badge-unpaid { color: #c2413a; background: #fff0ee; }
+        .badge-other { color: #596174; background: #f0f2f6; }
+
+        .parties {
+            gap: 64px;
+            margin-bottom: 38px;
+        }
+
+        .party:last-child {
+            padding-left: 32px;
+            border-left: 1px solid var(--invoice-line);
+        }
+
+        .party-label,
+        .party-label.from {
+            margin-bottom: 12px;
+            padding: 0;
+            border: 0;
+            color: #929aac;
+            font-size: 9px;
+            letter-spacing: .12em;
+        }
+
+        .party-name {
+            margin-bottom: 5px;
+            color: var(--invoice-ink);
+            font-size: 14px;
+        }
+
+        .party-sub {
+            color: #697286;
+            font-size: 11.5px;
+            line-height: 1.65;
+        }
+
+        .party-sub a {
+            color: #58657a;
+        }
+
+        .items-table {
+            margin-bottom: 22px;
+            border: 0;
+            border-radius: 0;
+        }
+
+        .items-table thead {
+            border-top: 1px solid var(--invoice-line);
+            border-bottom: 1px solid var(--invoice-line);
+        }
+
+        .items-table thead th {
+            padding: 11px 10px;
+            color: #7f899d;
+            background: var(--invoice-soft);
+            font-size: 9px;
+            letter-spacing: .11em;
+        }
+
+        .items-table thead th:first-child,
+        .items-table tbody td:first-child { padding-left: 12px; }
+
+        .items-table tbody tr {
+            border-color: var(--invoice-line);
+        }
+
+        .items-table tbody tr:nth-child(even) {
+            background: #fcfcfd;
+        }
+
+        .items-table tbody td {
+            padding: 16px 10px;
+            color: #3e4658;
+            font-size: 12px;
+        }
+
+        .item-title {
+            color: var(--invoice-ink);
+            font-size: 12.5px;
+        }
+
+        .item-period {
+            margin-top: 2px;
+            color: #7b8497;
+            font-size: 10.5px;
+            font-weight: 500;
+        }
+
+        .items-table tfoot td {
+            padding: 14px 12px;
+            border-top: 1px solid var(--invoice-line);
+            color: var(--invoice-ink);
+            background: var(--invoice-soft);
+            font-size: 14px;
+        }
+
+        .totals-wrap {
+            margin: 12px 0 30px;
+        }
+
+        .totals-table {
+            min-width: 290px;
+        }
+
+        .totals-table td {
+            padding: 5px 0;
+            font-size: 12px;
+        }
+
+        .totals-table .row-label {
+            color: #697286;
+            padding-right: 40px;
+        }
+
+        .totals-table .row-value {
+            color: #333a4c;
+        }
+
+        .total-row td {
+            padding-top: 11px;
+            border-top: 1px solid #cfd4de;
+            color: var(--invoice-ink);
+            font-size: 16px;
+        }
+
+        .total-row .row-value {
+            color: var(--color-primary);
+        }
+
+        .notes-box {
+            padding: 13px 15px;
+            color: #625a38;
+            border-color: #eee5bf;
+            border-radius: 8px;
+            background: #fffdf5;
+        }
+
+        @media screen and (max-width: 700px) {
+            .page { margin: 0; border: 0; border-radius: 0; }
+            .page-body { min-height: 0; padding: 28px 20px; }
+            .inv-header { align-items: flex-start; }
+            .inv-brand .inv-number { font-size: 22px; }
+            .inv-logo img { max-width: 110px; max-height: 38px; }
+            .inv-meta { flex-wrap: wrap; }
+            .inv-meta-item { min-width: 50%; border-bottom: 1px solid var(--invoice-line); }
+            .inv-meta-item:first-child { padding-left: 16px; }
+            .parties { flex-direction: column; gap: 24px; }
+            .party:last-child { padding: 0; border: 0; }
+            .items-table { display: block; overflow-x: auto; }
+            .items-table tbody,
+            .items-table thead,
+            .items-table tfoot { min-width: 620px; }
+            .totals-table { min-width: 260px; }
+        }
+
+        /* ── Print styles ── */
+        @media print {
+            @page { size: A4; margin: 0; }
+            body { background: #fff; }
+            .page {
+                width: 210mm;
+                min-height: 297mm;
+                max-width: none;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .page-body {
+                min-height: 238mm;
+                padding: 16mm 16mm 10mm;
+            }
+            .accent-bar { height: 3px; }
+            .no-print { display: none !important; }
+            .inv-footer { padding: 16px 32px 12px; }
+            .inv-header,
+            .inv-meta,
+            .parties,
+            .totals-wrap,
+            .notes-box { break-inside: avoid; }
+            .items-table thead { display: table-header-group; }
+            .items-table tr { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    {# ── Top accent bar ── #}
+    <div class="accent-bar"></div>
+
+    <div class="page-body">
+
+        {# ── Header ── #}
+        <div class="inv-header">
+            <div class="inv-brand">
+                <h1>Invoice</h1>
+                <div class="inv-number">#{{ nr }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+                <div class="inv-logo">
+                    {% if company.logo_url %}
+                        <img src="{{ company.logo_url }}" alt="{{ company.name }}">
+                    {% else %}
+                        <span class="inv-logo-text">{{ company.name }}</span>
+                    {% endif %}
+                </div>
+                <button class="btn-print no-print" onclick="window.print()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    Print
+                </button>
+            </div>
+        </div>
+
+        {# ── Meta strip ── #}
+        <div class="inv-meta">
+            <div class="inv-meta-item">
+                <div class="inv-meta-label">Date Issued</div>
+                <div class="inv-meta-value">{{ invoice.created_at|format_date }}</div>
+            </div>
+            {% if invoice.due_at %}
+            <div class="inv-meta-item">
+                <div class="inv-meta-label">Due Date</div>
+                <div class="inv-meta-value">{{ invoice.due_at|format_date }}</div>
+            </div>
+            {% endif %}
+            <div class="inv-meta-item">
+                <div class="inv-meta-label">Status</div>
+                <div class="inv-meta-value">
+                    {% if invoice.status == 'paid' %}
+                        <span class="badge-paid">PAID</span>
+                    {% elseif invoice.status == 'unpaid' %}
+                        <span class="badge-unpaid">UNPAID</span>
+                    {% else %}
+                        <span class="badge-other">{{ invoice.status|upper }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="inv-meta-item">
+                <div class="inv-meta-label">Currency</div>
+                <div class="inv-meta-value">{{ invoice.currency }}</div>
+            </div>
+            {% if invoice.paid_at %}
+            <div class="inv-meta-item">
+                <div class="inv-meta-label">Paid On</div>
+                <div class="inv-meta-value">{{ invoice.paid_at|format_date }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── Parties ── #}
+        <div class="parties">
+            <div class="party">
+                <div class="party-label from">From</div>
+                <div class="party-name">{{ seller.company ?? company.name }}</div>
+                <div class="party-sub">
+                    {% if seller.email %}{{ seller.email }}<br>{% endif %}
+                    {% if seller.phone %}Tel: {{ seller.phone }}<br>{% endif %}
+                    {% if seller.address_1 %}{{ seller.address_1 }}<br>{% endif %}
+                    {% if seller.address_2 %}{{ seller.address_2 }}<br>{% endif %}
+                    {% if seller.address_3 %}{{ seller.address_3 }}<br>{% endif %}
+                    {% if company.vat_number|default(false) %}VAT: {{ company.vat_number }}<br>{% endif %}
+                    {% if company.number|default(false) %}Reg: {{ company.number }}<br>{% endif %}
+                    {% if seller.bank_name %}Bank: {{ seller.bank_name }}<br>{% endif %}
+                    {% if seller.account_number %}A/C: {{ seller.account_number }}<br>{% endif %}
+                    {% if seller.bic %}SWIFT: {{ seller.bic }}{% endif %}
+                </div>
+            </div>
+            <div class="party">
+                <div class="party-label">Bill To</div>
+                {% if buyer.company %}
+                    <div class="party-name">{{ buyer.company }}</div>
+                {% endif %}
+                {% if buyer.first_name or buyer.last_name %}
+                    <div {% if buyer.company %}style="font-size:12px;color:#64748b;margin-bottom:4px;"{% else %}class="party-name"{% endif %}>
+                        {{ buyer.first_name }} {{ buyer.last_name }}
+                    </div>
+                {% endif %}
+                {% if buyer.company_number %}
+                    <div class="party-highlight">Reg: {{ buyer.company_number }}</div>
+                {% endif %}
+                {% if buyer.company_vat %}
+                    <div class="party-highlight">Tax: {{ buyer.company_vat }}</div>
+                {% endif %}
+                <div class="party-sub">
+                    {% if buyer.email %}<a href="mailto:{{ buyer.email }}">{{ buyer.email }}</a><br>{% endif %}
+                    {% if buyer.address %}{{ buyer.address }}<br>{% endif %}
+                    {% if buyer.city %}{{ buyer.city }}{% if buyer.state %}, {{ buyer.state }}{% endif %}{% if buyer.zip %} {{ buyer.zip }}{% endif %}<br>{% endif %}
+                    {% set countries = guest.system_countries %}
+                    {% if buyer.country %}{{ countries[buyer.country] ?? buyer.country }}{% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if invoice.text_1 %}
+        <div style="margin-bottom:20px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#64748b;line-height:1.6;">
+            {{ invoice.text_1 }}
+        </div>
+        {% endif %}
+
+        {# ── Items ── #}
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width:6%;">#</th>
+                    <th style="width:44%;">Description</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% set row = 0 %}
+            {% for item in invoice.lines %}
+                {% set row = row + 1 %}
+                {% set is_sub = item.title starts with '↳' or item.title starts with '└' %}
+                <tr>
+                    <td style="color:#94a3b8;">{{ row }}</td>
+                    <td>
+                        {% if is_sub %}
+                            <div class="item-sub">{{ item.title }}</div>
+                        {% else %}
+                            <div class="item-title">{{ item.title }}</div>
+                            {% if item.period %}
+                                <div class="item-period">{{ item.period|period_title }} term</div>
+                            {% endif %}
+                            {% if item.type == 'deposit' %}
+                                <div class="item-type-label">Account credit</div>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="text-right" style="white-space:nowrap;">{{ item.price|money(invoice.currency) }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-right" style="white-space:nowrap;font-weight:600;">{{ item.total|money(invoice.currency) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+            {% if invoice.tax <= 0 and (invoice.discount is not defined or invoice.discount <= 0) %}
+            <tfoot>
+                <tr>
+                    <td colspan="4" style="text-align:left;">Total</td>
+                    <td style="text-align:right;">{{ invoice.total|money(invoice.currency) }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+
+        {# ── Totals (shown when tax/discount present) ── #}
+        {% if invoice.tax > 0 or (invoice.discount is defined and invoice.discount > 0) %}
+        <div class="totals-wrap">
+            <table class="totals-table">
+                <tr>
+                    <td class="row-label">Subtotal</td>
+                    <td class="row-value">{{ invoice.subtotal|money(invoice.currency) }}</td>
+                </tr>
+                {% if invoice.discount is defined and invoice.discount > 0 %}
+                <tr>
+                    <td class="row-label" style="color:#16a34a;">Discount</td>
+                    <td class="row-value" style="color:#16a34a;">− {{ invoice.discount|money(invoice.currency) }}</td>
+                </tr>
+                {% endif %}
+                {% if invoice.tax > 0 %}
+                <tr>
+                    <td class="row-label">{{ invoice.taxname }} ({{ invoice.taxrate }}%)</td>
+                    <td class="row-value">{{ invoice.tax|money(invoice.currency) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="total-row">
+                    <td class="row-label">Total</td>
+                    <td class="row-value">{{ invoice.total|money(invoice.currency) }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+
+        {# ── Notes ── #}
+        {% if invoice.notes %}
+        <div class="notes-box">{{ invoice.notes }}</div>
+        {% endif %}
+
+    </div>{# end .page-body #}
+
+    {# ── Disclaimer ── #}
+    <div style="padding:14px 44px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="margin:0 0 2px;font-size:11px;color:#94a3b8;line-height:1.7;">This is a computer-generated <strong style="color:#64748b;">Proforma Invoice</strong> and does not require a signature.</p>
+        <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.7;">For an official Tax Invoice, please contact the billing team.</p>
+    </div>
+
+    {# ── Footer ── #}
+    <div class="inv-footer">
+        <div class="inv-footer-name">{{ company.name }}</div>
+        <div class="inv-footer-tagline">Reliable Hosting &amp; Billing Solutions</div>
+        <hr>
+        {% if company.email|default(false) or company.tel|default(false) or company.www|default(false) %}
+        <div class="inv-footer-contact">
+            {% if company.email|default(false) %}<span><a href="mailto:{{ company.email }}">{{ company.email }}</a></span>{% endif %}
+            {% if company.tel|default(false) %}<span>{{ company.tel }}</span>{% endif %}
+            {% if company.www|default(false) %}<span><a href="{{ company.www }}" target="_blank">{{ company.www }}</a></span>{% endif %}
+        </div>
+        {% endif %}
+        <div class="inv-footer-copy">Copyright &copy; {{ "now"|date("Y") }} {{ company.name }}. All rights reserved.</div>
+    </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,324 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_public.html.twig" %}
+
+{% block meta_title %}Order{% endblock %}
+
+{% block content %}
+{% if settings.homepage_mode|default('') == 'store' %}
+<script>window.location.replace('{{ '/order'|url }}');</script>
+{% elseif settings.homepage_mode|default('') == 'custom' and settings.homepage_custom_url|default('') is not empty %}
+<script>window.location.replace('{{ settings.homepage_custom_url|default('')|url }}');</script>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════════════
+   HERO — Domain search + TLD pricing (WHMCS-style)
+   ═══════════════════════════════════════════════════════════════════ #}
+{% set tlds = guest.servicedomain_tlds({'allow_register': true}) %}
+
+<div class="ref-home">
+<section class="ref-home-hero">
+    <div class="ref-home-hero-copy">
+        <span class="ref-home-kicker"><i></i>Nepal VPS · Local infrastructure. Global performance.</span>
+        <h1>VPS Hosting<br><em>built for Nepal.</em></h1>
+        <p>Launch fast, secure virtual servers with NVMe storage, full administrative access, low-latency connectivity, and expert support available 24/7.</p>
+        <div class="ref-home-hero-actions">
+            <a href="{{ '/order'|url }}" class="ref-home-primary">Explore VPS plans <span>→</span></a>
+            <a href="{{ (settings.link_support|default('/support/contact'))|url }}" class="ref-home-secondary">Talk to an expert</a>
+        </div>
+        <div class="ref-home-trust">
+            <span>✓ Instant setup</span><span>✓ Transparent NPR pricing</span><span>✓ Local support</span>
+        </div>
+    </div>
+    <div class="ref-home-console" aria-label="MeroVPS server deployment preview">
+        <div class="ref-home-console-bar"><span></span><span></span><span></span><b>deploy.sh — MeroVPS</b><i>Connected</i></div>
+        <div class="ref-home-console-body">
+            <p><span>promod@merovps</span> : ~/projects $ merovps deploy</p>
+            <p><b>✓</b> Server provisioned <small>Kathmandu · 4s</small></p>
+            <p><b>✓</b> Ubuntu 24.04 installed <small>12s</small></p>
+            <p><b>✓</b> SSL certificate issued <small>8s</small></p>
+            <p><b>✓</b> Firewall + backups enabled <small>6s</small></p>
+            <div><span>Deployment complete</span><strong>38 seconds</strong></div>
+        </div>
+    </div>
+</section>
+
+<section class="ref-home-products">
+    <a href="{{ '/order'|url }}"><span>Linux VPS</span><strong>Fast NVMe compute</strong><b>From NPR 1,200/mo</b><i>→</i></a>
+    <a href="{{ '/order'|url }}"><span>Windows VPS</span><strong>Secure RDP access</strong><b>From NPR 2,499/mo</b><i>→</i></a>
+    <a href="{{ '/order'|url }}"><span>Managed VPS</span><strong>cPanel and expert care</strong><b>Fully managed</b><i>→</i></a>
+</section>
+
+<section class="ref-home-hardware">
+    <span>Infrastructure designed for performance</span>
+    <div><b>NVMe</b><b>AMD EPYC</b><b>Cloudflare</b><b>24/7 Monitoring</b><b>99.9% Uptime</b></div>
+</section>
+
+<section class="ref-home-domain relative overflow-hidden pt-16 sm:pt-24 pb-14 sm:pb-20">
+    {# Ambient glow #}
+    <div class="absolute inset-0 pointer-events-none overflow-hidden">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full blur-[140px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.12) 0%, transparent 70%);"></div>
+    </div>
+
+    <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+
+        <span class="ref-home-section-label">Domains</span>
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mb-4">
+            Find your perfect <em class="italic" style="color: var(--color-primary);">domain.</em>
+        </h2>
+        <p class="ref-home-domain-intro">Search, register, and manage your domain alongside your hosting.</p>
+
+        {# Domain search bar with TLD selector #}
+        <div class="max-w-3xl mx-auto mb-10 relative z-10" x-data="{ q: '', tld: '.com', showTlds: false }">
+            <div class="rounded-2xl border border-white/[0.10] bg-white/[0.04] backdrop-blur-sm p-2">
+                <form @submit.prevent="if(q.trim().length >= 2) window.location.href='{{ '/order/domain-registration'|url }}' + '?register_sld=' + encodeURIComponent(q.trim().replace(/\.[a-z]+$/i, '')) + '&register_tld=' + encodeURIComponent(tld);"
+                      class="flex items-center gap-2">
+                    <label for="hero-domain-input" class="sr-only">Search for a domain name</label>
+                    <input id="hero-domain-input" type="text" x-model="q" x-ref="domainInput" placeholder="Enter your desired domain name" autocomplete="off" spellcheck="false" inputmode="url"
+                           class="flex-1 bg-transparent px-4 py-3.5 text-white placeholder-gray-500 outline-none text-sm sm:text-base min-w-0" />
+
+                    {# TLD dropdown #}
+                    <div class="relative flex-shrink-0" @click.outside="showTlds = false">
+                        <button type="button" @click="showTlds = !showTlds"
+                                class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.10] transition-colors">
+                            <span x-text="tld">.com</span>
+                            <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-200" :class="showTlds ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div x-show="showTlds" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                             class="absolute right-0 mt-2 w-36 rounded-xl border border-white/[0.08] bg-gray-900/95 backdrop-blur-xl shadow-2xl py-1 z-50 max-h-52 overflow-y-auto">
+                            {% for t in tlds %}
+                            <button type="button" @click="tld = '{{ t.tld }}'; showTlds = false"
+                                    class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-colors"
+                                    :class="tld === '{{ t.tld }}' ? 'text-white bg-indigo-500/10' : ''">
+                                {{ t.tld }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <button type="submit" :disabled="q.trim().length < 2"
+                            aria-label="Search for domain"
+                            class="px-6 sm:px-8 py-3.5 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-40 flex-shrink-0"
+                            style="background: linear-gradient(135deg, var(--color-primary), rgb(var(--brand-600)));">
+                        Search
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {# TLD pricing cards #}
+        {% if tlds|length > 0 %}
+        <div class="max-w-3xl mx-auto mb-8">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {% for t in tlds|slice(0, 5) %}
+                <div class="rounded-xl bg-white/[0.03] border border-white/[0.07] px-3 py-4 text-center hover:border-indigo-500/25 hover:bg-white/[0.06] transition-all cursor-default">
+                    <p class="text-lg font-bold text-white mb-1">{{ t.tld }}</p>
+                    <p class="text-[11px] text-gray-500 mb-0.5">Starting price</p>
+                    <p class="text-sm font-bold" style="color: var(--color-primary);">{{ t.price_registration|money_convert }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Transfer link #}
+        <p class="text-sm text-gray-500">
+            Already bought a domain?
+            <a href="{{ '/order/domain-transfer'|url }}" class="font-semibold hover:underline transition-colors" style="color: var(--color-primary);">Transfer it?</a>
+        </p>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════
+   WHY CHOOSE US — Glass feature cards
+   ═══════════════════════════════════════════════════════════════════ #}
+<section class="ref-home-features py-20 border-t border-white/5 relative overflow-hidden">
+    {# Subtle ambient glow #}
+    <div class="absolute inset-0 pointer-events-none">
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full blur-[160px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.08) 0%, transparent 70%);"></div>
+    </div>
+
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+            <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">
+                Speed. <em class="italic">Reliability.</em> Efficiency.
+            </h2>
+            <p class="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
+                Enterprise-grade infrastructure with blazing-fast NVMe storage, 24/7 support, and seamless migration — all at competitive prices.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {% set cards = [
+                {
+                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>',
+                    'color': 'indigo',
+                    'title': 'All Products',
+                    'desc': 'Web hosting, VPS, and domains — browse everything in one place.',
+                    'link': '/order'|url,
+                    'link_text': 'Browse Store'
+                },
+                {
+                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>',
+                    'color': 'violet',
+                    'title': 'Domain Names',
+                    'desc': 'Register or transfer your perfect domain with instant activation.',
+                    'link': '/order/domain-registration'|url,
+                    'link_text': 'Search Domains'
+                },
+                {
+                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>',
+                    'color': 'emerald',
+                    'title': 'News & Updates',
+                    'desc': 'Stay informed with product releases, maintenance, and company news.',
+                    'link': '/news'|url,
+                    'link_text': 'Read News'
+                },
+                {
+                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>',
+                    'color': 'amber',
+                    'title': 'Knowledgebase',
+                    'desc': 'Step-by-step guides, tutorials, and how-tos to help you get started.',
+                    'link': '/support/kb'|url,
+                    'link_text': 'Explore KB'
+                }
+            ] %}
+
+            {% for card in cards %}
+            <div class="rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6 flex flex-col transition-all hover:border-{{ card.color }}-500/25 hover:bg-white/[0.05] hover:-translate-y-0.5 group">
+                <div class="w-11 h-11 rounded-xl bg-{{ card.color }}-500/10 border border-{{ card.color }}-500/20 flex items-center justify-center mb-5">
+                    <svg class="w-5 h-5 text-{{ card.color }}-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ card.icon|raw }}</svg>
+                </div>
+
+                <h3 class="text-base font-bold text-white mb-2">{{ card.title }}</h3>
+                <p class="text-sm text-gray-500 leading-relaxed flex-1 mb-5">{{ card.desc }}</p>
+
+                <a href="{{ card.link }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-{{ card.color }}-400 hover:text-{{ card.color }}-300 transition-colors group/link">
+                    {{ card.link_text }}
+                    <svg class="w-3.5 h-3.5 group-hover/link:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════
+   CTA BANNER
+   ═══════════════════════════════════════════════════════════════════ #}
+<section class="ref-home-final-cta py-16 border-t border-white/5 pub-cta-section">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="pub-cta-card relative rounded-2xl overflow-hidden border border-indigo-500/15 p-10 sm:p-14 text-center" style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.08) 0%, rgba(var(--color-secondary-rgb),0.04) 100%);">
+            <div class="absolute inset-0 pointer-events-none">
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full blur-[100px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.14) 0%, transparent 70%);"></div>
+            </div>
+            <div class="relative">
+                <h2 class="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3">Ready to Get Started?</h2>
+                <p class="text-gray-400 text-sm mb-6 max-w-md mx-auto">Deploy in under 60 seconds. No credit card required for free-tier plans.</p>
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
+                    <a href="{{ 'signup'|url }}"
+                       class="px-7 py-3 rounded-xl text-white font-semibold text-sm inline-flex items-center gap-2 transition-all"
+                       style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 6px 24px rgba(var(--color-primary-rgb),0.3);">
+                        Create Account
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
+                       class="pub-ghost-btn px-7 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 font-medium text-sm transition-all">
+                        Contact Sales
+                    </a>
+                </div>
+                <div class="flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-center">
+                    <div>
+                        <p class="text-lg font-bold text-white">99.9%</p>
+                        <p class="text-xs text-gray-500">Uptime</p>
+                    </div>
+                    <div class="hidden sm:block w-px h-5 bg-white/10"></div>
+                    <div>
+                        <p class="text-lg font-bold text-white">&lt;60s</p>
+                        <p class="text-xs text-gray-500">Setup</p>
+                    </div>
+                    <div class="hidden sm:block w-px h-5 bg-white/10"></div>
+                    <div>
+                        <p class="text-lg font-bold text-white">24/7</p>
+                        <p class="text-xs text-gray-500">Support</p>
+                    </div>
+                    <div class="hidden sm:block w-px h-5 bg-white/10"></div>
+                    <div>
+                        <p class="text-lg font-bold text-white">500+</p>
+                        <p class="text-xs text-gray-500">Customers</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══════════════════════════════════════════════════════════════════
+   FAQ — Two-column layout
+   ═══════════════════════════════════════════════════════════════════ #}
+<section class="ref-home-faq py-20 border-t border-white/5" x-data="{ open: null }">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-16">
+            {# Left column — heading + CTA #}
+            <div class="lg:col-span-2">
+                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-gray-400 mb-6">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    Up To <span class="font-bold text-amber-400">70%</span> Off Managed Cloud Hosting
+                </div>
+
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-2">
+                    Frequently Ask
+                </h2>
+                <p class="text-3xl sm:text-4xl font-extrabold italic mb-6" style="color: var(--color-primary);">Questions</p>
+
+                <p class="text-gray-500 text-sm leading-relaxed mb-8 max-w-sm">
+                    In today's competitive business, the demand for efficient hosting solutions continues to grow. We've answered the most common questions to help you get started.
+                </p>
+
+                <a href="{{ 'login'|url }}"
+                   class="inline-flex items-center justify-center px-7 py-3 rounded-xl text-white font-semibold text-sm transition-all"
+                   style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 6px 24px rgba(var(--color-primary-rgb),0.3);">
+                    Clients Area
+                </a>
+            </div>
+
+            {# Right column — accordion #}
+            <div class="lg:col-span-3">
+                {% set faqs = [
+                    {'q': 'Is MeroVPS a Nepali company?', 'a': 'Yes. MeroVPS is a Nepal-based hosting provider offering local data center proximity, NPR billing, and dedicated support tailored for Nepali businesses and developers.'},
+                    {'q': 'What features do I get with web hosting?', 'a': 'All plans include NVMe SSD storage, free SSL certificates, one-click app installer, daily backups, cPanel access, and unlimited bandwidth on select plans.'},
+                    {'q': 'How is MeroVPS\'s technical support?', 'a': 'Our support team is available 24/7 via live chat, tickets, and WhatsApp. Average response time is under 5 minutes with expert-level assistance.'},
+                    {'q': 'Can I migrate my website to MeroVPS?', 'a': 'Yes. We offer free migration for all plans — our team handles server data, websites, databases, DNS, and application configs with zero downtime.'},
+                    {'q': 'Why choose MeroVPS?', 'a': 'Enterprise-grade NVMe infrastructure, 99.9% uptime SLA, instant provisioning under 60 seconds, local support, competitive NPR pricing, and always-on DDoS protection.'},
+                    {'q': 'Can I upgrade my web hosting plan later?', 'a': 'Yes. Upgrades are applied instantly from the client portal. You only pay the prorated difference. Downgrades take effect at the next billing cycle.'}
+                ] %}
+
+                <div class="divide-y divide-white/[0.06]">
+                    {% for i, faq in faqs %}
+                    <div>
+                        <button @click="open = (open === {{ i }}) ? null : {{ i }}"
+                                class="w-full flex items-center justify-between py-5 text-left group">
+                            <span class="text-base font-medium text-white pr-6 group-hover:text-indigo-300 transition-colors">{{ faq.q }}</span>
+                            <svg class="w-5 h-5 text-gray-500 flex-shrink-0 transition-transform duration-200"
+                                 :class="open === {{ i }} ? 'rotate-180' : ''"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open === {{ i }}"
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-cloak
+                             class="pb-5">
+                            <p class="text-sm text-gray-400 leading-relaxed">{{ faq.a }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+</div>
+{% endblock %}

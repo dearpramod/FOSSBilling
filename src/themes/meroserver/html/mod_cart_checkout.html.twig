@@ -1,0 +1,731 @@
+{% extends "layout_default.html.twig" %}
+
+{% block meta_title %}Billing Details{% endblock %}
+{% block page_header %}Billing Details{% endblock %}
+
+{% set cart     = guest.cart_get %}
+{% set r        = guest.client_required %}
+{% set social   = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
+{% set countries = guest.system_countries %}
+
+{% block content %}
+
+{# ── Already logged in: hand off to payment page ── #}
+{% if client %}
+<script>window.location.replace('{{ "/order/checkout"|url }}');</script>
+<div class="flex items-center justify-center py-24">
+    <div class="text-center">
+        <svg class="w-10 h-10 text-indigo-400 mx-auto mb-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        <p class="text-gray-400 text-sm">Redirecting to checkout…</p>
+        <a href="{{ "/order/checkout"|url }}" class="text-indigo-400 text-xs underline mt-2 block">Click here if nothing happens</a>
+    </div>
+</div>
+
+{# ── Empty cart ── #}
+{% elseif cart.items is empty %}
+<div class="flex flex-col items-center justify-center py-24 text-center">
+    <div class="w-20 h-20 rounded-2xl border border-white/[0.07] bg-white/[0.03] flex items-center justify-center mb-6">
+        <svg class="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+    </div>
+    <h2 class="text-xl font-bold text-white mb-2">Your cart is empty</h2>
+    <p class="text-gray-500 text-sm mb-8">Browse our plans and add something to get started.</p>
+    <a href="{{ '/order'|url }}"
+       class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-all"
+       style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.25);">
+        Browse Plans
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+        </svg>
+    </a>
+</div>
+
+{# ── Main billing details page ── #}
+{% else %}
+
+{# Build period-grouped totals for the sidebar #}
+{% set period_totals = {} %}
+{% for item in cart.items %}
+    {% set pk = item.period | period_title %}
+    {% set period_totals = period_totals | merge({(pk): (period_totals[pk] | default(0)) + item.total}) %}
+{% endfor %}
+
+<style>
+.checkout-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: #111827;
+    font-size: 0.875rem;
+    transition: border-color .15s, box-shadow .15s;
+    outline: none;
+}
+.checkout-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), .12);
+}
+.checkout-input::placeholder { color: #d1d5db; }
+.checkout-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.375rem;
+}
+.checkout-section-heading {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(var(--color-primary-rgb), .15);
+    margin-bottom: 1rem;
+}
+.radio-dot {
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    border: 2px solid #9ca3af;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color .15s;
+}
+.radio-dot.active { border-color: #2563eb; }
+.radio-dot-inner {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #2563eb;
+    transition: transform .15s;
+}
+</style>
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="checkoutPage()">
+
+    {# Error banner #}
+    <div x-show="error" x-transition
+         class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+         style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span x-text="error"></span>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6 items-start">
+
+        {# ════════════════════════════════════════════════════════
+           LEFT PANEL — Auth options
+           ════════════════════════════════════════════════════════ #}
+        <div class="flex-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+
+            {# ── Option 1: Existing Customer Login ── #}
+            <div class="border-b border-gray-200">
+                <div class="flex items-center gap-3 px-6 py-4 cursor-pointer select-none"
+                     @click="activeTab = 'login'">
+                    <div class="radio-dot" :class="activeTab === 'login' ? 'active' : ''">
+                        <div class="radio-dot-inner" :style="activeTab === 'login' ? '' : 'transform:scale(0)'"></div>
+                    </div>
+                    <span class="text-base font-semibold text-gray-900">Existing Customer Login</span>
+                </div>
+
+                <div x-show="activeTab === 'login'"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 -translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="px-6 pb-6 space-y-4"
+                     style="display:none;">
+
+                    {% if social.google_enabled|default(false) %}
+                    <div>
+                        <a href="{{ 'sociallogin/google'|url }}"
+                           class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-all"
+                           style="box-shadow:0 1px 3px rgba(0,0,0,.06);">
+                            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                            </svg>
+                            Continue with Google
+                        </a>
+                        <div class="relative flex items-center my-4">
+                            <div class="flex-grow border-t border-gray-200"></div>
+                            <span class="mx-3 text-xs text-gray-400 font-medium flex-shrink">or sign in with email</span>
+                            <div class="flex-grow border-t border-gray-200"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div>
+                        <label class="checkout-label">Email Address <span style="color:var(--color-primary);">*</span></label>
+                        <input type="email" x-model="loginEmail" class="checkout-input"
+                               placeholder="you@example.com" autocomplete="email">
+                    </div>
+                    <div>
+                        <label class="checkout-label">Password <span style="color:var(--color-primary);">*</span></label>
+                        <input type="password" x-model="loginPassword" class="checkout-input"
+                               placeholder="Your password" autocomplete="current-password">
+                    </div>
+                    <div class="flex items-center justify-between pt-1">
+                        <a href="{{ '/password-reset'|url }}"
+                           class="text-xs font-medium hover:underline underline-offset-2"
+                           style="color:var(--color-primary);">Forgot password?</a>
+                    </div>
+
+                </div>
+            </div>
+
+            {# ── Option 2: Create a New Account ── #}
+            <div>
+                <div class="flex items-center gap-3 px-6 py-4 cursor-pointer select-none"
+                     @click="activeTab = 'register'">
+                    <div class="radio-dot" :class="activeTab === 'register' ? 'active' : ''">
+                        <div class="radio-dot-inner" :style="activeTab === 'register' ? '' : 'transform:scale(0)'"></div>
+                    </div>
+                    <span class="text-base font-semibold text-gray-900">Create a New Account</span>
+                </div>
+
+                <div x-show="activeTab === 'register'"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 -translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="px-6 pb-6 space-y-6"
+                     style="display:none;">
+
+                    {# Social login #}
+                    {% if social.google_enabled|default(false) %}
+                    <div>
+                        <a href="{{ ('sociallogin/google?context=register')|url }}"
+                           class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-all"
+                           style="box-shadow:0 1px 3px rgba(0,0,0,.06);">
+                            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                            </svg>
+                            Continue with Google
+                        </a>
+                        <div class="relative flex items-center my-5">
+                            <div class="flex-grow border-t border-gray-200"></div>
+                            <span class="mx-3 text-xs text-gray-400 font-medium flex-shrink">or fill the form below</span>
+                            <div class="flex-grow border-t border-gray-200"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# ── Personal Information ── #}
+                    <div>
+                        <p class="checkout-section-heading">Personal Information</p>
+                        <div class="space-y-4">
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="checkout-label">First Name <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="firstName" class="checkout-input"
+                                           placeholder="First name" autocomplete="given-name" maxlength="100">
+                                </div>
+                                <div>
+                                    <label class="checkout-label">Last Name{% if 'last_name' in r %} <span style="color:var(--color-primary);">*</span>{% endif %}</label>
+                                    <input type="text" x-model="lastName" class="checkout-input"
+                                           placeholder="Last name" autocomplete="family-name" maxlength="100">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="checkout-label">Email Address <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="email" x-model="regEmail" class="checkout-input"
+                                           placeholder="you@example.com" autocomplete="email">
+                                </div>
+                                <div>
+                                    <label class="checkout-label">Phone Number{% if 'phone' in r %} <span style="color:var(--color-primary);">*</span>{% endif %}</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" x-model="phoneCC" class="checkout-input text-center"
+                                               style="width:5rem;flex-shrink:0;"
+                                               placeholder="+1" maxlength="6" inputmode="numeric" autocomplete="tel-country-code">
+                                        <input type="tel" x-model="phone" class="checkout-input"
+                                               placeholder="Phone number" maxlength="30" autocomplete="tel-national">
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {# ── Billing Address ── #}
+                    {% if 'address_1' in r or 'city' in r or 'country' in r or 'state' in r or 'postcode' in r %}
+                    <div>
+                        <p class="checkout-section-heading">Billing Address</p>
+                        <div class="space-y-4">
+
+                            {% if 'address_1' in r %}
+                            <div>
+                                <label class="checkout-label">Street Address <span style="color:var(--color-primary);">*</span></label>
+                                <input type="text" x-model="address1" class="checkout-input"
+                                       placeholder="Street address" autocomplete="address-line1">
+                            </div>
+                            {% endif %}
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {% if 'city' in r %}
+                                <div>
+                                    <label class="checkout-label">City <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="city" class="checkout-input"
+                                           placeholder="City" autocomplete="address-level2" maxlength="100">
+                                </div>
+                                {% endif %}
+                                {% if 'country' in r %}
+                                <div>
+                                    <label class="checkout-label">Country <span style="color:var(--color-primary);">*</span></label>
+                                    <select x-model="country" class="checkout-input" autocomplete="country">
+                                        <option value="">Select country…</option>
+                                        {% for val, label in countries %}
+                                            <option value="{{ val }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {% if 'state' in r %}
+                                <div>
+                                    <label class="checkout-label">State / Province <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="state" class="checkout-input"
+                                           placeholder="State / Province" autocomplete="address-level1" maxlength="100">
+                                </div>
+                                {% endif %}
+                                {% if 'postcode' in r %}
+                                <div>
+                                    <label class="checkout-label">Postcode <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="text" x-model="postcode" class="checkout-input"
+                                           placeholder="Postcode / ZIP" autocomplete="postal-code" maxlength="20">
+                                </div>
+                                {% endif %}
+                            </div>
+
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# ── Account Security ── #}
+                    <div>
+                        <p class="checkout-section-heading">Account Security</p>
+                        <div class="space-y-4">
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex items-center justify-between mb-1.5">
+                                        <label class="checkout-label" style="margin-bottom:0;">Password <span style="color:var(--color-primary);">*</span></label>
+                                        <span class="flex items-center gap-1 text-xs text-gray-400">
+                                            at least 8 characters
+                                            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <input type="password" x-model="password" class="checkout-input"
+                                           placeholder="Password" autocomplete="new-password">
+                                </div>
+                                <div>
+                                    <label class="checkout-label">Confirm Password <span style="color:var(--color-primary);">*</span></label>
+                                    <input type="password" x-model="passwordConfirm" class="checkout-input"
+                                           placeholder="Repeat password" autocomplete="new-password">
+                                </div>
+                            </div>
+
+                            <button type="button" @click="openPasswordModal()"
+                                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 border border-gray-200 hover:bg-gray-200 transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581M4.582 9A7.001 7.001 0 0117.938 8m1.48 5A7.001 7.001 0 016.062 16"/>
+                                </svg>
+                                Generate Password
+                            </button>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>{# end left panel #}
+
+        {# ════════════════════════════════════════════════════════
+           RIGHT PANEL — Order Summary
+           ════════════════════════════════════════════════════════ #}
+        <div class="lg:w-80 flex-shrink-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden sticky top-20">
+            <div class="px-6 py-5 border-b border-gray-100">
+                <h2 class="text-lg font-bold text-gray-900">Order Summary</h2>
+            </div>
+
+            <div class="px-6 py-5 space-y-4 border-b border-gray-100">
+
+                {# Subtotal #}
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-500 font-medium">Subtotal</span>
+                    <span class="font-semibold text-gray-800">{{ cart.subtotal | money_convert }}</span>
+                </div>
+
+                {# Discount #}
+                {% if cart.discount > 0 %}
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-green-600 font-medium">Discount</span>
+                    <span class="font-semibold text-green-600">− {{ cart.discount | money_convert }}</span>
+                </div>
+                {% endif %}
+
+                {# Period-grouped totals (only when more than one period) #}
+                {% if period_totals | length > 0 %}
+                <div class="pt-1 space-y-1.5">
+                    <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Totals</p>
+                    {% for period_label, period_amount in period_totals %}
+                    <div class="flex items-center justify-between text-sm pl-1">
+                        <span class="text-gray-500">{{ period_label }}</span>
+                        <span class="font-semibold text-gray-800">{{ period_amount | money_convert }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            </div>
+
+            {# Total Due Today #}
+            <div class="px-6 py-5">
+                <p class="text-sm text-gray-500 font-medium mb-1">Total Due Today</p>
+                <p class="text-3xl font-extrabold text-gray-900 mb-5">{{ cart.total | money_convert }}</p>
+
+                {# Checkout button #}
+                <button @click="checkout()"
+                        :disabled="loading"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-white text-sm font-bold transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                        style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 18px rgba(var(--color-primary-rgb),.30);">
+                    <template x-if="!loading">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        </svg>
+                    </template>
+                    <template x-if="loading">
+                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                    </template>
+                    <span x-text="loading ? 'Please wait…' : 'Checkout'"></span>
+                </button>
+
+                {# Items summary #}
+                <div class="mt-4 space-y-2">
+                    {% for item in cart.items %}
+                    <div class="flex items-start justify-between gap-2 text-xs text-gray-400">
+                        <span class="leading-relaxed">{{ item.title }}{% if item.period %} <span class="text-gray-300">· {{ item.period | period_title }}</span>{% endif %}</span>
+                        <span class="font-semibold text-gray-500 flex-shrink-0">{{ item.total | money_convert }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <a href="{{ '/order'|url }}"
+                       class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                        Back to products
+                    </a>
+                </div>
+            </div>
+
+        </div>{# end right panel #}
+
+    </div>
+
+    {# Password Generator Modal — teleported to <body> to escape nested stacking contexts #}
+    <template x-teleport="body">
+    <div x-show="passwordModalOpen" x-cloak
+         @keydown.escape.window="passwordModalOpen = false"
+         class="pwd-gen-modal fixed inset-0 flex items-center justify-center p-4"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         style="z-index:9999;display:none;">
+        <div class="absolute inset-0 bg-black/60" @click="passwordModalOpen = false"></div>
+
+        {# Copy toast #}
+        <div x-show="copyToast"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-2"
+             class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2.5 px-4 py-3 rounded-xl border border-emerald-500/30 text-emerald-300 text-sm font-semibold shadow-xl"
+             style="z-index:10001;background:rgba(6,78,59,.92);display:none;">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            Password copied to clipboard
+        </div>
+
+        <div class="pwd-gen-modal-panel relative w-full max-w-xl rounded-2xl border border-white/[0.12] overflow-hidden"
+             style="background:linear-gradient(160deg, rgba(15,23,42,.96), rgba(2,6,23,.96)); box-shadow:0 24px 70px rgba(0,0,0,.55);">
+            <div class="h-1 w-full" style="background:linear-gradient(90deg,var(--color-primary),var(--color-secondary));"></div>
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+                <h3 class="text-xl font-semibold text-white">Generate Password</h3>
+                <button type="button" @click="passwordModalOpen = false" class="text-gray-500 hover:text-gray-300 transition-colors" aria-label="Close password generator">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="px-6 py-6 space-y-5">
+                <p class="text-xs text-gray-400">Create a secure password, copy it, and insert it into both password fields.</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-[170px_1fr] gap-3 items-center">
+                    <label for="cart-pwd-length" class="text-left sm:text-right pr-0 sm:pr-2 text-sm font-medium text-gray-300">Password Length</label>
+                    <input id="cart-pwd-length" type="number" min="8" max="64" x-model.number="passwordLength" @input="sanitizePasswordLength()"
+                           class="w-full max-w-[160px] px-3.5 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-white text-base font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-[170px_1fr] gap-3 items-center">
+                    <label for="cart-generated-password" class="text-left sm:text-right pr-0 sm:pr-2 text-sm font-medium text-gray-300">Generated Password</label>
+                    <div class="flex items-center gap-2">
+                        <input id="cart-generated-password" :type="showGeneratedPassword ? 'text' : 'password'" x-model="generatedPassword" readonly
+                               class="w-full px-3.5 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-white text-base font-mono tracking-wide">
+                        <button type="button" @click="showGeneratedPassword = !showGeneratedPassword"
+                                class="px-3 py-2 rounded-lg border border-white/[0.15] bg-white/[0.06] text-xs font-semibold text-gray-200 hover:bg-white/[0.10] transition-colors"
+                                :aria-label="showGeneratedPassword ? 'Hide password' : 'Show password'">
+                            <span x-text="showGeneratedPassword ? 'Hide' : 'Show'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sm:pl-[170px] space-y-3 pt-1">
+                    <button type="button" @click="generatePasswordCandidate()"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-gray-100 text-sm font-semibold hover:bg-white/[0.10] transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581M4.582 9A7.001 7.001 0 0117.938 8m1.48 5A7.001 7.001 0 016.062 16"/>
+                        </svg>
+                        Generate new password
+                    </button>
+                    <button type="button" @click="copyGeneratedPassword()"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all text-sm font-semibold"
+                            :class="passwordCopied ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.15] bg-white/[0.06] text-gray-100 hover:bg-white/[0.10]'">
+                        <svg x-show="!passwordCopied" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        <svg x-show="passwordCopied" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span x-text="passwordCopied ? 'Copied!' : 'Copy'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-5 border-t border-white/[0.08]">
+                <button type="button" @click="passwordModalOpen = false"
+                        class="px-5 py-2.5 rounded-lg border border-white/[0.15] bg-white/[0.06] text-sm font-semibold text-gray-100 hover:bg-white/[0.10] transition-colors">
+                    Close
+                </button>
+                <button type="button" @click="insertGeneratedPassword()"
+                        class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white hover:opacity-95 transition-all"
+                        style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary)); box-shadow:0 6px 20px rgba(var(--color-primary-rgb),.35);">
+                    Copy to clipboard and Insert
+                </button>
+            </div>
+        </div>
+    </div>
+    </template>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block js %}
+<script>
+function checkoutPage() {
+    return {
+        activeTab: 'register',
+        loading: false,
+        error: '',
+
+        // Login form
+        loginEmail: '',
+        loginPassword: '',
+
+        // Register form
+        firstName: '',
+        lastName: '',
+        regEmail: '',
+        phone: '',
+        phoneCC: '+1',
+        address1: '',
+        city: '',
+        country: '',
+        state: '',
+        postcode: '',
+        password: '',
+        passwordConfirm: '',
+        passwordModalOpen: false,
+        passwordLength: 12,
+        generatedPassword: '',
+        showGeneratedPassword: true,
+        passwordCopied: false,
+        copyToast: false,
+
+        sanitizePasswordLength() {
+            let len = parseInt(this.passwordLength, 10);
+            if (Number.isNaN(len)) len = 12;
+            this.passwordLength = Math.max(8, Math.min(64, len));
+        },
+
+        generatePasswordCandidate() {
+            this.sanitizePasswordLength();
+            const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+            let pwd = '';
+            for (let i = 0; i < this.passwordLength; i++) {
+                pwd += charset.charAt(Math.floor(Math.random() * charset.length));
+            }
+            this.generatedPassword = pwd;
+            this.passwordCopied = false;
+        },
+
+        openPasswordModal() {
+            this.passwordModalOpen = true;
+            this.showGeneratedPassword = true;
+            this.generatePasswordCandidate();
+        },
+
+        copyText(text) {
+            if (!text) return Promise.resolve(false);
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+            }
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            let copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch (e) {
+                copied = false;
+            }
+            document.body.removeChild(ta);
+            return Promise.resolve(copied);
+        },
+
+        copyGeneratedPassword() {
+            this.copyText(this.generatedPassword).then((ok) => {
+                this.passwordCopied = ok;
+                if (ok) {
+                    setTimeout(() => { this.passwordCopied = false; }, 1500);
+                    this.copyToast = true;
+                    setTimeout(() => { this.copyToast = false; }, 2200);
+                }
+            });
+        },
+
+        insertGeneratedPassword() {
+            if (!this.generatedPassword) this.generatePasswordCandidate();
+            this.password = this.generatedPassword;
+            this.passwordConfirm = this.generatedPassword;
+            this.copyText(this.generatedPassword).then(() => {
+                this.copyToast = true;
+                setTimeout(() => { this.copyToast = false; }, 2200);
+            });
+            this.passwordModalOpen = false;
+        },
+
+        checkout() {
+            const self = this;
+            self.error = '';
+
+            if (self.activeTab === 'login') {
+                if (!self.loginEmail || !self.loginPassword) {
+                    self.error = 'Please enter your email and password.';
+                    return;
+                }
+                self.loading = true;
+                API.guest.post(
+                    'client/login',
+                    { email: self.loginEmail, password: self.loginPassword },
+                    function () { window.location.href = '{{ "/order/checkout"|url }}'; },
+                    function (err) {
+                        self.loading = false;
+                        self.error = err.message || 'Invalid email or password.';
+                    }
+                );
+                return;
+            }
+
+            // Register path
+            if (!self.firstName || !self.regEmail || !self.password) {
+                self.error = 'Please fill in all required fields.';
+                return;
+            }
+            if (self.password.length < 8) {
+                self.error = 'Password must be at least 8 characters.';
+                return;
+            }
+            if (self.password !== self.passwordConfirm) {
+                self.error = 'Passwords do not match.';
+                return;
+            }
+
+            self.loading = true;
+
+            const data = {
+                first_name:       self.firstName,
+                last_name:        self.lastName,
+                email:            self.regEmail,
+                phone_cc:         self.phoneCC,
+                phone:            self.phone,
+                address_1:        self.address1,
+                city:             self.city,
+                country:          self.country,
+                state:            self.state,
+                postcode:         self.postcode,
+                password:         self.password,
+                password_confirm: self.passwordConfirm,
+            };
+
+            API.guest.post(
+                'client/create',
+                data,
+                function () {
+                    // Auto-login then proceed
+                    API.guest.post(
+                        'client/login',
+                        { email: self.regEmail, password: self.password },
+                        function () { window.location.href = '{{ "/order/checkout"|url }}'; },
+                        function () { window.location.href = '{{ "/order/checkout"|url }}'; }
+                    );
+                },
+                function (err) {
+                    self.loading = false;
+                    self.error = err.message || 'Registration failed. Please try again.';
+                }
+            );
+        }
+    };
+}
+</script>
+{% endblock %}

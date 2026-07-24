@@ -1,0 +1,702 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% set company = guest.system_company %}
+
+{% block meta_title %}Domain Transfer — Transfer Your Domain to {{ company.name }}{% endblock %}
+{% block page_header %}Domain Transfer{% endblock %}
+
+{# Fetch all TLDs that allow transfer #}
+{% set transferTlds = guest.servicedomain_tlds({'allow_transfer': 1}) %}
+{% set _dp = guest.product_get_list({'type': 'domain'}) %}
+{% set domain_product_id = _dp.list[0].id ?? null %}
+{% set currency = guest.cart_get_currency %}
+{% set currPrefix = currency.symbol|default(currency.code|default('')) %}
+{% set currSuffix = '' %}
+
+{% block content %}
+<style>
+  [x-cloak] { display: none !important; }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-slide { animation: fadeSlideIn 0.25s ease both; }
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb),.35); }
+    70%  { box-shadow: 0 0 0 8px rgba(var(--color-primary-rgb),0); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb),0); }
+  }
+  .checking-pulse { animation: pulse-ring 1.2s infinite; }
+
+  /* Dark mode override for hero background */
+  html[data-theme="dark"] [data-hero="domain-transfer"] {
+    background: radial-gradient(ellipse 80% 60% at 40% -10%, rgba(var(--color-primary-rgb),0.14), transparent),
+                radial-gradient(ellipse 60% 40% at 110% 80%, rgba(168,85,247,0.08), transparent),
+                #0d1117 !important;
+    border-bottom-color: rgba(255,255,255,0.06) !important;
+  }
+  html[data-theme="dark"] .transfer-search-bar {
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.10) !important;
+    box-shadow: none !important;
+  }
+</style>
+
+{# ── JS data ── #}
+<script>
+  const TRANSFER_TLDS = {{ transferTlds|json_encode(constant('JSON_HEX_TAG'))|raw }};
+  const DOMAIN_PRODUCT_ID = {{ domain_product_id|default('null') }};
+  const CHECKOUT_URL = '{{ '/order/checkout'|url }}';
+  const CURR_PREFIX  = {{ currPrefix|json_encode(constant('JSON_HEX_TAG'))|raw }};
+  const CURR_SUFFIX  = {{ currSuffix|json_encode(constant('JSON_HEX_TAG'))|raw }};
+  const CURR_RATE    = {{ currency.conversion_rate|default(1)|json_encode(constant('JSON_HEX_TAG'))|raw }};
+</script>
+
+<div x-data="domainTransfer()" x-init="init()">
+
+  {# ─────────────────────────────────────────────────────────────────────
+     Hero banner
+  ───────────────────────────────────────────────────────────────────── #}
+  <div class="relative -mx-8 -mt-5 sm:-mx-10 lg:-mx-16 px-8 sm:px-10 lg:px-16 pb-14 pt-14 mb-8"
+       data-hero="domain-transfer"
+       style="background: radial-gradient(ellipse 80% 60% at 60% -10%, rgba(var(--color-primary-rgb),0.10), transparent), radial-gradient(ellipse 60% 40% at -10% 80%, rgba(168,85,247,0.06), transparent), #f0f4ff; border-bottom: 1px solid rgba(var(--color-primary-rgb),0.12);">
+
+    <div class="max-w-3xl mx-auto text-center">
+
+      <!-- Trust badge -->
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-6"
+           style="background: rgba(var(--color-primary-rgb),0.10); color: var(--color-primary);">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        Trusted by 10,000+ Users
+      </div>
+
+      <!-- Register / Transfer toggle -->
+      <div class="mb-6 flex justify-center">
+        <div class="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+          <a href="{{ '/order/domain-registration'|url }}"
+             class="px-4 py-1.5 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-sm font-semibold transition-colors">
+            Register
+          </a>
+          <span class="transfer-tab-active px-4 py-1.5 bg-primary rounded-md text-sm font-semibold shadow-sm cursor-default select-none"
+                style="color: #ffffff;">
+            Transfer
+          </span>
+        </div>
+      </div>
+
+      <!-- Hero text -->
+      <h1 class="text-4xl sm:text-5xl font-bold mb-4 tracking-tight text-slate-900 dark:text-white leading-tight">
+        Transfer your domain
+        <span class="italic" style="background: linear-gradient(135deg, var(--color-primary), rgb(var(--brand2-400)), var(--color-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; display: inline-block;">to {{ company.name }}</span>
+      </h1>
+      <p class="text-slate-500 dark:text-slate-400 text-base max-w-xl mx-auto mb-10 leading-relaxed">
+        Keep your domain active — just move management here. Enter your domain name and EPP code to get started.
+      </p>
+
+      <!-- Domain input bar -->
+      <div class="transfer-search-bar flex items-center p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 transition-all"
+           style="box-shadow: 0 8px 32px rgba(var(--color-primary-rgb),0.08);">
+        <svg class="w-5 h-5 ml-2 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+        <input type="text"
+               x-model="query"
+               @keydown.enter.prevent="checkDomain()"
+               @input="inputError = ''"
+               placeholder="Enter your domain name, e.g. example.com"
+               autocomplete="off"
+               spellcheck="false"
+               autocapitalize="none"
+               inputmode="url"
+               class="flex-1 bg-transparent px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400 outline-none text-base font-medium" />
+        <button x-show="query.length > 0"
+                type="button"
+                @click="query = ''; inputError = '';"
+                class="mr-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex-shrink-0 p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+        <button @click="checkDomain()"
+                :disabled="checking || query.trim().length < 3"
+                class="m-0.5 px-6 py-2.5 rounded-lg bg-primary text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0 flex items-center gap-2 whitespace-nowrap hover:opacity-90"
+                style="color: #ffffff;">
+          <span x-show="!checking" class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+            </svg>
+            Transfer Now
+          </span>
+          <span x-show="checking" class="flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            Checking…
+          </span>
+        </button>
+      </div>
+      <p x-show="inputError" x-text="inputError" class="text-xs text-red-500 dark:text-red-400 mt-2 text-center" x-cloak></p>
+
+    </div>
+  </div>
+
+  {# ─────────────────────────────────────────────────────────────────────
+     No transferable TLDs configured
+  ───────────────────────────────────────────────────────────────────── #}
+  {% if not transferTlds %}
+    <div class="max-w-lg mx-auto p-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-center">
+      <svg class="w-10 h-10 text-amber-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      <p class="text-amber-300 font-semibold mb-1">Domain transfers not configured</p>
+      <p class="text-sm text-gray-500">No TLDs with transfer support are currently available. Please contact support.</p>
+    </div>
+  {% elseif not domain_product_id %}
+    <div class="max-w-lg mx-auto p-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-center">
+      <p class="text-amber-300 font-semibold mb-1">Domain product not found</p>
+      <p class="text-sm text-gray-500">Please contact support to set up domain transfers.</p>
+    </div>
+  {% else %}
+
+  {# ─────────────────────────────────────────────────────────────────────
+     Progress steps
+  ───────────────────────────────────────────────────────────────────── #}
+  <div class="max-w-6xl mx-auto mb-8 mt-8">
+    <div class="flex items-center justify-center gap-0">
+      {# Step 1 #}
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+             :class="step > 1 ? 'bg-emerald-500 text-white' : (step === 1 ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-white/[0.06] text-slate-400 dark:text-gray-500 border border-slate-200 dark:border-white/10')">
+          <svg x-show="step > 1" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          <span x-show="step <= 1">1</span>
+        </div>
+        <span class="text-xs font-medium hidden sm:inline"
+              :class="step >= 1 ? 'text-indigo-500 dark:text-indigo-300' : 'text-slate-400 dark:text-gray-600'">Enter Domain</span>
+      </div>
+      <div class="w-10 h-px mx-2" :class="step >= 2 ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-white/10'"></div>
+      {# Step 2 #}
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+             :class="step > 2 ? 'bg-emerald-500 text-white' : (step >= 2 ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-white/[0.06] text-slate-400 dark:text-gray-500 border border-slate-200 dark:border-white/10')">
+          <svg x-show="step > 2" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          <span x-show="step <= 2">2</span>
+        </div>
+        <span class="text-xs font-medium hidden sm:inline"
+              :class="step >= 2 ? 'text-indigo-500 dark:text-indigo-300' : 'text-slate-400 dark:text-gray-600'">Verify & Authorize</span>
+      </div>
+      <div class="w-10 h-px mx-2" :class="step >= 3 ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-white/10'"></div>
+      {# Step 3 #}
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+             :class="step >= 3 ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-white/[0.06] text-slate-400 dark:text-gray-500 border border-slate-200 dark:border-white/10'">3</div>
+        <span class="text-xs font-medium hidden sm:inline"
+              :class="step >= 3 ? 'text-indigo-500 dark:text-indigo-300' : 'text-slate-400 dark:text-gray-600'">Checkout</span>
+      </div>
+    </div>
+  </div>
+
+  {# ─────────────────────────────────────────────────────────────────────
+     STEP 1 — Why transfer + error display
+  ───────────────────────────────────────────────────────────────────── #}
+  <div x-show="step === 1" class="max-w-6xl mx-auto fade-slide">
+
+    {# Supported TLDs hint #}
+    <p class="text-xs text-slate-400 dark:text-gray-600 text-center mb-8">
+      Supported TLDs:
+      {% for tld in transferTlds|slice(0, 10) %}
+        <span class="text-slate-500 dark:text-gray-500">{{ tld.tld }}</span>{% if not loop.last %}, {% endif %}
+      {% endfor %}
+      {% if transferTlds|length > 10 %}<span class="text-slate-400 dark:text-gray-600"> +{{ transferTlds|length - 10 }} more</span>{% endif %}
+    </p>
+
+    {# Why transfer feature cards #}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="p-5 rounded-2xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] text-center shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <p class="text-sm font-semibold text-slate-900 dark:text-white mb-1.5">Free Transfer</p>
+        <p class="text-xs text-slate-500 dark:text-gray-500 leading-relaxed">No hidden transfer fees. You get a free year extension included.</p>
+      </div>
+      <div class="p-5 rounded-2xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] text-center shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+        </div>
+        <p class="text-sm font-semibold text-slate-900 dark:text-white mb-1.5">Stays Active</p>
+        <p class="text-xs text-slate-500 dark:text-gray-500 leading-relaxed">Your domain stays online throughout the entire transfer process.</p>
+      </div>
+      <div class="p-5 rounded-2xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] text-center shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <p class="text-sm font-semibold text-slate-900 dark:text-white mb-1.5">Quick Process</p>
+        <p class="text-xs text-slate-500 dark:text-gray-500 leading-relaxed">Most transfers complete within 5–7 days after approval.</p>
+      </div>
+    </div>
+  </div>
+
+  {# ─────────────────────────────────────────────────────────────────────
+     STEP 2 — Confirm domain + EPP code
+  ───────────────────────────────────────────────────────────────────── #}
+  <div x-show="step === 2" x-cloak class="max-w-6xl mx-auto fade-slide">
+
+    {# API error message (shown when transfer check returned an unknown error) #}
+    <div x-show="checkError" x-cloak
+         class="mb-4 flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/[0.08] border border-red-200 dark:border-red-500/25 text-red-700 dark:text-red-300 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+      </svg>
+      <span x-text="checkError"></span>
+    </div>
+
+    {# Domain summary card #}
+    <div class="mb-4 p-4 rounded-xl border flex items-center gap-4"
+         :class="canTransfer ? 'border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/[0.04]' : 'border-red-500/25 bg-red-50 dark:bg-red-500/[0.04]'">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+           :class="canTransfer ? 'bg-emerald-500/15 border border-emerald-500/20' : 'bg-red-500/15 border border-red-500/20'">
+        <svg x-show="canTransfer" class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <svg x-show="!canTransfer" class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="sld + tld"></p>
+        <p class="text-xs mt-0.5"
+           :class="canTransfer ? 'text-emerald-500' : 'text-red-500'"
+           x-text="canTransfer ? 'Eligible for transfer' : 'Transfer not available for this domain'"></p>
+      </div>
+      <div x-show="canTransfer && transferPrice > 0" class="text-right flex-shrink-0">
+        <p class="text-xs text-slate-400 dark:text-gray-500">Transfer price</p>
+        <p class="text-sm font-bold text-slate-900 dark:text-white" x-text="CURR_PREFIX + transferPrice.toFixed(2) + CURR_SUFFIX"></p>
+        <p class="text-xs text-emerald-500">+ 1 year extension</p>
+      </div>
+      <button @click="step = 1; canTransfer = null; checkError = ''; orderError = '';"
+              class="ml-auto flex-shrink-0 p-1.5 rounded-lg text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+        </svg>
+      </button>
+    </div>
+
+    {# Cannot transfer — show message #}
+    <div x-show="!canTransfer" class="p-6 rounded-2xl border border-slate-200 dark:border-white/[0.07] bg-white dark:bg-white/[0.02] text-center">
+      <p class="text-sm text-slate-500 dark:text-gray-400 mb-4">This domain cannot be transferred at this time. Common reasons include:</p>
+      <ul class="text-xs text-slate-500 dark:text-gray-500 space-y-1 text-left max-w-xs mx-auto mb-5">
+        <li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg> Domain was registered/transferred within the last 60 days</li>
+        <li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg> Domain has a transfer lock enabled at current registrar</li>
+        <li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg> Domain is expired or in redemption period</li>
+        <li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg> TLD does not support transfers at this time</li>
+      </ul>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <button @click="step = 1; canTransfer = null;"
+                class="px-5 py-2.5 rounded-xl bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-800 dark:text-white border border-slate-300 dark:border-white/10 text-sm font-semibold transition-all shadow-sm">
+          Try Another Domain
+        </button>
+        <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
+           class="px-5 py-2.5 rounded-xl text-indigo-700 dark:text-indigo-300 border border-indigo-400 dark:border-indigo-500/40 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-sm font-semibold transition-all text-center">
+          Contact Support
+        </a>
+      </div>
+    </div>
+
+    {# Can transfer — EPP code form #}
+    <div x-show="canTransfer" class="p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.02] shadow-sm">
+      <h2 class="text-base font-semibold text-slate-900 dark:text-white mb-1">Enter your Auth / EPP Code</h2>
+      <p class="text-xs text-slate-500 dark:text-gray-500 mb-5">
+        This is the authorization code (also called EPP code or transfer key) from your current registrar.
+        Log into your current registrar's control panel to find it.
+      </p>
+
+      {# EPP input #}
+      <div class="mb-4">
+        <label class="block text-xs text-slate-600 dark:text-gray-400 font-medium mb-1.5">
+          Auth / EPP Code
+          <span class="text-red-500 ml-0.5">*</span>
+        </label>
+        <div class="flex rounded-xl border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-colors"
+             :class="eppTouched && epp.trim() === '' ? 'border-red-400' : 'border-slate-200 dark:border-white/[0.10] focus-within:border-indigo-400 dark:focus-within:border-indigo-500/50'">
+          <input type="text"
+                 x-model="epp"
+                 @input="orderError = ''; eppTouched = true"
+                 @blur="eppTouched = true"
+                 placeholder="e.g. Abc123!@#XYZ"
+                 autocomplete="off"
+                 spellcheck="false"
+                 required
+                 class="flex-1 bg-transparent px-4 py-3.5 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 outline-none text-sm font-mono"/>
+          <button x-show="epp.length > 0"
+                  @click="epp = ''"
+                  class="px-3 text-slate-400 dark:text-gray-600 hover:text-slate-600 dark:hover:text-gray-400 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <p x-show="eppTouched && epp.trim() === ''" class="text-xs text-red-500 mt-1.5">EPP / auth code is required to proceed with the transfer.</p>
+        <p x-show="!(eppTouched && epp.trim() === '')" class="text-xs text-slate-400 dark:text-gray-600 mt-1.5">The EPP code is case-sensitive. You can find it in your current registrar's control panel.</p>
+      </div>
+
+      {# Coupon code #}
+      <div class="mb-4">
+        <label class="block text-xs text-slate-600 dark:text-gray-400 font-medium mb-1.5">Coupon code <span class="text-slate-400 dark:text-gray-600">(optional)</span></label>
+        <div x-show="!promoCode" class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-gray-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+            </svg>
+            <input type="text"
+                   x-model="promoInput"
+                   @keydown.enter.prevent="applyCoupon()"
+                   placeholder="PROMO2026"
+                   autocomplete="off"
+                   class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/[0.10] text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/50 uppercase tracking-wider transition-colors">
+          </div>
+          <button @click="applyCoupon()"
+                  :disabled="!promoInput.trim() || promoLoading"
+                  class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+            <span x-show="!promoLoading">Apply</span>
+            <span x-show="promoLoading" x-cloak>Checking…</span>
+          </button>
+        </div>
+        <div x-show="promoCode" class="flex items-center justify-between gap-3 py-1">
+          <div class="flex items-center gap-2 min-w-0">
+            <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-sm text-emerald-500 dark:text-emerald-400">Promo code applied.</span>
+            <span class="px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-500 dark:text-emerald-300 uppercase" x-text="promoCode"></span>
+          </div>
+          <button @click="promoCode = ''; promoError = ''; promoDiscount = 0; promoType = null; promoValue = 0; promoPeriods = [];"
+                  class="flex-shrink-0 px-2 py-1 rounded-lg text-xs text-slate-500 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 border border-slate-200 dark:border-white/10 hover:border-red-500/30 transition-colors"
+                  title="Remove code">
+            Remove
+          </button>
+        </div>
+        <div x-show="promoDiscount > 0" x-cloak class="mt-1.5 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          <span class="text-xs text-emerald-400" x-text="'Discount: −' + CURR_PREFIX + promoDiscount.toFixed(2) + CURR_SUFFIX"></span>
+        </div>
+        <p x-show="promoError" x-cloak class="mt-1.5 text-xs text-red-500 dark:text-red-400" x-text="promoError"></p>
+      </div>
+
+      {# Info box #}
+      <div class="mb-5 flex items-start gap-3 p-3.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/5 border border-indigo-200 dark:border-indigo-500/15">
+        <svg class="w-4 h-4 text-indigo-500 dark:text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed">
+          Before starting the transfer, make sure your domain's <strong>transfer lock is disabled</strong> and
+          the <strong>admin email address</strong> in WHOIS is one you can access — you'll need to approve the transfer via email.
+        </p>
+      </div>
+
+      {# Order error #}
+      <div x-show="orderError" x-cloak
+           class="mb-4 flex items-start gap-3 p-4 rounded-xl bg-red-500/8 border border-red-500/25 text-red-300 text-sm">
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+        <span x-text="orderError"></span>
+      </div>
+
+      {# Action buttons #}
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button @click="step = 1; canTransfer = null; orderError = ''; epp = ''; eppTouched = false;"
+                class="flex-1 py-3 rounded-xl bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-800 dark:text-white border border-slate-300 dark:border-white/10 text-sm font-semibold transition-all shadow-sm">
+          ← Back
+        </button>
+        <button @click="addToCart()"
+                :disabled="ordering || epp.trim() === ''"
+                class="flex-1 py-3 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 6px 24px rgba(var(--color-primary-rgb),0.3);">
+          <template x-if="!ordering">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+              </svg>
+              Start Transfer →
+            </span>
+          </template>
+          <template x-if="ordering">
+            <span class="flex items-center gap-2">
+              <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              Processing…
+            </span>
+          </template>
+        </button>
+      </div>
+    </div>
+
+    {# How to get EPP code steps #}
+    <div x-show="canTransfer" class="mt-5 p-5 rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02]">
+      <p class="text-xs font-semibold text-slate-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+        <svg class="w-3.5 h-3.5 text-slate-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        How to get your EPP code
+      </p>
+      <ol class="space-y-2">
+        <li class="flex items-start gap-2.5 text-xs text-slate-500 dark:text-gray-500">
+          <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center flex-shrink-0 font-bold text-slate-400 dark:text-gray-500 mt-0.5">1</span>
+          Log into your current registrar's control panel
+        </li>
+        <li class="flex items-start gap-2.5 text-xs text-slate-500 dark:text-gray-500">
+          <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center flex-shrink-0 font-bold text-slate-400 dark:text-gray-500 mt-0.5">2</span>
+          Navigate to domain management for <span class="text-slate-700 dark:text-gray-400 font-mono mx-1" x-text="sld + tld"></span>
+        </li>
+        <li class="flex items-start gap-2.5 text-xs text-slate-500 dark:text-gray-500">
+          <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center flex-shrink-0 font-bold text-slate-400 dark:text-gray-500 mt-0.5">3</span>
+          Disable the transfer lock (registrar lock / domain lock)
+        </li>
+        <li class="flex items-start gap-2.5 text-xs text-slate-500 dark:text-gray-500">
+          <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center flex-shrink-0 font-bold text-slate-400 dark:text-gray-500 mt-0.5">4</span>
+          Request / view the EPP authorization code (also called auth code or transfer key)
+        </li>
+        <li class="flex items-start gap-2.5 text-xs text-slate-500 dark:text-gray-500">
+          <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center flex-shrink-0 font-bold text-slate-400 dark:text-gray-500 mt-0.5">5</span>
+          Copy the code and paste it above. You may receive it via email from your current registrar.
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  {% endif %}{# end domain_product_id check #}
+
+</div>{# end x-data #}
+<div style="margin-bottom: 3rem;"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const TLD_DATA = TRANSFER_TLDS;
+
+  function parseDomain(input) {
+    const clean = input.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\//g,'');
+    const dotIdx = clean.indexOf('.');
+    if (dotIdx < 1) return null;
+    const sld = clean.slice(0, dotIdx);
+    const tld = clean.slice(dotIdx); // includes the dot, e.g. ".com"
+    return { sld, tld };
+  }
+
+  function findTld(tld) {
+    return TLD_DATA.find(t => t.tld === tld) || null;
+  }
+
+  window.domainTransfer = function () {
+    return {
+      step: 1,
+      query: '',
+      sld: '',
+      tld: '',
+      checking: false,
+      canTransfer: null,
+      transferPrice: 0,
+      epp: '',
+      eppTouched: false,
+      ordering: false,
+      checkError: '',
+      orderError: '',
+      inputError: '',
+      promoInput: '',
+      promoCode: '',
+      promoError: '',
+      promoLoading: false,
+      promoDiscount: 0,
+      promoType: null,
+      promoValue: 0,
+      promoPeriods: [],
+
+      applyCoupon() {
+        const code = this.promoInput.trim();
+        if (!code || this.promoLoading || this.promoCode) return;
+        this.promoLoading = true;
+        this.promoError   = '';
+        const productId = (typeof DOMAIN_PRODUCT_ID !== 'undefined' && DOMAIN_PRODUCT_ID) ? DOMAIN_PRODUCT_ID : null;
+        const payload = productId
+          ? { promocode: code, product_id: productId, period: '' }
+          : { promocode: code, period: '' };
+        API.guest.post('cart/validate_promo', payload,
+          (promo) => {
+            this.promoLoading = false;
+            this.promoCode    = code.toUpperCase();
+            this.promoInput   = '';
+            this.promoError   = '';
+            this.promoType    = promo.type    || null;
+            this.promoValue   = promo.value   || 0;
+            this.promoPeriods = promo.periods || [];
+            // Compute a discount preview from the transfer price if available
+            const base = parseFloat(this.transferPrice) || 0;
+            if (base > 0 && this.promoType) {
+              if (this.promoType === 'percentage') {
+                this.promoDiscount = Math.round(base * this.promoValue / 100 * 100) / 100;
+              } else if (this.promoType === 'absolute') {
+                this.promoDiscount = Math.min(this.promoValue, base);
+              }
+            }
+          },
+          (err) => {
+            this.promoLoading = false;
+            this.promoError   = (err && err.message) ? err.message : 'Invalid promo code.';
+          }
+        );
+      },
+
+      init() {
+        // Pre-fill from query string ?domain=example.com
+        const params = new URLSearchParams(window.location.search);
+        const d = params.get('domain');
+        if (d) {
+          this.query = d;
+        }
+      },
+
+      async checkDomain() {
+        this.inputError  = '';
+        this.checkError  = '';
+        this.canTransfer = null;
+
+        const q = this.query.trim();
+        if (!q) {
+          this.inputError = 'Please enter a domain name.';
+          return;
+        }
+
+        const parsed = parseDomain(q);
+        if (!parsed) {
+          this.inputError = 'Please enter a valid domain name (e.g. example.com).';
+          return;
+        }
+
+        const tldMeta = findTld(parsed.tld);
+        if (!tldMeta) {
+          this.inputError = 'The TLD "' + parsed.tld + '" is not supported for transfers. Supported TLDs: ' +
+            TLD_DATA.slice(0, 8).map(t => t.tld).join(', ') +
+            (TLD_DATA.length > 8 ? ', …' : '') + '.';
+          return;
+        }
+
+        this.sld = parsed.sld;
+        this.tld = parsed.tld;
+        this.checking = true;
+
+        // Get transfer price for this TLD (raw price is in default currency; multiply by conversion rate)
+        try {
+          this.transferPrice = parseFloat(tldMeta.price_transfer ?? 0) * CURR_RATE;
+        } catch (e) {
+          this.transferPrice = 0;
+        }
+
+        // Check if domain can be transferred
+        await new Promise(resolve => {
+          API.guest.post(
+            'servicedomain/can_be_transferred',
+            { sld: this.sld, tld: this.tld },
+            () => {
+              this.canTransfer = true;
+              resolve();
+            },
+            (err) => {
+              // API returns error when domain cannot be transferred
+              const msg = (err && (err.message || err)) + '';
+              if (msg.toLowerCase().includes('cannot') ||
+                  msg.toLowerCase().includes('cannot be transferred') ||
+                  msg.toLowerCase().includes('not available') ||
+                  msg.toLowerCase().includes('locked') ||
+                  msg.toLowerCase().includes('60 days') ||
+                  msg.toLowerCase().includes('false')) {
+                this.canTransfer = false;
+              } else {
+                // Unknown error — show and still proceed to step 2 with canTransfer = false
+                this.canTransfer = false;
+                this.checkError = msg || 'Could not verify domain transfer eligibility. Please try again or contact support.';
+              }
+              resolve();
+            },
+            false
+          );
+        });
+
+        this.checking = false;
+        this.step = 2;
+      },
+
+      addToCart() {
+        if (this.ordering) return;
+
+        this.eppTouched = true;
+        if (this.epp.trim() === '') {
+          this.orderError = 'Please enter your EPP / auth code before continuing.';
+          return;
+        }
+
+        if (!DOMAIN_PRODUCT_ID) {
+          this.orderError = 'Domain product not configured. Please contact support.';
+          return;
+        }
+
+        this.ordering   = true;
+        this.orderError = '';
+
+        const params = {
+          id:            DOMAIN_PRODUCT_ID,
+          multiple:      1,
+          action:        'transfer',
+          transfer_sld:  this.sld,
+          transfer_tld:  this.tld,
+          transfer_code: this.epp.trim(),
+        };
+
+        API.guest.post(
+          'cart/add_item',
+          params,
+          () => {
+            if (this.promoCode) {
+              API.guest.post(
+                'cart/apply_promo',
+                { promocode: this.promoCode },
+                () => {
+                  window.location.href = CHECKOUT_URL;
+                },
+                (err) => {
+                  const msg = (err && (err.message || err)) || 'Promo code is invalid or has expired.';
+                  this.promoError = msg;
+                  this.orderError = 'Promo code error: ' + msg + ' Please remove it or try a different code.';
+                  this.promoCode  = '';
+                  this.promoDiscount = 0;
+                  this.ordering   = false;
+                },
+                true
+              );
+            } else {
+              window.location.href = CHECKOUT_URL;
+            }
+          },
+          (err) => {
+            this.orderError = (err && (err.message || err)) || 'Failed to add domain transfer to cart. Please try again.';
+            this.ordering = false;
+          },
+          true
+        );
+      },
+    };
+  };
+})();
+</script>
+{% endblock %}

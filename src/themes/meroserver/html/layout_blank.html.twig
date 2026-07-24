@@ -1,0 +1,18 @@
+{% set active_locale = guest.system_locale|default('en')|replace({'_': '-'}) %}
+<!DOCTYPE html>
+<html lang="{{ active_locale }}">
+<head>
+    <meta charset="utf-8">
+    <title>{% block meta_title %}{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include 'partials/theme_colors.html.twig' %}
+    <link rel="stylesheet" href="{{ 'build/css/meroserver.css' | asset_url }}">
+    <script defer src="{{ 'build/js/meroserver.js' | asset_url }}"></script>
+    {{ 'js/api.js' | public_asset_url | script_tag }}
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-[#030712] text-white font-sans" style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    {% block content %}{% endblock %}
+    {% block js %}{% endblock %}
+</body>
+</html>

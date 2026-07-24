@@ -1,0 +1,562 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Dashboard{% endblock %}
+{% block page_header %}Client Dashboard{% endblock %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% block content %}
+    {# Single API call — balance, recent_invoices, recent_emails, recent_tickets all bundled #}
+    {% set dashboard = client.index_get_dashboard %}
+    {% set profile = dashboard.profile %}
+    {% set client_currency = profile.currency|default(guest.cart_get_currency.code) %}
+    {% set bal = dashboard.balance %}
+
+    {# === EMAIL VERIFICATION MODAL + BANNER === #}
+    {% if guest.client_is_email_validation_required and not profile.email_approved %}
+        <div x-data="{
+                open: false,
+                dismissed: false,
+                loading: false,
+                sent: false,
+                error: '',
+                skip() { this.open = false; },
+                reopen() { this.open = true; }
+             }">
+
+            {# ── Compact banner shown inline like Stitch ── #}
+            <div x-show="!dismissed"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 -translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="mb-6 flex items-start gap-4 rounded-lg border border-red-200 bg-[#feeceb] px-4 py-4 text-sm shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
+                <div class="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
+                    <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-bold text-red-700">Account Verification Required</p>
+                    <p class="mt-1 text-sm text-red-500">Please complete your identity verification to ensure uninterrupted service.
+                        <button @click="reopen()" class="font-semibold text-indigo-500 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-600">Verify Now</button>
+                    </p>
+                </div>
+                <button @click="dismissed = true"
+                        class="flex-shrink-0 p-1 rounded text-red-300 hover:text-red-500 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            {# ── Full-screen modal (shown until skipped for this session) ── #}
+            <div x-show="open"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="fixed inset-0 z-50 flex items-center justify-center p-4">
+
+                {# Backdrop — clicking outside skips the modal for this session #}
+                <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="skip()"></div>
+
+                {# Glass panel #}
+                <div class="relative w-full max-w-xl"
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-200"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95">
+
+                    <div class="rounded-2xl border border-amber-500/30
+                                bg-white/95 dark:bg-gray-950/90
+                                backdrop-blur-xl
+                                shadow-2xl shadow-amber-900/20
+                                overflow-hidden">
+
+                        {# Amber accent top bar #}
+                        <div class="h-1 w-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-600"></div>
+
+                        <div class="p-7">
+                            {# Icon + dismiss row #}
+                            <div class="flex items-start justify-between mb-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
+                                        <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Verify your email address</h3>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Action required to activate your account</p>
+                                    </div>
+                                </div>
+                                <button @click="skip()"
+                                        class="text-gray-400 hover:text-gray-600 dark:text-gray-600 dark:hover:text-gray-400 transition-colors p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex-shrink-0"
+                                        aria-label="Dismiss">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {# Email chip #}
+                            <div class="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 mb-5">
+                                <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/>
+                                </svg>
+                                <span class="text-sm text-amber-700 dark:text-amber-300">A confirmation link was sent to&nbsp;<strong class="font-semibold">{{ profile.email }}</strong></span>
+                            </div>
+
+                            {# Steps hint #}
+                            <div class="grid grid-cols-3 gap-3 mb-5">
+                                <div class="rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] p-3.5 text-center">
+                                    <span class="w-7 h-7 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center justify-center mx-auto mb-2">1</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 leading-snug">Open your inbox</p>
+                                </div>
+                                <div class="rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] p-3.5 text-center">
+                                    <span class="w-7 h-7 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center justify-center mx-auto mb-2">2</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 leading-snug">Click the confirmation link</p>
+                                </div>
+                                <div class="rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.06] p-3.5 text-center">
+                                    <span class="w-7 h-7 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center justify-center mx-auto mb-2">3</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 leading-snug">Reload — banner disappears</p>
+                                </div>
+                            </div>
+
+                            {# Error message #}
+                            <p x-show="error" x-text="error" x-cloak class="text-xs text-red-500 mb-3 text-center"></p>
+
+                            {# Actions #}
+                            <div class="flex items-center gap-3">
+                                <button @click="
+                                            loading = true; error = '';
+                                            API.client.post(
+                                                'client/resend_email_verification',
+                                                {},
+                                                function() { sent = true; loading = false; },
+                                                function(err) { error = err || 'Failed to send. Please try again.'; loading = false; }
+                                            )"
+                                        :disabled="sent || loading"
+                                        class="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20">
+                                    <svg x-show="loading" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                    </svg>
+                                    <span x-text="loading ? 'Sending…' : (sent ? '✓ Email sent!' : 'Resend verification email')"></span>
+                                </button>
+                                <button @click="skip()"
+                                        class="px-5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 text-sm font-medium transition-all">
+                                    Skip for now
+                                </button>
+                            </div>
+
+                            <p class="text-xs text-gray-400 dark:text-gray-600 text-center mt-4">Didn't get the email? Check your spam folder or resend above.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    {# === ON-HOLD TICKET ALERTS === #}
+    {% if dashboard.tickets.on_hold > 0 %}
+        <div class="mb-6 space-y-2">
+            {% for i, ticket in dashboard.recent_tickets %}
+                {% if ticket.status == 'on_hold' %}
+                    <div class="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span>Ticket <strong>#{{ ticket.id }}</strong> was replied to {{ ticket.updated_at|timeago }} ago.</span>
+                        <a href="{{ 'support/ticket'|url }}/{{ ticket.id }}"
+                           class="ml-auto text-xs font-semibold text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800">
+                            Reply
+                        </a>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# === REFERENCE-ALIGNED DASHBOARD === #}
+    {% set active_orders = client.order_get_list({'per_page': 6, 'hide_addons': 1, 'status': 'active'}) %}
+    {% set account_complete = profile.email_approved|default(false) %}
+
+    <div class="ref-dashboard">
+        <section class="ref-service-summary" aria-label="Service overview">
+            {% set summary_items = [
+                {'label': 'Domains', 'count': 0, 'icon': 'globe'},
+                {'label': 'Hosting & Servers', 'count': dashboard.orders.active|default(0), 'icon': 'server'},
+                {'label': 'Websites', 'count': 0, 'icon': 'website'},
+                {'label': 'Email & Office Tools', 'count': 0, 'icon': 'mail'},
+                {'label': 'Application Hosting', 'count': 0, 'icon': 'apps'},
+                {'label': 'Other', 'count': 0, 'icon': 'box'}
+            ] %}
+            {% for item in summary_items %}
+            <a href="{{ item.label == 'Domains' ? '/order/domain-registration'|url : '/order/service'|url }}" class="ref-summary-item">
+                <span class="ref-summary-icon">
+                    {% if item.icon == 'globe' %}
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.2 2.5 3.3 5.5 3.3 9S14.2 18.5 12 21M12 3c-2.2 2.5-3.3 5.5-3.3 9S9.8 18.5 12 21"/></svg>
+                    {% elseif item.icon == 'server' %}
+                    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg>
+                    {% elseif item.icon == 'mail' %}
+                    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>
+                    {% elseif item.icon == 'apps' %}
+                    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="5" height="5"/><rect x="15" y="4" width="5" height="5"/><rect x="4" y="15" width="5" height="5"/><rect x="15" y="15" width="5" height="5"/></svg>
+                    {% elseif item.icon == 'website' %}
+                    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 20V9"/></svg>
+                    {% else %}
+                    <svg viewBox="0 0 24 24"><path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 7 8 4 8-4v10l-8 4-8-4V7Z"/></svg>
+                    {% endif %}
+                </span>
+                <span class="ref-summary-label">{{ item.label }}</span>
+                <strong>{{ item.count }}</strong>
+            </a>
+            {% endfor %}
+        </section>
+
+        <section class="ref-panel ref-todos">
+            <div class="ref-panel-title">
+                <h2>Todos</h2>
+                <span>{{ account_complete ? '4/4' : '3/4' }} completed</span>
+            </div>
+            <div class="ref-progress-tabs">
+                <div>Product setup <span class="ref-check">✓</span></div>
+                <div class="active">Account setup <span class="ref-count">{{ account_complete ? '✓' : '1' }}</span></div>
+            </div>
+            <div class="ref-todo-list">
+                <a href="{{ '/client/profile'|url }}" class="ref-todo-row {{ account_complete ? 'completed' : '' }}">
+                    <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.9 8.3 7 10 4.1-1.7 7-5.4 7-10V6l-7-3Z"/></svg>
+                    <span><strong>{{ account_complete ? 'Email verified' : 'Verify your email address' }}</strong><small>{{ account_complete ? 'Your account email is verified' : 'Protect your account and unlock all services' }}</small></span>
+                    <b>{{ account_complete ? '✓' : '↗' }}</b>
+                </a>
+                <div class="ref-todo-row completed"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg><span><strong>Add a payment method</strong><small>Securely store a card to make future purchases faster</small></span><b>✓</b></div>
+                <div class="ref-todo-row completed"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2 2.5 3 5.5 3 9s-1 6.5-3 9M12 3c-2 2.5-3 5.5-3 9s1 6.5 3 9"/></svg><span><strong>Add an address</strong><small>Add an address to your account</small></span><b>✓</b></div>
+                <div class="ref-todo-row completed"><svg viewBox="0 0 24 24"><path d="M7 4h3l2 5-2 1c1 3 2 4 5 5l1-2 5 2v3c0 2-2 3-4 3C9 20 4 15 3 7c0-2 2-3 4-3Z"/></svg><span><strong>Add a phone number</strong><small>Add a phone number for security and verification</small></span><b>✓</b></div>
+            </div>
+        </section>
+
+        <section class="ref-panel ref-products">
+            <div class="ref-panel-title">
+                <h2>Products &amp; Services</h2>
+                <a href="{{ '/order/service'|url }}">View all</a>
+            </div>
+            <div class="ref-product-group">
+                <div class="ref-product-group-title">
+                    <span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg> Hosting &amp; Servers ({{ active_orders.total|default(0) }})</span>
+                </div>
+                {% if active_orders.list %}
+                    {% for order in active_orders.list %}
+                    <div class="ref-product-row">
+                        <div><strong>{{ order.title }}</strong><small>{{ order.service_type|replace({'service': ''})|title }}{% if order.period %} · {{ order.period|period_title }}{% endif %}</small></div>
+                        <span class="ref-status"><i></i> Active</span>
+                        <div class="ref-product-actions">
+                            <a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-yellow">Login to Control Panel</a>
+                            <a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-light">Manage</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="ref-product-empty">
+                        <p>No active products yet.</p>
+                        <a href="{{ '/order'|url }}" class="ref-btn ref-btn-yellow">Place new order</a>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    {# Retain the previous dashboard for rollback/data reference, but do not render it. #}
+    {% if false %}
+    {# === STAT CARDS === #}
+    {% set unpaid_count = dashboard.invoices.unpaid|default(0) %}
+    {% set open_tickets = dashboard.tickets.open|default(0) %}
+    <div class="mob-stat-grid grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
+
+        {# Active Services — indigo #}
+        <a href="{{ 'order/service'|url }}" class="group relative block bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] p-5 sm:p-6 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all overflow-hidden">
+            <div class="absolute inset-x-0 top-0 h-0.5 rounded-t-xl bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                    </svg>
+                </div>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Services</p>
+            </div>
+            <div class="space-y-0.5">
+                <p class="text-3xl font-bold text-slate-900 dark:text-white tabular-nums">{{ "%02d"|format(dashboard.orders.active|default(0)) }}</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Active Services</p>
+            </div>
+        </a>
+
+        {# Unpaid Invoices — amber if unpaid > 0, slate if clear #}
+        <a href="{{ 'invoice'|url }}" class="group relative block bg-white dark:bg-white/[0.03] border p-5 sm:p-6 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden
+            {{ unpaid_count > 0 ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/[0.04]' : 'border-slate-200 dark:border-white/[0.08] hover:border-emerald-300 dark:hover:border-emerald-500/40' }}">
+            <div class="absolute inset-x-0 top-0 h-0.5 rounded-t-xl {{ unpaid_count > 0 ? 'bg-amber-500' : 'bg-emerald-500 opacity-0 group-hover:opacity-100' }} transition-opacity"></div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all
+                    {{ unpaid_count > 0 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white' }}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                    </svg>
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-wider {{ unpaid_count > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400' }}">Invoices</p>
+            </div>
+            <div class="space-y-0.5">
+                <p class="text-3xl font-bold tabular-nums {{ unpaid_count > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-white' }}">{{ "%02d"|format(unpaid_count) }}</p>
+                <p class="text-sm font-medium {{ unpaid_count > 0 ? 'text-amber-600/80 dark:text-amber-400/80' : 'text-slate-500 dark:text-slate-400' }}">
+                    {{ unpaid_count > 0 ? 'Need Payment' : 'All Paid' }}
+                </p>
+            </div>
+        </a>
+
+        {# Open Tickets — violet #}
+        <a href="{{ 'support'|url }}" class="group relative block bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] p-5 sm:p-6 rounded-xl shadow-sm hover:shadow-md hover:border-violet-300 dark:hover:border-violet-500/40 hover:-translate-y-0.5 transition-all overflow-hidden">
+            <div class="absolute inset-x-0 top-0 h-0.5 rounded-t-xl bg-violet-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-400 group-hover:bg-violet-500 group-hover:text-white transition-all flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                    </svg>
+                </div>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Support</p>
+            </div>
+            <div class="space-y-0.5">
+                <p class="text-3xl font-bold text-slate-900 dark:text-white tabular-nums">{{ "%02d"|format(open_tickets) }}</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Open Tickets</p>
+            </div>
+        </a>
+
+        {# Account Balance — emerald #}
+        <a href="{{ 'client/balance'|url }}" class="group relative block bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] p-5 sm:p-6 rounded-xl shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all overflow-hidden">
+            <div class="absolute inset-x-0 top-0 h-0.5 rounded-t-xl bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-all flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                </div>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Balance</p>
+            </div>
+            <div class="space-y-0.5">
+                <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ bal | money(client_currency) }}</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Account Credits</p>
+            </div>
+        </a>
+
+    </div>
+
+    {# === MAIN CONTENT GRID — matches Stitch lg:grid-cols-3 structure === #}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {# ── LEFT COLUMN: Invoices + Emails/News sub-grid ── #}
+        <div class="lg:col-span-2 space-y-6">
+
+            {# Recent Invoices #}
+            <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
+                <div class="p-6 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Recent Invoices</h3>
+                    <a href="{{ '/invoice'|url }}" class="text-sm font-semibold text-indigo-400 hover:text-indigo-500 hover:underline transition-colors">View All</a>
+                </div>
+                {% if dashboard.recent_invoices is not empty %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/[0.05]">
+                                <th class="px-3 sm:px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Invoice ID</th>
+                                <th class="hidden sm:table-cell px-3 sm:px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                                <th class="px-3 sm:px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                                <th class="px-3 sm:px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                                <th class="px-3 sm:px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                            {% for invoice in dashboard.recent_invoices %}
+                            <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02] transition-colors group/row">
+                                <td class="px-3 sm:px-6 py-3 sm:py-4">
+                                    <a href="{{ 'invoice'|url }}/{{ invoice.hash }}" class="text-sm font-bold text-slate-900 dark:text-slate-100 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors tabular-nums">#{{ invoice.serie }}{{ invoice.nr }}</a>
+                                </td>
+                                <td class="hidden sm:table-cell px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium text-slate-600 dark:text-slate-400">{{ invoice.created_at|date("M j, Y") }}</td>
+                                <td class="px-3 sm:px-6 py-3 sm:py-4 text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums tracking-tight">{{ invoice.total | money(invoice.currency) }}</td>
+                                <td class="px-3 sm:px-6 py-3 sm:py-4">
+                                    {% if invoice.status == 'paid' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300">
+                                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5"></span>Paid
+                                    </span>
+                                    {% elseif invoice.status == 'unpaid' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300">
+                                        <span class="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5"></span>Pending
+                                    </span>
+                                    {% elseif invoice.status == 'cancelled' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-500/15 text-red-800 dark:text-red-300">
+                                        <span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>Cancelled
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300">
+                                        <span class="w-1.5 h-1.5 bg-slate-400 rounded-full mr-1.5"></span>{{ invoice.status|title }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-3 sm:px-6 py-3 sm:py-4 text-right">
+                                    {% if invoice.status == 'unpaid' %}
+                                    <a href="{{ 'invoice'|url }}/{{ invoice.hash }}" class="text-slate-400 dark:text-slate-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors" title="Pay invoice">
+                                        <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                    </a>
+                                    {% else %}
+                                    <a href="{{ 'invoice'|url }}/{{ invoice.hash }}" class="text-slate-400 dark:text-slate-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors" title="Download invoice">
+                                        <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <div class="px-6 py-10 text-center">
+                        <p class="text-slate-400 dark:text-slate-500 text-sm">No invoices yet</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            {# Emails + News sub-grid #}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                {# Recent Emails #}
+                <div class="bg-white dark:bg-white/[0.03] rounded-lg border border-slate-200 dark:border-white/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Recent Emails</h3>
+                        <a href="{{ '/email'|url }}" class="text-xs font-semibold text-indigo-500 dark:text-indigo-400 hover:underline transition-colors">View all</a>
+                    </div>
+                    <div class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+                        {% if dashboard.recent_emails is defined and dashboard.recent_emails|length > 0 %}
+                            {% for email in dashboard.recent_emails %}
+                                <a href="{{ 'email'|url }}/{{ email.id }}" class="group flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors cursor-pointer">
+                                    <div class="flex flex-col min-w-0 flex-1 mr-3">
+                                        <span class="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">{{ email.subject|default('(No Subject)') }}</span>
+                                        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Sent on {{ email.created_at|date("M j, Y") }}</span>
+                                    </div>
+                                    <svg class="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-indigo-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                                </a>
+                            {% endfor %}
+                        {% else %}
+                            <div class="px-6 py-8 text-center">
+                                <p class="text-slate-400 dark:text-slate-500 text-sm">No emails yet</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# News & Announcements #}
+                <div class="bg-white dark:bg-white/[0.03] rounded-lg border border-slate-200 dark:border-white/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-white">News &amp; Announcements</h3>
+                        <a href="{{ '/news'|url }}" class="text-xs font-semibold text-indigo-500 dark:text-indigo-400 hover:underline transition-colors">View all</a>
+                    </div>
+                    <div class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+                        {% if _notif_news.list is defined and _notif_news.list|length > 0 %}
+                            {% for post in _notif_news.list %}
+                                <div class="flex gap-4 items-start px-6 py-4 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors cursor-pointer">
+                                    <div class="flex-shrink-0 w-12 h-12 {% if loop.index is odd %}bg-indigo-50 dark:bg-indigo-500/10{% else %}bg-violet-50 dark:bg-violet-500/10{% endif %} rounded-lg flex items-center justify-center">
+                                        {% if loop.index is odd %}
+                                        <svg class="w-5 h-5 text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                        {% else %}
+                                        <svg class="w-5 h-5 text-violet-500 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex flex-col min-w-0 flex-1">
+                                        <a href="{{ '/news'|url }}/{{ post.slug }}" class="text-sm font-bold text-slate-800 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate">{{ post.title }}</a>
+                                        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 mt-0.5">{{ post.created_at|timeago }} ago</span>
+                                        {% if post.content is defined and post.content %}
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">{{ post.content|striptags }}</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="px-6 py-8 text-center">
+                                <p class="text-slate-400 dark:text-slate-500 text-sm">No announcements yet</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>{# end emails+news sub-grid #}
+
+        </div>{# end left col #}
+
+        {# ── RIGHT SIDEBAR: Active Tickets ── #}
+        <div class="space-y-6">
+            <div class="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col h-full">
+                <div class="p-6 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Active Tickets</h3>
+                    <a href="{{ '/support'|url }}" class="text-xs font-bold text-indigo-400 hover:text-indigo-500 hover:underline transition-colors">View all</a>
+                </div>
+                <div class="p-4 space-y-4 flex-1">
+                    {# Use tickets already fetched by index_get_dashboard — no extra API calls #}
+                    {% set all_tickets = dashboard.recent_tickets is defined ? dashboard.recent_tickets : [] %}
+                    {% if all_tickets %}
+                        {% for ticket in all_tickets %}
+                        <a href="{{ 'support/ticket'|url }}/{{ ticket.id }}" class="block rounded-lg border p-4 transition-all
+                            {% if ticket.status == 'closed' %}border-slate-200 dark:border-white/[0.06] opacity-60{% else %}border-slate-200 dark:border-white/[0.08]{% endif %}
+                            bg-slate-50/30 dark:bg-white/[0.02] hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.04]">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    {# Helpdesk name — only shown when it exists and is not a generic fallback #}
+                                    {% if ticket.helpdesk.name is defined and ticket.helpdesk.name %}
+                                    <span class="rounded bg-slate-100 dark:bg-white/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{{ ticket.helpdesk.name }}</span>
+                                    {% endif %}
+                                    {# Status pill #}
+                                    {% if ticket.status == 'open' %}
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Open</span>
+                                    {% elseif ticket.status == 'on_hold' %}
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>On Hold</span>
+                                    {% elseif ticket.status == 'replied' %}
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-500/15 border border-blue-200 dark:border-blue-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>Replied</span>
+                                    {% elseif ticket.status == 'closed' %}
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Closed</span>
+                                    {% endif %}
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 flex-shrink-0">{{ ticket.updated_at|timeago }} ago</span>
+                            </div>
+                            <h4 class="mb-1.5 line-clamp-2 text-sm font-bold text-slate-800 dark:text-slate-100">{{ ticket.subject|default('No Subject') }}</h4>
+                            {% if ticket.first.content is defined and ticket.first.content %}
+                            <p class="line-clamp-2 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">{{ ticket.first.content|striptags }}</p>
+                            {% endif %}
+                            <div class="mt-3 flex items-center justify-between">
+                                <div class="flex -space-x-2">
+                                    {% set initials = (ticket.client.first_name|slice(0,1)|upper) ~ (ticket.client.last_name|slice(0,1)|upper) %}
+                                    <div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-white/[0.08] text-[8px] font-bold text-slate-500 dark:text-slate-300">{{ initials|default('?') }}</div>
+                                    <div class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white dark:border-slate-900 bg-indigo-100 dark:bg-indigo-500/20 text-[8px] font-bold text-indigo-600 dark:text-indigo-300">ST</div>
+                                </div>
+                                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">#{{ ticket.id }}</span>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    {% else %}
+                        <div class="py-8 text-center">
+                            <p class="text-slate-400 dark:text-slate-500 text-sm mb-3">No tickets yet</p>
+                            <a href="{{ '/support'|url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all">Open a Ticket →</a>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="p-4 border-t border-slate-100 dark:border-white/[0.06] bg-slate-50/50 dark:bg-white/[0.02]">
+                    <a href="{{ '/support'|url }}" class="block w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.04] py-2 text-center text-xs font-bold text-slate-500 dark:text-slate-400 transition-all hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-500 dark:hover:text-indigo-400">
+                        Open New Ticket
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>{# end main 3-col grid #}
+    {% endif %}
+
+{% endblock %}

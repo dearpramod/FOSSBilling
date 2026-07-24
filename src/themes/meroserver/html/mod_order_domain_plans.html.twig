@@ -1,0 +1,2373 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Domain Registration — Find Your Perfect Domain{% endblock %}
+{% block page_header %}Domain Registration{% endblock %}
+
+{% set tlds = guest.servicedomain_tlds({}) %}
+{% set _dp = guest.product_get_list({'type': 'domain'}) %}
+{% set domain_product_id = _dp.list[0].id ?? null %}
+{% set domain_addons = _dp.list[0].addons ?? [] %}
+{% set currency = guest.cart_get_currency %}
+{% set currencies = guest.currency_get_pairs %}
+{% set currencyCode = currency.code|default('USD') %}
+{% set periods = guest.system_periods %}
+{# Split the currency format string on {{price}} to get prefix and suffix #}
+{% set currPrefix = currency.symbol|default(currency.code|default('')) %}
+{% set currSuffix = '' %}
+{% set clientLoggedIn = client ? true : false %}
+{% if client %}
+  {% set _clientProfile = client.profile_get %}
+  {% set clientCurrencyCode = _clientProfile.currency|default('') %}
+{% else %}
+  {% set clientCurrencyCode = '' %}
+{% endif %}
+{% set _rc = guest.extension_is_on({'mod': 'antispam'}) ? guest.antispam_recaptcha : {} %}
+{% set social = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
+
+{% block content %}
+<style>
+  [x-cloak] { display: none !important; }
+
+  /* Search bar glow on focus */
+  .search-glow:focus-within {
+    box-shadow: 0 0 0 1px rgba(var(--color-primary-rgb),0.35), 0 8px 32px rgba(var(--color-primary-rgb),0.10);
+  }
+
+  /* TLD card hover */
+  .tld-card {
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .tld-card:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Result row slide-in */
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .result-row { animation: slideIn 0.22s ease both; }
+  .result-row:nth-child(2) { animation-delay: .04s; }
+  .result-row:nth-child(3) { animation-delay: .08s; }
+  .result-row:nth-child(4) { animation-delay: .12s; }
+  .result-row:nth-child(5) { animation-delay: .16s; }
+
+  /* Shimmer loader */
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, rgba(0,0,0,.04) 25%, rgba(0,0,0,.08) 50%, rgba(0,0,0,.04) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 0.5rem;
+  }
+  html[data-theme="dark"] .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 75%);
+    background-size: 800px 100%;
+  }
+
+  /* Domain checking pulse ring */
+  @keyframes ping-slow {
+    0%   { transform: scale(1);   opacity: 0.6; }
+    70%  { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  .domain-checking-ring {
+    animation: ping-slow 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Step connector */
+  .step-line { transition: background 0.3s; }
+
+  /* Hero: dark-mode background override (inline style uses light #f0f4ff base) */
+  html[data-theme="dark"] [data-hero="domain-plans"] {
+    background: radial-gradient(ellipse 80% 60% at 60% -10%, rgba(var(--color-primary-rgb),0.12), transparent),
+                radial-gradient(ellipse 60% 40% at -10% 80%, rgba(168,85,247,0.07), transparent),
+                #0d1424 !important;
+  }
+
+  /* Results / suggestions containers */
+  .results-container {
+    border-radius: 1rem;
+    border: 1px solid rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  html[data-theme="dark"] .results-container {
+    border-color: rgba(255,255,255,0.08);
+  }
+  .result-row {
+    background: #ffffff;
+  }
+  .result-row:hover {
+    background: #f9fafb;
+  }
+  html[data-theme="dark"] .result-row {
+    background: rgba(255,255,255,0.02);
+  }
+  html[data-theme="dark"] .result-row:hover {
+    background: rgba(255,255,255,0.04);
+  }
+
+  .suggestions-container {
+    border-radius: 1rem;
+    border: 1px solid rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  html[data-theme="dark"] .suggestions-container {
+    border-color: rgba(255,255,255,0.07);
+  }
+
+  /* Mobile: ensure search button always has enough room */
+  @media (max-width: 480px) {
+    .domain-search-bar .search-submit-btn {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+</style>
+
+<div x-data="domainFlow()">
+
+  {# ══════════════════════════════════════════════════════════════
+     Phase 1 — Search & Browse
+  ══════════════════════════════════════════════════════════════ #}
+  <div x-show="!wizardActive">
+
+    {# ── Hero ─────────────────────────────────────────────────── #}
+    <div class="relative -mx-8 -mt-5 sm:-mx-10 lg:-mx-16 px-8 sm:px-10 lg:px-16 pb-14 pt-14 mb-8"
+         data-hero="domain-plans"
+         style="background: radial-gradient(ellipse 80% 60% at 60% -10%, rgba(var(--color-primary-rgb),0.10), transparent), radial-gradient(ellipse 60% 40% at -10% 80%, rgba(168,85,247,0.06), transparent), #f0f4ff; border-bottom: 1px solid rgba(var(--color-primary-rgb),0.12);">
+
+      <div class="max-w-3xl mx-auto text-center">
+
+        <!-- Trust badge -->
+        <div class="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold mb-6">
+          <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          Trusted by 10,000+ Users
+        </div>
+
+        <!-- Register / Transfer toggle -->
+        <div class="mb-6 flex justify-center">
+          <div class="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+            <span class="px-4 py-1.5 bg-primary rounded-md text-sm font-medium shadow-sm cursor-default select-none" style="color: #ffffff;">
+              Register
+            </span>
+            <a href="{{ '/order/domain-transfer'|url }}"
+               class="px-4 py-1.5 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-sm font-medium transition-colors">
+              Transfer
+            </a>
+          </div>
+        </div>
+
+        <!-- Hero text -->
+        <h1 class="text-4xl sm:text-5xl font-bold mb-4 tracking-tight text-slate-900 dark:text-white leading-tight">
+          Find your perfect <span class="text-primary italic">domain name</span>
+        </h1>
+        <p class="text-slate-500 dark:text-slate-400 text-base max-w-xl mx-auto mb-10 leading-relaxed">
+          Search hundreds of extensions and register in minutes — all managed from one powerful dashboard.
+        </p>
+
+        <!-- Search bar -->
+        <form id="frmDomainChecker" role="search" autocomplete="off" @submit.prevent="search()">
+          <div class="domain-search-bar flex items-center p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl shadow-primary/5 border border-slate-200 dark:border-slate-700 transition-all search-glow">
+            <svg class="w-5 h-5 ml-2 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+            </svg>
+            <input id="inputDomain"
+                   type="text"
+                   name="domain"
+                   x-model="query"
+                   @input.debounce.250ms="onInput()"
+                   @keydown.enter.prevent="search()"
+                   placeholder="Search for a domain (e.g. yourbrand.com)"
+                   autocomplete="off"
+                   spellcheck="false"
+                   autocorrect="off"
+                   autocapitalize="none"
+                   inputmode="url"
+                   class="flex-1 bg-transparent px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400 outline-none text-base font-medium" />
+            <button x-show="query.length > 0"
+                    type="button"
+                    @click="clearSearch()"
+                    class="mr-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex-shrink-0 p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+            <button type="submit"
+                    id="btnCheckAvailability"
+                    :disabled="searching || query.trim().length < 2"
+                    class="search-submit-btn m-0.5 px-6 py-2.5 rounded-lg bg-primary text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0 flex items-center gap-2 whitespace-nowrap"
+                    style="color: #ffffff;">
+              <span x-show="!searching" class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+                </svg>
+                Search
+              </span>
+              <span x-show="searching" class="flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                Checking…
+              </span>
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    {# ── Error banners ──────────────────────────────────────────── #}
+    <div x-show="error"
+         class="max-w-3xl mx-auto mb-5 flex items-start gap-3 p-4 rounded-xl bg-red-500/8 border border-red-500/25 text-red-300 text-sm"
+         x-cloak>
+      <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+      <span x-text="error"></span>
+    </div>
+    <div x-show="registrarError"
+         class="max-w-3xl mx-auto mb-5 flex items-start gap-3 p-4 rounded-xl bg-indigo-500/8 border border-indigo-500/25 text-indigo-300 text-sm"
+         x-cloak>
+      <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <span><strong>Notice:</strong> Live availability check is temporarily limited. Results shown are based on pricing data only.</span>
+    </div>
+    <div x-show="authError"
+         class="max-w-3xl mx-auto mb-5 flex items-start gap-3 p-4 rounded-xl bg-red-500/8 border border-red-500/25 text-red-300 text-sm"
+         x-cloak>
+      <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+      <span><strong>Configuration Error:</strong> Domain registrar authentication failed. Please update your API key in the admin panel.</span>
+    </div>
+
+    {# ── Loading animation while searching ──────────────────── #}
+    <div x-show="searching" class="max-w-6xl mx-auto mb-6" x-cloak>
+
+      {# Centered pulse indicator #}
+      <div class="flex flex-col items-center justify-center py-8 gap-4">
+        {# Pulse rings + spinner #}
+        <div class="relative flex items-center justify-center w-14 h-14">
+          <span class="domain-checking-ring absolute inline-flex w-10 h-10 rounded-full"
+                style="background: rgba(var(--color-primary-rgb), 0.25);"></span>
+          <span class="relative inline-flex w-10 h-10 rounded-full items-center justify-center"
+                style="background: rgba(var(--color-primary-rgb), 0.15); border: 1px solid rgba(var(--color-primary-rgb), 0.4);">
+            <svg class="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                 style="color: var(--color-primary);">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+              <path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+          </span>
+        </div>
+
+        {# Domain being checked #}
+        <div class="text-center">
+          <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="'Checking ' + query"></p>
+          <p class="text-xs text-slate-500 mt-1">Looking up availability across extensions…</p>
+        </div>
+      </div>
+
+      {# Skeleton rows #}
+      <div class="space-y-2">
+        <template x-for="i in [1,2,3,4,5]" :key="i">
+          <div class="skeleton h-16 w-full"></div>
+        </template>
+      </div>
+    </div>
+
+    {# ── Search Results ────────────────────────────────────────── #}
+    <div id="searchResults" x-show="!searching && results.length > 0" class="max-w-6xl mx-auto mb-6" x-cloak>
+      <p class="text-xs text-gray-500 mb-3 px-1"
+         x-text="(results.filter(r=>r.available).length + suggestions.filter(s=>!s.checking&&s.available).length) + ' domain' + ((results.filter(r=>r.available).length + suggestions.filter(s=>!s.checking&&s.available).length) !== 1 ? 's' : '') + ' available'"></p>
+
+      <div class="results-container divide-y divide-slate-100 dark:divide-white/[0.05] rounded-2xl border border-slate-200 dark:border-white/[0.08] overflow-hidden">
+        <template x-for="(r, idx) in results" :key="r.domain">
+          <div class="result-row flex items-center gap-3.5 px-4 py-3.5 transition-all"
+               :class="r.available ? 'bg-white hover:bg-slate-50 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]' : 'opacity-50'">  
+
+            {# TLD icon badge #}
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-extrabold text-white tracking-tight select-none"
+                 :style="`background: ${tldGradient(r.tld)};`"
+                 x-text="r.tld.replace('.','').toUpperCase().slice(0,4)"></div>
+
+            {# Domain name + badges #}
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="font-semibold text-slate-900 dark:text-white text-sm" x-text="r.domain"></span>
+                <template x-if="r.available && r.renewPrice > r.price && r.price > 0">
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400"
+                        x-text="'Save ' + Math.round((r.renewPrice - r.price) / r.renewPrice * 100) + '%'"></span>
+                </template>
+              </div>
+              <template x-if="!r.available">
+                <p class="text-xs text-gray-600 mt-0.5">Unavailable</p>
+              </template>
+            </div>
+
+            {# Available: price + button #}
+            <template x-if="r.available">
+              <div class="flex items-center gap-3 flex-shrink-0">
+                <div class="text-right hidden sm:block">
+                  <template x-if="r.renewPrice > r.price && r.price > 0">
+                    <span class="block text-xs text-gray-500 line-through leading-none mb-0.5"
+                          x-text="fmtPrice(r.renewPrice) + '/yr'"></span>
+                  </template>
+                  <span class="text-sm font-bold text-slate-900 dark:text-white leading-none"
+                        x-text="fmtPrice(r.price) + '/1st yr'"></span>
+                </div>
+                <span class="sm:hidden text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap"
+                      x-text="fmtPrice(r.price) + '/yr'"></span>
+                <button @click="startWizard(r)"
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:opacity-90 whitespace-nowrap bg-primary">
+                  Register
+                </button>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    {# ── "Also Consider" — sequential per-row availability check ────────── #}
+    <div x-show="searched && suggestions.length > 0"
+         class="max-w-6xl mx-auto mb-10" x-cloak>
+      <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Also consider</p>
+
+      <div class="suggestions-container rounded-2xl border border-slate-200 dark:border-white/[0.07] overflow-hidden">
+
+        {# Column header #}
+        <div class="hidden sm:grid grid-cols-[1fr_120px_100px_auto] items-center px-4 py-2 border-b border-slate-100 dark:border-white/[0.05] bg-slate-50 dark:bg-white/[0.02]">
+          <span class="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Domain</span>
+          <span class="text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-center">Status</span>
+          <span class="text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Price</span>
+          <span class="text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-center w-24">Action</span>
+        </div>
+
+        <template x-for="(s, idx) in suggestions" :key="s.domain">
+          <div class="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_120px_100px_auto] items-center px-4 py-3.5 border-b border-slate-100 dark:border-white/[0.04] last:border-0 transition-colors"
+               :class="!s.checking && s.available === false ? 'opacity-60' : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'">
+
+            {# Domain name #}
+            <span class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="s.domain"></span>
+
+            {# Status badge #}
+            <div class="hidden sm:flex justify-center">
+              {# Searching... #}
+              <template x-if="s.checking">
+                <span class="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                  <svg class="animate-spin w-3 h-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  Searching…
+                </span>
+              </template>
+              {# Not checked yet — availability is on demand #}
+              <template x-if="!s.checking && s.available === null">
+                <span class="text-xs text-gray-500">Not checked</span>
+              </template>
+              {# Available #}
+              <template x-if="!s.checking && s.available === true">
+                <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                  Available
+                </span>
+              </template>
+              {# Unavailable #}
+              <template x-if="!s.checking && s.available === false">
+                <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-400">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                  Unavailable
+                </span>
+              </template>
+            </div>
+
+            {# Price #}
+            <div class="hidden sm:block text-right">
+              <template x-if="s.renewPrice > s.price && s.price > 0">
+                <span class="block text-[11px] text-gray-600 line-through leading-none mb-0.5" x-text="fmtPrice(s.renewPrice) + '/yr'"></span>
+              </template>
+              <span x-show="s.price > 0" class="text-sm font-semibold text-slate-900 dark:text-white leading-none" x-text="fmtPrice(s.price)"></span>
+            </div>
+
+            {# Action button + mobile status #}
+            <div class="flex items-center gap-2 justify-end sm:justify-center sm:w-24 flex-shrink-0">
+              {# Mobile: inline status dot #}
+              <span class="sm:hidden w-2 h-2 rounded-full flex-shrink-0"
+                    :class="s.checking ? 'bg-gray-600 animate-pulse' : (s.available === null ? 'bg-slate-300 dark:bg-gray-600' : (s.available ? 'bg-emerald-400' : 'bg-red-400'))"></span>
+              {# Unchecked → explicit availability check on demand #}
+              <template x-if="!s.checking && s.available === null">
+                <button @click="checkSuggestion(idx)"
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-primary/40 text-primary hover:bg-primary hover:text-white cursor-pointer">
+                  Check
+                </button>
+              </template>
+              <template x-if="s.checking || s.available !== null">
+                <button @click="!s.checking && s.available && startWizard(s)"
+                        :disabled="s.checking || !s.available"
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        :class="!s.checking && s.available
+                          ? 'bg-primary text-white hover:opacity-90 cursor-pointer'
+                          : 'text-slate-400 dark:text-gray-600 border border-slate-200 dark:border-white/[0.06] bg-transparent cursor-not-allowed'">
+                  Register
+                </button>
+              </template>
+            </div>
+
+          </div>
+        </template>
+      </div>
+
+      {# Show-more button #}
+      <div x-show="!suggestionsLoading && !suggestionsLoadingMore && suggestionQueue.length > 0"
+           class="mt-3 text-center" x-cloak>
+        <button @click="showMoreSuggestions()"
+                class="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-medium border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] text-slate-500 dark:text-gray-400 hover:border-primary/40 hover:text-primary transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+          Show 3 more extensions
+        </button>
+      </div>
+    </div>
+
+    {# ── Feature strip ─────────────────────────────────────────── #}
+    <div x-show="!searched" class="max-w-6xl mx-auto mb-8" x-cloak>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+          </div>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300 leading-tight">WHOIS Protection</span>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+            </svg>
+          </div>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300 leading-tight">DNS Management</span>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300 leading-tight">Control Panel</span>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </div>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300 leading-tight">Auto-Renewal</span>
+        </div>
+      </div>
+    </div>
+
+    {# ── Popular Extensions ─────────────────────────────────────── #}
+    <div x-show="!searched" class="max-w-6xl mx-auto mb-8" x-cloak>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-5 flex items-center gap-2">
+        <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+        </svg>
+        Popular Extensions
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {% set top3 = ['.com', '.net', '.org'] %}
+        {% set top3desc = {'.com': 'The world\'s most trusted and recognized domain extension.', '.net': 'Ideal for networks, technology sites, and online business.', '.org': 'The premier choice for charities and non-profit organizations.'} %}
+        {% for p in top3 %}
+          {% for t in tlds %}
+            {% if t.tld == p and t.allow_register %}
+            <div class="tld-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow {{ p == '.com' ? 'border-t-4 border-t-primary' : '' }}"
+                 @click="document.getElementById('inputDomain').scrollIntoView({behavior:'smooth', block:'center'}); $nextTick(() => document.getElementById('inputDomain').focus())"
+                 style="cursor: pointer;">
+              <div class="flex justify-between items-start mb-4">
+                <span class="text-3xl font-bold text-slate-900 dark:text-white">{{ t.tld }}</span>
+                {% if p == '.com' %}
+                <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-bold rounded uppercase">Top Seller</span>
+                {% elseif t.price_renew > t.price_registration and t.price_registration > 0 %}
+                <span class="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded uppercase">
+                  Save {{ ((t.price_renew - t.price_registration) / t.price_renew * 100)|round }}%
+                </span>
+                {% endif %}
+              </div>
+              <p class="text-slate-500 dark:text-slate-400 text-sm mb-6 leading-snug">{{ top3desc[t.tld] ?? '' }}</p>
+              <div class="flex items-end gap-1 mb-6">
+                <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ t.price_registration | money_convert }}</span>
+                <span class="text-slate-400 dark:text-slate-500 text-sm pb-1">/yr</span>
+              </div>
+              <button class="w-full py-2.5 border border-primary/40 bg-primary/5 dark:bg-primary/10 hover:bg-primary hover:text-white hover:border-primary transition-all rounded-lg font-semibold text-primary flex items-center justify-center gap-2">
+                Register
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+            </div>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── TLD Pricing Cards ─────────────────────────────────────── #}
+    {% set registerTlds = [] %}
+    {% for t in tlds %}{% if t.allow_register %}{% set registerTlds = registerTlds|merge([t]) %}{% endif %}{% endfor %}
+
+    {% if registerTlds|length > 0 %}
+    <div class="max-w-6xl mx-auto pb-10">
+      <div class="flex items-center justify-between pb-4 mb-5">
+        <div class="flex items-center gap-2.5">
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white">All Extensions</h2>
+          <span class="text-xs font-medium text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">{{ registerTlds|length }}</span>
+        </div>
+        {% if currencies|length > 1 and not clientLoggedIn %}
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-slate-500 dark:text-slate-400">Currency:</span>
+          <select @change="changeCurrency($event.target.value)"
+                  class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-2.5 py-1.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+            {% for code, title in currencies %}
+            <option value="{{ code }}"{{ code == currencyCode ? ' selected' : '' }}>{{ code }} — {{ title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% elseif currencies|length > 1 and clientLoggedIn %}
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-slate-500 dark:text-slate-400">Currency:</span>
+          <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ currencyCode }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Table -->
+      <div id="dom-all-extensions" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+              <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Extension</th>
+              <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right hidden sm:table-cell">Registration</th>
+              <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right hidden sm:table-cell">Renewal</th>
+              <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right hidden sm:table-cell">Transfer</th>
+              <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {% for t in registerTlds %}
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+                @click="document.getElementById('inputDomain').scrollIntoView({behavior:'smooth', block:'center'}); $nextTick(() => document.getElementById('inputDomain').focus())">
+              <td class="px-6 py-4">
+                <div class="flex items-center gap-3">
+                  <div>
+                    <span class="font-semibold text-slate-900 dark:text-white">{{ t.tld }}</span>
+                    {% if t.price_renew > t.price_registration and t.price_registration > 0 %}
+                    <span class="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                      Save {{ ((t.price_renew - t.price_registration) / t.price_renew * 100)|round }}%
+                    </span>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td class="px-6 py-4 text-right hidden sm:table-cell">
+                <div class="font-bold text-primary">{{ t.price_registration | money_convert }}</div>
+                <div class="text-[10px] text-slate-400">1st year</div>
+              </td>
+              <td class="px-6 py-4 text-right font-medium text-slate-700 dark:text-slate-300 hidden sm:table-cell">
+                {% if t.price_renew > 0 %}{{ t.price_renew | money_convert }}{% else %}<span class="text-slate-400">&mdash;</span>{% endif %}
+              </td>
+              <td class="px-6 py-4 text-right hidden sm:table-cell">
+                {% if t.allow_transfer and t.price_transfer > 0 %}
+                <span class="font-medium text-slate-700 dark:text-slate-300">{{ t.price_transfer | money_convert }}</span>
+                {% elseif t.allow_transfer %}
+                <span class="font-medium text-emerald-600 dark:text-emerald-400">Free</span>
+                {% else %}
+                <span class="text-slate-400">&mdash;</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-center">
+                {# Mobile: show price inline #}
+                <div class="flex items-center justify-end sm:justify-center gap-2">
+                  <span class="sm:hidden text-sm font-bold text-slate-900 dark:text-white">{{ t.price_registration | money_convert }}</span>
+                  <button class="px-4 py-1.5 border border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-semibold transition-all whitespace-nowrap">
+                    Register
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# /Phase 1 #}
+
+
+  {# ══════════════════════════════════════════════════════════════
+     Phase 2 — Registration Wizard
+  ══════════════════════════════════════════════════════════════ #}
+  <div x-show="wizardActive" x-cloak>
+
+    {# ── Back button ───────────────────────────────────────────── #}
+    <div class="max-w-6xl mx-auto mb-6">
+      <button @click="exitWizard()"
+              class="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm group">
+        <div class="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </div>
+        Back to search
+      </button>
+    </div>
+
+    {# ── Selected domain card ──────────────────────────────────── #}
+    <div class="wizard-domain-card max-w-6xl mx-auto mb-7 p-5 rounded-2xl border"
+         style="border-color: rgba(var(--color-primary-rgb),0.25); background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.07) 0%, rgba(var(--color-primary-rgb),0.03) 100%);">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+            <span class="text-xs text-emerald-400 font-medium uppercase tracking-wider">Available</span>
+          </div>
+          <p class="text-xl font-bold text-slate-900 dark:text-white" x-text="selSld + selTld"></p>
+          <p class="text-xs text-gray-400 mt-0.5"
+             x-text="selYears + ' year' + (selYears > 1 ? 's' : '') + ' registration'"></p>
+        </div>
+        <div class="text-right">
+          <p class="text-2xl font-extrabold text-slate-900 dark:text-white" x-text="fmtPrice(selPriceRaw * selYears)"></p>
+          <p x-show="selRenewPrice > 0 && selRenewPrice !== selPriceRaw"
+             class="text-xs text-gray-500 mt-0.5"
+             x-text="'Renews at ' + fmtPrice(selRenewPrice) + '/yr'"></p>
+          {% if currencies|length > 1 and not clientLoggedIn %}
+          <div class="mt-2 flex items-center justify-end gap-1.5">
+            <span class="text-[11px] text-gray-500">Currency:</span>
+            <select :disabled="changingCurrency"
+                    @change="changeCurrency($event.target.value)"
+                    class="text-xs bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-700 dark:text-white focus:outline-none focus:border-primary/50 cursor-pointer disabled:opacity-50 transition-colors">
+              {% for code, title in currencies %}
+              <option value="{{ code }}"{{ code == currencyCode ? ' selected' : '' }} class="bg-[#0f172a]">{{ code }}</option>
+              {% endfor %}
+            </select>
+            <svg x-show="changingCurrency" x-cloak class="animate-spin w-3.5 h-3.5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+          </div>
+          {% elseif currencies|length > 1 and clientLoggedIn %}
+          <div class="mt-2 flex items-center justify-end gap-1.5">
+            <span class="text-[11px] text-gray-500">Currency:</span>
+            <span class="text-xs font-mono font-bold text-white">{{ currencyCode }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ── Step progress indicator ───────────────────────────────── #}
+    <div class="max-w-6xl mx-auto mb-8">
+      <div class="flex items-center">
+        {% for stepNum, stepLabel in {1: 'Configure Domain', 2: 'Checkout'} %}
+        {% set stepIdx = stepNum %}
+        <div class="flex items-center {{ stepIdx < 2 ? 'flex-1' : '' }}">
+          <div class="flex items-center gap-2.5 flex-shrink-0">
+            <div class="relative">
+              <div class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all duration-300"
+                   :class="wizardStep > {{ stepIdx }} ? 'border-indigo-400 bg-indigo-400 text-white'
+                          : wizardStep === {{ stepIdx }} ? 'border-indigo-400 bg-indigo-500 text-white'
+                          : 'border-white/15 bg-transparent text-gray-500'">
+                <template x-if="wizardStep > {{ stepIdx }}">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </template>
+                <template x-if="wizardStep <= {{ stepIdx }}">
+                  <span>{{ stepIdx }}</span>
+                </template>
+              </div>
+            </div>
+            <span class="text-xs font-medium hidden sm:block transition-colors"
+                  :class="wizardStep === {{ stepIdx }} ? 'text-indigo-400'
+                         : wizardStep > {{ stepIdx }} ? 'text-indigo-400'
+                         : 'text-gray-600'">{{ stepLabel }}</span>
+          </div>
+          {% if stepIdx < 2 %}
+          <div class="flex-1 h-px mx-3 step-line transition-colors duration-500"
+               :class="wizardStep > {{ stepIdx }} ? 'bg-indigo-500/40' : 'bg-white/8'"></div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ════════════════════════════════════════
+       Step 1 — Configure Domain
+    ════════════════════════════════════════ #}
+    <div x-show="wizardStep === 1" class="max-w-6xl mx-auto">
+      <div class="rounded-2xl border border-white/[0.08] overflow-hidden"
+           style="background: rgba(255,255,255,0.025);">
+        <div class="px-6 pt-6 pb-4 border-b border-white/[0.06]">
+          <h3 class="text-base font-bold text-white">Nameserver Configuration</h3>
+          <p class="text-xs text-gray-500 mt-0.5">Choose how your domain will resolve DNS queries</p>
+        </div>
+        <div class="p-6">
+          {# Toggle #}
+          <div class="flex gap-3 mb-6">
+            <button @click="useDefaultNs = true"
+                    class="flex-1 flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left"
+                    :class="useDefaultNs ? 'border-indigo-500/50 bg-indigo-500/8' : 'border-white/8 bg-white/[0.02] hover:border-white/15'">
+              <div class="flex-shrink-0 mt-0.5">
+                <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center"
+                     :class="useDefaultNs ? 'border-indigo-400' : 'border-gray-600'">
+                  <div class="w-2 h-2 rounded-full" :class="useDefaultNs ? 'bg-indigo-500' : 'bg-transparent'"></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-sm font-semibold" :class="useDefaultNs ? 'text-white' : 'text-gray-400'">Default Nameservers</p>
+                <p class="text-xs text-gray-500 mt-0.5">Use our managed DNS — fastest setup</p>
+              </div>
+            </button>
+            <button @click="useDefaultNs = false"
+                    class="flex-1 flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left"
+                    :class="!useDefaultNs ? 'border-indigo-500/50 bg-indigo-500/8' : 'border-white/8 bg-white/[0.02] hover:border-white/15'">
+              <div class="flex-shrink-0 mt-0.5">
+                <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center"
+                     :class="!useDefaultNs ? 'border-indigo-400' : 'border-gray-600'">
+                  <div class="w-2 h-2 rounded-full" :class="!useDefaultNs ? 'bg-indigo-500' : 'bg-transparent'"></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-sm font-semibold" :class="!useDefaultNs ? 'text-white' : 'text-gray-400'">Custom Nameservers</p>
+                <p class="text-xs text-gray-500 mt-0.5">Point to your own DNS provider</p>
+              </div>
+            </button>
+          </div>
+
+          <div x-show="useDefaultNs" class="flex items-center gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-xs text-gray-400">Your domain will use our default nameservers. You can update them anytime from the domain management panel.</p>
+          </div>
+
+          <div x-show="!useDefaultNs" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Nameserver 1 <span class="text-red-400">*</span></label>
+              <input type="text" x-model="ns1" placeholder="ns1.example.com"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none transition-colors focus:border-indigo-500/50 placeholder-gray-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Nameserver 2 <span class="text-red-400">*</span></label>
+              <input type="text" x-model="ns2" placeholder="ns2.example.com"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none transition-colors focus:border-indigo-500/50 placeholder-gray-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">
+                Nameserver 3 <span class="text-gray-600">(optional)</span>
+              </label>
+              <input type="text" x-model="ns3" placeholder="ns3.example.com"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none transition-colors focus:border-indigo-500/50 placeholder-gray-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">
+                Nameserver 4 <span class="text-gray-600">(optional)</span>
+              </label>
+              <input type="text" x-model="ns4" placeholder="ns4.example.com"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none transition-colors focus:border-indigo-500/50 placeholder-gray-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if domain_addons|length > 0 %}
+      {# ── Optional Add-ons ── #}
+      <div class="mt-4 rounded-2xl border overflow-hidden"
+           :class="DOMAIN_ADDONS.some(a => a.isFree) ? 'border-emerald-500/20' : 'border-white/[0.08]'"
+           :style="DOMAIN_ADDONS.some(a => a.isFree) ? 'background:rgba(16,185,129,0.025);' : 'background:rgba(255,255,255,0.025);'">
+        <div class="px-5 py-4 border-b flex items-center justify-between"
+             :class="DOMAIN_ADDONS.some(a => a.isFree) ? 'border-emerald-500/15' : 'border-white/[0.06]'">
+          <div>
+            <div class="flex items-center gap-2">
+              <h4 class="text-sm font-semibold text-white">Add-ons</h4>
+              <template x-if="DOMAIN_ADDONS.some(a => a.isFree)">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide"
+                      style="background:linear-gradient(135deg,rgba(16,185,129,0.25),rgba(5,150,105,0.15));border:1px solid rgba(16,185,129,0.35);color:#34d399;">
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v13m0-13V6a4 4 0 00-4-4H5.45a2.45 2.45 0 000 4.9H12m0-4.9V6a4 4 0 014-4h2.55a2.45 2.45 0 010 4.9H12M3 13h18M5 21h14a2 2 0 002-2v-6H3v6a2 2 0 002 2z"/>
+                  </svg>
+                  INCLUDES FREE OFFER
+                </span>
+              </template>
+            </div>
+            <p class="text-xs text-gray-600 mt-0.5"
+               x-text="DOMAIN_ADDONS.some(a => a.isFree) ? 'Claim a free bonus with your domain registration' : 'Enhance your domain registration'"></p>
+          </div>
+          <span class="text-xs text-gray-600" x-text="DOMAIN_ADDONS.length + ' available'"></span>
+        </div>
+        <div class="p-4 space-y-2.5">
+          <template x-for="addon in DOMAIN_ADDONS" :key="addon.id">
+          <div>
+
+            {# ── FREE addon ── #}
+            <template x-if="addon.isFree">
+            <div class="free-addon-card rounded-2xl border-2 overflow-hidden relative transition-all duration-300"
+                 :class="addons[String(addon.id)]?.selected ? 'border-emerald-500/70' : 'border-emerald-500/30 hover:border-emerald-500/55'"
+                 :style="addons[String(addon.id)]?.selected ? 'background:linear-gradient(135deg,rgba(16,185,129,0.10),rgba(5,150,105,0.05));' : 'background:linear-gradient(135deg,rgba(16,185,129,0.05),rgba(5,150,105,0.02));'">
+              <div class="h-0.5 w-full" style="background:linear-gradient(90deg,transparent,#10b981,#34d399,#10b981,transparent);"></div>
+              <div class="absolute top-3 right-3 z-10">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase"
+                      style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,0.45);">
+                  FREE
+                </span>
+              </div>
+              <div class="p-4">
+                <div class="flex items-start gap-3">
+                  <div class="w-11 h-11 rounded-xl flex-shrink-0 mt-0.5 flex items-center justify-center transition-all"
+                       :style="addons[String(addon.id)]?.selected ? 'background:rgba(16,185,129,0.22);border:1.5px solid rgba(16,185,129,0.5);' : 'background:rgba(16,185,129,0.10);border:1.5px solid rgba(16,185,129,0.25);'">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8v13m0-13V6a4 4 0 00-4-4H5.45a2.45 2.45 0 000 4.9H12m0-4.9V6a4 4 0 014-4h2.55a2.45 2.45 0 010 4.9H12M3 13h18M5 21h14a2 2 0 002-2v-6H3v6a2 2 0 002 2z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 min-w-0 pr-14">
+                    <p class="text-sm font-bold text-white leading-tight" x-text="addon.title"></p>
+                    <div x-show="addon.description"
+                         class="text-xs text-gray-400 mt-1 leading-relaxed [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mt-0.5 [&_strong]:text-gray-200"
+                         x-html="addon.description"></div>
+                    <div class="flex items-center gap-1.5 mt-2">
+                      <svg class="w-3 h-3 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                      </svg>
+                      <span class="text-xs text-emerald-400/80">Included at no extra cost</span>
+                      <span class="text-gray-600">·</span>
+                      <span class="text-xs text-gray-500">For new domain registrations</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-3 pt-3 border-t border-emerald-500/10 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-emerald-500/70 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="text-xs text-gray-500">Limited to one per order</span>
+                  </div>
+                  <button @click.stop="toggleAddon(addon.id)"
+                          class="px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5"
+                          :class="addons[String(addon.id)]?.selected ? 'text-emerald-300' : 'text-white hover:brightness-110'"
+                          :style="addons[String(addon.id)]?.selected ? 'background:rgba(16,185,129,0.15);border:1.5px solid rgba(16,185,129,0.35);' : 'background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 3px 12px rgba(16,185,129,0.40);border:1.5px solid transparent;'">
+                    <svg class="w-3 h-3" x-show="!addons[String(addon.id)]?.selected" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <svg class="w-3 h-3" x-show="addons[String(addon.id)]?.selected" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span x-text="addons[String(addon.id)]?.selected ? 'Claimed!' : 'Claim Free'"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            </template>
+
+            {# ── Paid addon ── #}
+            <template x-if="!addon.isFree">
+            <div class="rounded-2xl border transition-all duration-200"
+                 :class="addons[String(addon.id)]?.selected ? 'border-indigo-500/40' : 'border-white/[0.08] hover:border-white/[0.12]'"
+                 :style="addons[String(addon.id)]?.selected ? 'background:rgba(var(--color-primary-rgb),0.06);' : 'background:rgba(255,255,255,0.02);'">
+              <div class="p-4">
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-xl flex-shrink-0 mt-0.5 flex items-center justify-center transition-all"
+                       :style="addons[String(addon.id)]?.selected ? 'background:rgba(var(--color-primary-rgb),0.2);border:1px solid rgba(var(--color-primary-rgb),0.35);' : 'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);'">
+                    <svg class="w-4 h-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                         :class="addons[String(addon.id)]?.selected ? 'text-indigo-400' : 'text-gray-500'">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-white leading-tight" x-text="addon.title"></p>
+                        <div x-show="addon.description"
+                             class="text-xs text-gray-400 mt-1 leading-relaxed [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mt-0.5 [&_strong]:text-gray-300"
+                             x-html="addon.description"></div>
+                      </div>
+                      <div class="text-right flex-shrink-0">
+                        <span class="text-base font-bold text-white" x-text="addon.priceFormatted || '—'"></span>
+                        <span class="text-xs text-gray-500 block" x-show="addon.priceSubLabel" x-text="addon.priceSubLabel"></span>
+                      </div>
+                    </div>
+                    <div class="flex items-center justify-between mt-3 gap-2">
+                      <p class="text-xs text-gray-600" x-text="addon.priceLabel"></p>
+                      <button @click.stop="toggleAddon(addon.id)"
+                              class="px-4 py-2 rounded-xl text-xs font-semibold transition-all border whitespace-nowrap flex items-center gap-1.5"
+                              :class="addons[String(addon.id)]?.selected ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20' : 'border-transparent text-white hover:opacity-90'"
+                              :style="addons[String(addon.id)]?.selected ? '' : 'background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));'">
+                        <svg class="w-3 h-3" x-show="!addons[String(addon.id)]?.selected" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        <svg class="w-3 h-3" x-show="addons[String(addon.id)]?.selected" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        <span x-text="addons[String(addon.id)]?.selected ? 'Added' : 'Add'">Add</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </template>
+
+          </div>
+          </template>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="flex justify-end mt-4">
+        <button @click="goToStep2()"
+                :disabled="!useDefaultNs && (!ns1.trim() || !ns2.trim())"
+                class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
+                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 4px 16px rgba(var(--color-primary-rgb),0.25);">
+          Continue to Checkout
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>{# /Step 1 #}
+
+
+    {# ════════════════════════════════════════
+       Step 2 — Contact Info
+    ════════════════════════════════════════ #}
+    <div x-show="wizardStep === 2" class="max-w-6xl mx-auto">
+
+      {# ── Auth gate: shown when NOT logged in ──────────────────── #}
+      <div x-show="!isLoggedIn" class="rounded-2xl border border-white/[0.08] overflow-hidden"
+           style="background: rgba(255,255,255,0.025);">
+        <div class="px-6 pt-6 pb-4 border-b border-white/[0.06]">
+          <h3 class="text-base font-bold text-white">Contact Information</h3>
+          <p class="text-xs text-gray-500 mt-0.5">Sign in or create an account to continue with your registration</p>
+        </div>
+
+        <div class="p-6 space-y-4">
+
+          {# Google sign-in #}
+          {% if social.google_enabled|default(false) %}
+          <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request.uri|default('/')|url_encode)|url }}"
+             class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-white/[0.08] bg-white/[0.02] hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all group">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: rgba(255,255,255,0.06);">
+              <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-white">Continue with Google</p>
+              <p class="text-xs text-gray-500 mt-0.5">Sign in with your Google account</p>
+            </div>
+            <svg class="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+
+          {# Divider #}
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
+            <span class="text-xs text-gray-600">or</span>
+            <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
+          </div>
+          {% endif %}
+
+          {# Sign In option — brand-highlighted per Stitch design #}
+          <button @click="showLoginModal = true; loginError = '';"
+                  class="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left group"
+                  style="border-color:rgba(var(--color-primary-rgb),0.35);background:rgba(var(--color-primary-rgb),0.07);"
+                  onmouseenter="this.style.borderColor='rgba(var(--color-primary-rgb),0.55)';this.style.background='rgba(var(--color-primary-rgb),0.12)'"
+                  onmouseleave="this.style.borderColor='rgba(var(--color-primary-rgb),0.35)';this.style.background='rgba(var(--color-primary-rgb),0.07)'">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+                 style="background:var(--color-primary);">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-white">Sign in with existing account</p>
+              <p class="text-xs text-gray-400 mt-0.5">Use your stored contact details automatically</p>
+            </div>
+            <svg class="w-4 h-4 text-gray-500 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+
+          {# Divider #}
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
+            <span class="text-xs text-gray-600">or</span>
+            <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
+          </div>
+
+          {# Register option #}
+          <a :href="signupUrl + '?redirect=' + encodeURIComponent(window.location.href)"
+             class="flex items-center gap-4 p-4 rounded-xl border-2 border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04] transition-all group">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: rgba(var(--color-primary-rgb),0.12);">
+              <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-white">Create a new account</p>
+              <p class="text-xs text-gray-500 mt-0.5">Free — takes less than 2 minutes</p>
+            </div>
+            <svg class="w-4 h-4 text-gray-600 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+
+        </div>
+
+        {# Card footer — ToS note + help link #}
+        <div class="px-6 py-3 border-t border-white/[0.05] flex items-center justify-between" style="background:rgba(255,255,255,0.015);">
+          <p class="text-xs text-gray-600">By continuing, you agree to our <a href="{{ '/tos'|url }}" class="hover:underline" style="color:var(--color-primary);">Terms of Service</a>.</p>
+          <a href="{{ '/support'|url }}" class="text-xs font-medium text-gray-500 hover:text-white transition-colors">Need help?</a>
+        </div>
+      </div>
+
+      {# ── Contact forms: shown when logged in ────────────────────── #}
+      <div x-show="isLoggedIn" class="space-y-3">
+
+        {# ═══ Registrant Contact ═══ #}
+        <div class="rounded-2xl border overflow-hidden transition-colors"
+             :class="registrantEnabled ? 'border-indigo-500/25' : 'border-white/[0.08]'"
+             style="background: rgba(255,255,255,0.025);">
+          <div class="px-5 py-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                 :style="registrantEnabled ? 'background:rgba(var(--color-primary-rgb),0.15)' : 'background:rgba(255,255,255,0.04)'">
+              <svg class="w-4 h-4 transition-colors" :class="registrantEnabled ? 'text-indigo-400' : 'text-gray-600'"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm font-semibold transition-colors"
+                    :class="registrantEnabled ? 'text-white' : 'text-gray-400'">Registrant Contact</h4>
+                <span class="text-[10px] font-medium px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400">Required</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-0.5">Primary WHOIS contact and domain owner</p>
+            </div>
+            <button @click="registrantEnabled = !registrantEnabled; if (registrantEnabled && !contact.email) loadContactFromAccount()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex-shrink-0"
+                    :class="registrantEnabled
+                      ? 'border-red-500/30 bg-red-500/8 text-red-400 hover:bg-red-500/12'
+                      : 'border-indigo-500/30 bg-indigo-500/8 text-indigo-400 hover:bg-indigo-500/12'">
+              <svg x-show="registrantEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+              </svg>
+              <svg x-show="!registrantEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+              <span x-text="registrantEnabled ? 'Collapse' : 'Enable'"></span>
+            </button>
+          </div>
+          <div x-show="registrantEnabled" class="border-t border-white/[0.06] p-5">
+            <div x-show="contactLoading" class="flex items-center justify-center py-8 gap-3 text-gray-400">
+              <svg class="animate-spin h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span class="text-sm">Loading your account information…</span>
+            </div>
+            <div x-show="!contactLoading" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">First Name <span class="text-red-400">*</span></label>
+                <input type="text" x-model="contact.first_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Last Name <span class="text-red-400">*</span></label>
+                <input type="text" x-model="contact.last_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Email <span class="text-red-400">*</span></label>
+                <input type="email" x-model="contact.email"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Company</label>
+                <input type="text" x-model="contact.company"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Address <span class="text-red-400">*</span></label>
+                <input type="text" x-model="contact.address_1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">City <span class="text-red-400">*</span></label>
+                <input type="text" x-model="contact.city"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">State / Province</label>
+                <input type="text" x-model="contact.state"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Postcode</label>
+                <input type="text" x-model="contact.postcode"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Country Code</label>
+                <input type="text" x-model="contact.country" maxlength="2" placeholder="US"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Country Code</label>
+                <input type="text" x-model="contact.phone_cc" placeholder="1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
+                <input type="text" x-model="contact.phone"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+            </div>
+            <div x-show="!contactLoading && (!contact.first_name || !contact.address_1 || !contact.email)"
+                 class="mt-4 flex items-center gap-2 p-3 rounded-lg bg-amber-500/8 border border-amber-500/20 text-amber-300 text-xs">
+              <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+              </svg>
+              Please complete the required fields to continue.
+            </div>
+          </div>
+        </div>
+
+        {# ═══ Administrative Contact ═══ #}
+        <div class="rounded-2xl border overflow-hidden transition-colors"
+             :class="adminEnabled ? 'border-indigo-500/25' : 'border-white/[0.08]'"
+             style="background: rgba(255,255,255,0.025);">
+          <div class="px-5 py-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                 :style="adminEnabled ? 'background:rgba(var(--color-primary-rgb),0.15)' : 'background:rgba(255,255,255,0.04)'">
+              <svg class="w-4 h-4 transition-colors" :class="adminEnabled ? 'text-indigo-400' : 'text-gray-600'"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm font-semibold transition-colors"
+                    :class="adminEnabled ? 'text-white' : 'text-gray-400'">Administrative Contact</h4>
+                <span class="text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.03] text-gray-500">Optional</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-0.5">Domain administration — defaults to Registrant if left blank</p>
+            </div>
+            <button @click="adminEnabled = !adminEnabled"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex-shrink-0"
+                    :class="adminEnabled
+                      ? 'border-red-500/30 bg-red-500/8 text-red-400 hover:bg-red-500/12'
+                      : 'border-white/10 bg-white/[0.04] text-gray-400 hover:border-indigo-500/30 hover:bg-indigo-500/8 hover:text-indigo-400'">
+              <svg x-show="adminEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+              </svg>
+              <svg x-show="!adminEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+              <span x-text="adminEnabled ? 'Disable' : 'Enable'"></span>
+            </button>
+          </div>
+          <div x-show="adminEnabled" class="border-t border-white/[0.06] p-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">First Name</label>
+                <input type="text" x-model="adminContact.first_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Last Name</label>
+                <input type="text" x-model="adminContact.last_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+                <input type="email" x-model="adminContact.email"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Company</label>
+                <input type="text" x-model="adminContact.company"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Address</label>
+                <input type="text" x-model="adminContact.address_1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">City</label>
+                <input type="text" x-model="adminContact.city"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">State / Province</label>
+                <input type="text" x-model="adminContact.state"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Postcode</label>
+                <input type="text" x-model="adminContact.postcode"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Country Code</label>
+                <input type="text" x-model="adminContact.country" maxlength="2" placeholder="US"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Country Code</label>
+                <input type="text" x-model="adminContact.phone_cc" placeholder="1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
+                <input type="text" x-model="adminContact.phone"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# ═══ Technical Contact ═══ #}
+        <div class="rounded-2xl border overflow-hidden transition-colors"
+             :class="techEnabled ? 'border-indigo-500/25' : 'border-white/[0.08]'"
+             style="background: rgba(255,255,255,0.025);">
+          <div class="px-5 py-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                 :style="techEnabled ? 'background:rgba(var(--color-primary-rgb),0.15)' : 'background:rgba(255,255,255,0.04)'">
+              <svg class="w-4 h-4 transition-colors" :class="techEnabled ? 'text-indigo-400' : 'text-gray-600'"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm font-semibold transition-colors"
+                    :class="techEnabled ? 'text-white' : 'text-gray-400'">Technical Contact</h4>
+                <span class="text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.03] text-gray-500">Optional</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-0.5">Technical points of contact — defaults to Registrant if left blank</p>
+            </div>
+            <button @click="techEnabled = !techEnabled"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex-shrink-0"
+                    :class="techEnabled
+                      ? 'border-red-500/30 bg-red-500/8 text-red-400 hover:bg-red-500/12'
+                      : 'border-white/10 bg-white/[0.04] text-gray-400 hover:border-indigo-500/30 hover:bg-indigo-500/8 hover:text-indigo-400'">
+              <svg x-show="techEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+              </svg>
+              <svg x-show="!techEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+              <span x-text="techEnabled ? 'Disable' : 'Enable'"></span>
+            </button>
+          </div>
+          <div x-show="techEnabled" class="border-t border-white/[0.06] p-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">First Name</label>
+                <input type="text" x-model="techContact.first_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Last Name</label>
+                <input type="text" x-model="techContact.last_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+                <input type="email" x-model="techContact.email"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Company</label>
+                <input type="text" x-model="techContact.company"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Address</label>
+                <input type="text" x-model="techContact.address_1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">City</label>
+                <input type="text" x-model="techContact.city"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">State / Province</label>
+                <input type="text" x-model="techContact.state"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Postcode</label>
+                <input type="text" x-model="techContact.postcode"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Country Code</label>
+                <input type="text" x-model="techContact.country" maxlength="2" placeholder="US"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Country Code</label>
+                <input type="text" x-model="techContact.phone_cc" placeholder="1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
+                <input type="text" x-model="techContact.phone"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# ═══ Billing Contact ═══ #}
+        <div class="rounded-2xl border overflow-hidden transition-colors"
+             :class="billingEnabled ? 'border-indigo-500/25' : 'border-white/[0.08]'"
+             style="background: rgba(255,255,255,0.025);">
+          <div class="px-5 py-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                 :style="billingEnabled ? 'background:rgba(var(--color-primary-rgb),0.15)' : 'background:rgba(255,255,255,0.04)'">
+              <svg class="w-4 h-4 transition-colors" :class="billingEnabled ? 'text-indigo-400' : 'text-gray-600'"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm font-semibold transition-colors"
+                    :class="billingEnabled ? 'text-white' : 'text-gray-400'">Billing Contact</h4>
+                <span class="text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.03] text-gray-500">Optional</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-0.5">Billing contact for domain renewals — defaults to Registrant if left blank</p>
+            </div>
+            <button @click="billingEnabled = !billingEnabled"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex-shrink-0"
+                    :class="billingEnabled
+                      ? 'border-red-500/30 bg-red-500/8 text-red-400 hover:bg-red-500/12'
+                      : 'border-white/10 bg-white/[0.04] text-gray-400 hover:border-indigo-500/30 hover:bg-indigo-500/8 hover:text-indigo-400'">
+              <svg x-show="billingEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+              </svg>
+              <svg x-show="!billingEnabled" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+              <span x-text="billingEnabled ? 'Disable' : 'Enable'"></span>
+            </button>
+          </div>
+          <div x-show="billingEnabled" class="border-t border-white/[0.06] p-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">First Name</label>
+                <input type="text" x-model="billingContact.first_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Last Name</label>
+                <input type="text" x-model="billingContact.last_name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+                <input type="email" x-model="billingContact.email"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Company</label>
+                <input type="text" x-model="billingContact.company"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Address</label>
+                <input type="text" x-model="billingContact.address_1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">City</label>
+                <input type="text" x-model="billingContact.city"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">State / Province</label>
+                <input type="text" x-model="billingContact.state"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Postcode</label>
+                <input type="text" x-model="billingContact.postcode"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Country Code</label>
+                <input type="text" x-model="billingContact.country" maxlength="2" placeholder="US"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Country Code</label>
+                <input type="text" x-model="billingContact.phone_cc" placeholder="1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
+                <input type="text" x-model="billingContact.phone"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>{# /isLoggedIn contact cards #}
+
+      {# ── Promo Code ── #}
+      <div x-show="isLoggedIn" class="mt-4">
+        <div class="rounded-2xl border border-white/[0.08] p-4" style="background:rgba(255,255,255,0.02);">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(var(--color-primary-rgb),0.12);">
+                <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-white">Promo code</p>
+                <p class="text-xs text-gray-500">Add your coupon before checkout</p>
+              </div>
+            </div>
+            <span x-show="promoCode" class="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 uppercase" x-text="promoCode"></span>
+          </div>
+
+          <div x-show="!promoCode" class="flex items-center gap-2">
+            <div class="relative flex-1">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+              </svg>
+              <input type="text"
+                     x-model="promoInput"
+                     @keydown.enter.prevent="applyCoupon()"
+                     placeholder="PROMO2026"
+                     autocomplete="off"
+                     class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 uppercase tracking-wider transition-colors">
+            </div>
+            <button @click="applyCoupon()"
+                    :disabled="!promoInput.trim() || promoLoading"
+                    class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                    style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+              <span x-show="!promoLoading">Apply</span>
+              <span x-show="promoLoading" x-cloak>Checking…</span>
+            </button>
+          </div>
+
+          <div x-show="promoCode" class="flex items-center justify-between gap-3 py-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span class="text-sm text-emerald-400">Promo code applied.</span>
+              <span class="px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 uppercase" x-text="promoCode"></span>
+            </div>
+            <button @click="promoCode = ''; promoError = ''; promoDiscount = 0; promoType = null; promoValue = 0;"
+                    class="flex-shrink-0 px-2 py-1 rounded-lg text-xs text-gray-500 hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-colors"
+                    title="Remove code">
+              Remove
+            </button>
+          </div>
+          <div x-show="promoDiscount > 0" x-cloak class="mt-1.5 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span class="text-xs text-emerald-400" x-text="'Discount: −' + '{{ currPrefix|escape('js') }}' + promoDiscount.toFixed(2) + '{{ currSuffix|escape('js') }}'"></span>
+          </div>
+        </div>
+        <p x-show="promoError" class="mt-1.5 text-xs text-red-400" x-text="promoError"></p>
+      </div>
+
+      {# ── Order Summary ── #}
+      <div x-show="isLoggedIn" class="mt-4 rounded-2xl border border-white/[0.08] overflow-hidden"
+           style="background: rgba(255,255,255,0.025);">
+        <div class="px-6 pt-5 pb-4 border-b border-white/[0.06]">
+          <h3 class="text-sm font-bold text-white">Order Summary</h3>
+        </div>
+        <div class="divide-y divide-white/[0.06]">
+
+          {# Domain row #}
+          <div class="px-6 py-4 flex items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-0.5">
+                <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/>
+                </svg>
+                <span class="text-white font-semibold" x-text="selSld + selTld"></span>
+              </div>
+              <p class="text-xs text-gray-500 ml-6"
+                 x-text="selYears + ' year' + (selYears > 1 ? 's' : '') + ' — Domain Registration'"></p>
+            </div>
+            <span class="text-white font-bold flex-shrink-0" x-text="fmtPrice(selPriceRaw * selYears)"></span>
+          </div>
+
+          {# Nameservers row #}
+          <div class="px-6 py-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+              </svg>
+              <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nameservers</span>
+            </div>
+            <div x-show="useDefaultNs" class="ml-6 text-sm text-gray-300">Default nameservers</div>
+            <div x-show="!useDefaultNs" class="ml-6 space-y-0.5">
+              <p class="text-sm text-gray-300" x-text="ns1"></p>
+              <p class="text-sm text-gray-300" x-text="ns2"></p>
+              <p x-show="ns3" class="text-sm text-gray-300" x-text="ns3"></p>
+              <p x-show="ns4" class="text-sm text-gray-300" x-text="ns4"></p>
+            </div>
+          </div>
+
+          {# Registrant row #}
+          <div class="px-6 py-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Registrant</span>
+            </div>
+            <div class="ml-6">
+              <p class="text-sm text-gray-300" x-text="(contact.first_name || '') + ' ' + (contact.last_name || '')"></p>
+              <p class="text-xs text-gray-500 mt-0.5" x-text="contact.email"></p>
+              <p class="text-xs text-gray-500 mt-0.5"
+                 x-text="[contact.address_1, contact.city, contact.country].filter(Boolean).join(', ')"></p>
+            </div>
+          </div>
+
+          {# Add-ons row — only shown when at least one addon is selected #}
+          <template x-if="DOMAIN_ADDONS.length > 0 && Object.values(addons).some(a => a.selected)">
+            <div class="px-6 py-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                </svg>
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Add-ons</span>
+              </div>
+              <div class="ml-6 space-y-1.5">
+                <template x-for="addon in DOMAIN_ADDONS.filter(a => addons[String(a.id)] && addons[String(a.id)].selected)" :key="addon.id">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm text-gray-300" x-text="addon.title"></p>
+                    <span class="text-sm font-semibold text-white" x-text="addon.isFree ? 'Free' : (addon.priceFormatted || '—')"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+
+          {# Promo row — shown when a code has been entered #}
+          <template x-if="promoCode">
+            <div class="px-6 py-3 flex items-center justify-between gap-4 border-t border-white/[0.06]">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-xs text-gray-400">Promo</span>
+                <span class="px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 uppercase" x-text="promoCode"></span>
+              </div>
+              <span class="text-sm font-semibold text-emerald-400 flex-shrink-0">Discount applied</span>
+            </div>
+          </template>
+
+          {# Total row #}
+          <div class="px-6 py-5" style="background: rgba(var(--color-primary-rgb),0.06);">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-semibold text-white">Total Due Today</p>
+                <p x-show="promoCode" class="text-xs text-emerald-500 mt-0.5 flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                  Promo discount applied at checkout
+                </p>
+                <p x-show="selRenewPrice > 0 && !promoCode"
+                   class="text-xs text-gray-500 mt-0.5"
+                   x-text="'Renews at ' + fmtPrice(selRenewPrice) + '/year'"></p>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-extrabold"
+                   :class="promoCode ? 'text-emerald-300' : 'text-white'"
+                   x-text="fmtPrice(selPriceRaw * selYears + addonPriceTotal())"></p>
+                <p x-show="promoCode" class="text-xs text-emerald-500/70 mt-0.5">Before promo discount</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {# Error #}
+      <div x-show="orderError"
+           class="mt-4 flex items-start gap-3 p-4 rounded-xl bg-red-500/8 border border-red-500/25 text-red-300 text-sm" x-cloak>
+        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+        <span x-text="orderError"></span>
+      </div>
+
+      <div class="flex items-center justify-between mt-4">
+        <button @click="wizardStep = 1"
+                class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-gray-400 text-sm hover:border-white/20 hover:text-white transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          Back
+        </button>
+        <button x-show="isLoggedIn"
+                @click="placeOrder()"
+                :disabled="ordering || !contact.first_name || !contact.last_name || !contact.email || !contact.address_1 || !contact.city"
+                class="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 shadow-lg"
+                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 4px 20px rgba(var(--color-primary-rgb),0.25);">
+          <svg x-show="ordering" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <svg x-show="!ordering" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span x-text="ordering ? 'Processing…' : 'Complete Order & Pay'"></span>
+        </button>
+      </div>
+    </div>{# /Step 2 #}
+
+  </div>{# /Phase 2 #}
+
+  {# ══════════════════════════════════════════════════════════════
+     Login Modal Overlay
+  ══════════════════════════════════════════════════════════════ #}
+  <div x-show="showLoginModal"
+       x-cloak
+       @keydown.escape.window="showLoginModal = false"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);">
+
+    <div @click.outside="showLoginModal = false"
+         class="login-modal w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 overflow-hidden"
+         style="background: #0a0f1e;">
+
+      {# Modal header #}
+      <div class="flex items-center justify-between px-6 py-5 border-b border-white/[0.07]">
+        <div>
+          <h2 class="login-modal-title text-base font-bold text-white">Sign In to Continue</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Log in to load your contact details</p>
+        </div>
+        <button @click="showLoginModal = false"
+                class="w-8 h-8 rounded-lg border border-white/10 flex items-center justify-center text-gray-500 hover:text-white hover:border-white/20 transition-all">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      {# Modal body #}
+      <div class="px-6 py-6 space-y-4">
+
+        {# Google sign-in #}
+        {% if social.google_enabled|default(false) %}
+        <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request.uri|default('/')|url_encode)|url }}"
+           class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-200 text-sm font-semibold hover:bg-white/[0.08] transition-all"
+           style="background:rgba(255,255,255,0.05);">
+          <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Continue with Google
+        </a>
+        <div class="flex items-center gap-3">
+          <div class="flex-1 h-px bg-white/[0.08]"></div>
+          <span class="text-xs text-gray-600">or sign in with email</span>
+          <div class="flex-1 h-px bg-white/[0.08]"></div>
+        </div>
+        {% endif %}
+
+        {# Error #}
+        <div x-show="loginError"
+             class="flex items-center gap-2 p-3 rounded-xl bg-red-500/8 border border-red-500/25 text-red-300 text-xs">
+          <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+          <span x-text="loginError"></span>
+        </div>
+
+        {# Email #}
+        <div>
+          <label class="login-modal-label block text-xs font-medium text-gray-400 mb-1.5">Email address</label>
+          <input type="email"
+                 x-model="loginEmail"
+                 @keydown.enter="submitLogin()"
+                 placeholder="you@example.com"
+                 autofocus
+                 class="login-modal-input w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white text-sm outline-none transition-colors focus:border-indigo-500/50 placeholder-gray-600" />
+        </div>
+
+        {# Password #}
+        <div>
+          <label class="login-modal-label block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+          <input type="password"
+                 x-model="loginPassword"
+                 @keydown.enter="submitLogin()"
+                 placeholder="••••••••"
+                 class="login-modal-input w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white text-sm outline-none transition-colors focus:border-indigo-500/50 placeholder-gray-600" />
+        </div>
+
+        {# Submit #}
+        <button @click="submitLogin()"
+                :disabled="loginLoading || !loginEmail || !loginPassword"
+                class="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-50 hover:brightness-110"
+                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+          <svg x-show="loginLoading" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span x-text="loginLoading ? 'Signing in…' : 'Sign In & Continue'"></span>
+        </button>
+
+        <p class="text-center text-xs text-gray-600">
+          <a href="{{ 'password-reset'|url }}" class="text-indigo-400 hover:text-indigo-300 transition-colors">Forgot password?</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>{# /x-data #}
+<div style="margin-bottom: 3rem;"></div>
+{% endblock %}
+
+{% block js %}
+{% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+<script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
+{% endif %}
+<script>
+(function () {
+  const PRODUCT_ID        = {{ domain_product_id|default('null') }};
+  const CURR_CODE         = '{{ currencyCode|escape('js') }}';
+  const CURR_PREFIX       = '{{ currPrefix|escape('js') }}';
+  const CURR_SUFFIX       = '{{ currSuffix|escape('js') }}';
+  const CURR_RATE         = {{ currency.conversion_rate|default(1)|number_format(10, '.', '') }};
+  {% set _priceFormat = currency.price_format|default(1) %}
+  const CURR_PRICE_FORMAT = {{ _priceFormat in [1,2,3,4,5] ? _priceFormat : 1 }};
+  const CURRENCIES        = {{ currencies|json_encode|raw }};
+  const CLIENT_CURRENCY   = '{{ clientCurrencyCode|escape('js') }}';
+  const CHECKOUT          = '{{ '/order/checkout'|url }}';
+  const TLD_DATA          = {{ tlds|json_encode|raw }};
+  const IS_LOGGED_IN      = {{ clientLoggedIn ? 'true' : 'false' }};
+  const SIGNUP_URL        = '{{ 'signup'|url }}';
+  const DOMAIN_ADDONS = (function () {
+    const _raw = [
+      {% for addon in domain_addons %}
+      {% set _oncePx   = (addon.pricing.type == 'once') ? addon.pricing.once.price : 0 %}
+      {% set _onceSetup = (addon.pricing.type == 'once' and addon.pricing.once.setup is defined) ? addon.pricing.once.setup : 0 %}
+      {% set _isFree  = addon.pricing.type == 'free' or (addon.pricing.type == 'once' and _oncePx == 0) %}
+      {# For recurrent: find first enabled period price using same pattern as legacy templates #}
+      {% set _firstEnabledPrice = null %}
+      {% set _firstEnabledCode  = '' %}
+      {% if addon.pricing.type == 'recurrent' %}
+        {% for code, prices in addon.pricing.recurrent %}
+          {% if _firstEnabledPrice is null and prices.enabled %}
+            {% set _firstEnabledPrice = prices.price %}
+            {% set _firstEnabledCode  = code %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+      {
+        id: {{ addon.id }},
+        title: {{ addon.title|json_encode|raw }},
+        description: {{ ((addon.description ?? '')|markdown ~ '')|json_encode|raw }},
+        pricingType: {{ addon.pricing.type|json_encode|raw }},
+        isFree: {{ _isFree ? 'true' : 'false' }},
+        priceRaw: {% if addon.pricing.type == 'recurrent' and _firstEnabledPrice is not null %}{{ _firstEnabledPrice|number_format(10, '.', '') }}{% elseif addon.pricing.type == 'once' and not _isFree %}{{ (_oncePx + _onceSetup)|number_format(10, '.', '') }}{% else %}0{% endif %},
+        priceFormatted: {% if addon.pricing.type == 'recurrent' and _firstEnabledPrice is not null %}{{ (_firstEnabledPrice)|money_convert|json_encode|raw }}{% elseif addon.pricing.type == 'once' and not _isFree %}{{ (_oncePx + _onceSetup)|money_convert|json_encode|raw }}{% else %}''{% endif %},
+        priceSubLabel: {% if addon.pricing.type == 'recurrent' and _firstEnabledCode != '' %}{{ ('/' ~ (periods[_firstEnabledCode] ?? _firstEnabledCode))|json_encode|raw }}{% elseif addon.pricing.type == 'once' and not _isFree %}'one-time'{% else %}''{% endif %},
+        priceLabel: {% if _isFree %}'No extra cost'{% elseif addon.pricing.type == 'once' %}'One-time charge'{% else %}'Add-on charge'{% endif %},
+        firstPeriodCode: {{ _firstEnabledCode|json_encode|raw }},
+      },
+      {% endfor %}
+    ];
+    // Deduplicate by id — prefer the isFree entry over a paid entry for the same id
+    const _map = {};
+    for (const _a of _raw) { if (!_map[_a.id] || _a.isFree) _map[_a.id] = _a; }
+    return Object.values(_map);
+  })();
+
+  function fmtPrice(amount) {
+    const raw = parseFloat(amount || 0) * CURR_RATE;
+    let n;
+    const fmt = parseInt(CURR_PRICE_FORMAT);
+    if (fmt === 2) {
+      n = raw.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    } else if (fmt === 3) {
+      const p = raw.toFixed(2).split('.');
+      n = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
+    } else if (fmt === 4) {
+      n = Math.round(raw).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    } else if (fmt === 5) {
+      n = Math.round(raw).toString();
+    } else {
+      n = raw.toFixed(2);
+    }
+    return CURR_PREFIX + n + CURR_SUFFIX;
+  }
+
+  function tldGradient(tld) {
+    const p = [
+      ['var(--color-primary)','var(--color-secondary)'], ['#0ea5e9','#0284c7'], ['#10b981','#059669'],
+      ['#f59e0b','#d97706'], ['#ef4444','#dc2626'], ['#ec4899','#db2777'],
+      ['#14b8a6','#0d9488'], ['var(--color-secondary)','#6d28d9'], ['#06b6d4','#0891b2'],
+      ['#84cc16','#65a30d'],
+    ];
+    let h = 0;
+    for (let i = 0; i < tld.length; i++) h = (Math.imul(h, 31) + tld.charCodeAt(i)) | 0;
+    const [a, b] = p[Math.abs(h) % p.length];
+    return `linear-gradient(135deg, ${a}bb, ${b}ee)`;
+  }
+
+  function tldMeta(tld) {
+    const t = TLD_DATA.find(x => x.tld === tld);
+    return t ? {
+      price:      parseFloat(t.price_registration) || 0,
+      renewPrice: parseFloat(t.price_renew)         || 0,
+      minYears:   parseInt(t.min_years, 10)         || 1,
+    } : { price: 0, renewPrice: 0, minYears: 1 };
+  }
+
+  window.domainFlow = function () {
+    return {
+      /* ── Data exposed for Alpine expressions ── */
+      DOMAIN_ADDONS,
+
+      /* ── Search state ── */
+      query:            '',
+      results:               [],
+      suggestions:           [],
+      suggestionQueue:       [],
+      searching:             false,
+      searched:              false,
+      suggestionsLoading:    false,
+      suggestionsLoadingMore: false,
+      error:            '',
+      registrarError:   false,
+      authError:        false,
+      parsedSld:        '',
+      parsedTld:        '',
+
+      /* ── Wizard state ── */
+      wizardActive:  false,
+      wizardStep:    1,
+      selSld:        '',
+      selTld:        '',
+      selYears:      1,
+      selPriceRaw:   0,
+      selRenewPrice: 0,
+
+      /* ── Nameservers ── */
+      useDefaultNs: true,
+      ns1: '', ns2: '', ns3: '', ns4: '',
+
+      /* ── Auth ── */
+      isLoggedIn:    IS_LOGGED_IN,
+      showLoginModal: false,
+      loginEmail:    '',
+      loginPassword: '',
+      loginLoading:  false,
+      loginError:    '',
+
+      /* ── Contact ── */
+      registrantEnabled: false,
+      adminEnabled: false,
+      techEnabled: false,
+      billingEnabled: false,
+      contactLoading: false,
+      contact: {
+        first_name: '', last_name: '', email: '',
+        company: '', address_1: '', city: '',
+        state: '', country: '', postcode: '',
+        phone_cc: '', phone: ''
+      },
+      adminContact: {
+        first_name: '', last_name: '', email: '',
+        company: '', address_1: '', city: '',
+        state: '', country: '', postcode: '',
+        phone_cc: '', phone: ''
+      },
+      techContact: {
+        first_name: '', last_name: '', email: '',
+        company: '', address_1: '', city: '',
+        state: '', country: '', postcode: '',
+        phone_cc: '', phone: ''
+      },
+      billingContact: {
+        first_name: '', last_name: '', email: '',
+        company: '', address_1: '', city: '',
+        state: '', country: '', postcode: '',
+        phone_cc: '', phone: ''
+      },
+
+      /* ── URLs (must be data props — Alpine evaluates :href in data scope) ── */
+      signupUrl:   SIGNUP_URL,
+      checkoutUrl: CHECKOUT,
+
+      /* ── Currency ── */
+      currencyCode:     CURR_CODE,
+      changingCurrency: false,
+
+      /* ── Order ── */
+      ordering:   false,
+      orderError: '',
+
+      /* ── Promo code ── */
+      promoInput: '',
+      promoCode:  '',
+      promoError: '',
+      promoLoading: false,
+      promoDiscount: 0,
+      promoType: null,
+      promoValue: 0,
+
+      /* ── Addons ── */
+      addons: {},  // { addonId: { selected: bool } }
+
+      /* ──────────────────────────────── */
+      init() {
+        const params = new URLSearchParams(window.location.search);
+        const sld    = params.get('register_sld');
+        const tld    = params.get('register_tld');
+        if (sld) {
+          this.query = sld + (tld || '');
+          this.$nextTick(() => this.search());
+        }
+      },
+
+      onInput() {
+        this.error = '';
+        const raw  = this.query.trim();
+        const dot  = raw.lastIndexOf('.');
+        this.parsedSld = dot > 0 ? raw.slice(0, dot) : raw;
+        this.parsedTld = dot > 0 ? raw.slice(dot)    : '';
+        if (!raw) {
+          this.results = [];
+          this.suggestions = [];
+          this.searched = false;
+        }
+      },
+
+      clearSearch() {
+        this.query                = '';
+        this.results              = [];
+        this.suggestions          = [];
+        this.suggestionQueue      = [];
+        this.searched             = false;
+        this.suggestionsLoading   = false;
+        this.suggestionsLoadingMore = false;
+        this.error                = '';
+        this.registrarError       = false;
+        this.authError            = false;
+      },
+
+      async search() {
+        const raw = this.query.trim();
+        if (raw.length < 2) return;
+
+        const dot = raw.lastIndexOf('.');
+        this.parsedSld = dot > 0 ? raw.slice(0, dot) : raw;
+        this.parsedTld = dot > 0 ? raw.slice(dot)    : '';
+
+        // Determine the one primary TLD to check first
+        const primaryTld = this.parsedTld || this._pickPrimaryTld();
+
+        this.searching          = true;
+        this.searched           = false;
+        this.error              = '';
+        this.registrarError     = false;
+        this.authError          = false;
+        this.results            = [];
+        this.suggestions        = [];
+        this.suggestionQueue    = [];
+        this.suggestionsLoading = false;
+        this.suggestionsLoadingMore = false;
+
+        // Step 1: Check primary domain only — show result immediately
+        {% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+        // reCAPTCHA v3: get a token for the primary domain availability check
+        const primaryRcToken = await new Promise(function(resolve) {
+          if (typeof grecaptcha !== 'undefined') {
+            grecaptcha.ready(function() {
+              grecaptcha.execute('{{ _rc.publickey }}', { action: 'DOMAIN_SEARCH' })
+                .then(resolve).catch(function() { resolve(''); });
+            });
+          } else { resolve(''); }
+        });
+        const primary = await this._checkOneTld(primaryTld, this.parsedSld, true, {'g-recaptcha-response': primaryRcToken});
+        {% else %}
+        const primary = await this._checkOneTld(primaryTld, this.parsedSld, true);
+        {% endif %}
+        this.results   = [primary];
+        this.searching = false;
+        this.searched  = true;
+
+        // Scroll results into view
+        this.$nextTick(() => {
+          const el = document.getElementById('searchResults');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        // Step 2: Lazily check alternative TLDs in the background
+        this._startSuggestionsLoad(this.parsedSld, primaryTld);
+      },
+
+      _pickPrimaryTld() {
+        const popular = ['.com', '.net', '.org', '.io', '.co'];
+        const avail = TLD_DATA.filter(t => t.allow_register);
+        for (const p of popular) {
+          if (avail.find(t => t.tld === p)) return p;
+        }
+        return avail.length > 0 ? avail[0].tld : '.com';
+      },
+
+      _checkOneTld(tld, sld, updateErrors, extraParams = {}) {
+        return new Promise(resolve => {
+          API.guest.post(
+            'servicedomain/check',
+            Object.assign({ sld, tld }, extraParams),
+            () => {
+              const meta = tldMeta(tld);
+              resolve({
+                tld,
+                sld,
+                domain:        sld + tld,
+                available:     true,
+                price:         meta.price,
+                renewPrice:    meta.renewPrice,
+                minYears:      meta.minYears,
+                registerYears: Math.max(1, meta.minYears),
+              });
+            },
+            (err) => {
+              const msg = (err && (err.message || err)) + '';
+              const m = msg.toLowerCase();
+              const isAuth  = m.includes('unauthenticated user') || m.includes('unauthorized') || m.includes('invalid api key') || m.includes('credentials are invalid') || m.includes('whitelisted') || m.includes('api credentials');
+              const isTaken = !isAuth && (m.includes('not available') || m.includes('already') ||
+                              m.includes('cannot be registered') || m.includes('not active') ||
+                              m.includes('is invalid') || m.includes('no registrar') ||
+                              m.includes('not configured') || m.includes('tld is not'));
+              if (updateErrors) {
+                if (isAuth) this.authError = true;
+                else if (!isTaken) this.registrarError = true;
+              }
+              resolve({ tld, sld, domain: sld + tld, available: false, price: 0, renewPrice: 0, minYears: 1, registerYears: 1 });
+            },
+            false
+          );
+        });
+      },
+
+      _startSuggestionsLoad(sld, excludeTld) {
+        // Huraga-aligned: suggestions show configured pricing only — availability is
+        // checked on demand (per-row Check button), not auto-fired. This keeps registrar
+        // API usage and the per-IP rate-limit budget at one lookup per explicit action.
+        if (!sld || sld.length < 2) return;
+        const altTlds = TLD_DATA.filter(t => t.allow_register && t.tld !== excludeTld);
+        if (altTlds.length === 0) return;
+
+        const firstBatch = altTlds.slice(0, 3);
+        this.suggestionQueue = altTlds.slice(3, 6);
+
+        this.suggestions = firstBatch.map(t => {
+          const meta = tldMeta(t.tld);
+          return {
+            tld: t.tld, sld, domain: sld + t.tld,
+            checking: false, available: null,
+            price: meta.price, renewPrice: meta.renewPrice,
+            minYears: meta.minYears, registerYears: Math.max(1, meta.minYears),
+          };
+        });
+      },
+
+      async checkSuggestion(idx) {
+        const s = this.suggestions[idx];
+        if (!s || s.checking || s.available !== null) return;
+        this.suggestions.splice(idx, 1, { ...s, checking: true });
+        const r = await this._checkOneTld(s.tld, s.sld, false);
+        this.suggestions.splice(idx, 1, { ...r, checking: false });
+      },
+
+      showMoreSuggestions() {
+        if (!this.suggestionQueue.length) return;
+        const batch = this.suggestionQueue.splice(0, 3);
+
+        // Append rows with pricing only — availability stays on-demand per row
+        batch.forEach(t => {
+          const meta = tldMeta(t.tld);
+          this.suggestions.push({
+            tld: t.tld, sld: this.parsedSld, domain: this.parsedSld + t.tld,
+            checking: false, available: null,
+            price: meta.price, renewPrice: meta.renewPrice,
+            minYears: meta.minYears, registerYears: Math.max(1, meta.minYears),
+          });
+        });
+      },
+
+      startWizard(r) {
+        this.selSld        = r.sld   || this.parsedSld;
+        this.selTld        = r.tld;
+        this.selYears      = r.registerYears || Math.max(1, r.minYears || 1);
+        this.selPriceRaw   = r.price;
+        this.selRenewPrice = r.renewPrice;
+        this.useDefaultNs  = true;
+        this.ns1 = this.ns2 = this.ns3 = this.ns4 = '';
+        this.registrantEnabled = false;
+        this.adminEnabled      = false;
+        this.techEnabled       = false;
+        this.billingEnabled    = false;
+        this.orderError    = '';
+        this.wizardStep    = 1;
+        this.wizardActive  = true;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+
+      exitWizard() {
+        this.wizardActive = false;
+        this.wizardStep   = 1;
+      },
+
+      goToStep2() {
+        this.wizardStep = 2;
+        if (this.isLoggedIn) this.loadContactFromAccount();
+      },
+
+      changeCurrency(code) {
+        if (code === this.currencyCode || this.changingCurrency) return;
+        if (window.stablepanel && typeof window.stablepanel.switchCurrency === 'function') {
+          window.stablepanel.switchCurrency(code);
+          return;
+        }
+        this.changingCurrency = true;
+        API.guest.post(
+          'cart/set_currency',
+          { currency: code },
+          () => { window.location.reload(); },
+          () => { this.changingCurrency = false; },
+          false
+        );
+      },
+
+      submitLogin() {
+        if (!this.loginEmail || !this.loginPassword) return;
+        this.loginLoading = true;
+        this.loginError   = '';
+        API.guest.post(
+          'client/login',
+          { email: this.loginEmail, password: this.loginPassword },
+          () => {
+            // After login the server calls session_regenerate_id(), so the session ID
+            // changes. The CSRF token embedded in the page meta tag was computed from
+            // the old session ID and is now stale — any subsequent client API call will
+            // fail with a CSRF 403. Fix: re-fetch the current page and pull the fresh
+            // csrf-token out of its <meta> tag before calling loadContactFromAccount().
+            fetch(window.location.href, { credentials: 'same-origin' })
+              .then(r => r.text())
+              .then(html => {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const freshToken = doc.querySelector('meta[name="csrf-token"]')
+                                      ?.getAttribute('content');
+                if (freshToken) {
+                  const metaEl = document.querySelector('meta[name="csrf-token"]');
+                  if (metaEl) metaEl.setAttribute('content', freshToken);
+                }
+              })
+              .catch(() => { /* non-fatal — profile fetch may still work */ })
+              .finally(() => {
+                this.isLoggedIn     = true;
+                this.showLoginModal  = false;
+                this.loginPassword   = '';
+                this.loginError      = '';
+                this.loginLoading    = false;
+                this.loadContactFromAccount();
+              });
+          },
+          (err) => {
+            this.loginError  = (err && (err.message || err)) || 'Invalid email or password.';
+            this.loginLoading = false;
+          },
+          false
+        );
+      },
+
+      loadContactFromAccount() {
+        if (this.contact.email) return; // already loaded
+        this.registrantEnabled = true; // open card so loading spinner is visible
+        this.contactLoading = true;
+        API.client.post(
+          'profile/get',
+          {},
+          (data) => {
+            this.contact = {
+              first_name: data.first_name || '',
+              last_name:  data.last_name  || '',
+              email:      data.email      || '',
+              company:    data.company    || '',
+              address_1:  data.address_1  || '',
+              city:       data.city       || '',
+              state:      data.state      || '',
+              country:    data.country    || '',
+              postcode:   data.postcode   || '',
+              phone_cc:   data.phone_cc   || '',
+              phone:      data.phone      || '',
+            };
+            this.contactLoading = false;
+          },
+          () => {
+            this.contactLoading = false;
+          },
+          false
+        );
+      },
+
+      toggleAddon(addonId) {
+        const key = String(addonId);
+        if (!this.addons[key]) this.addons[key] = { selected: false };
+        this.addons[key].selected = !this.addons[key].selected;
+      },
+
+      addonPriceTotal() {
+        return DOMAIN_ADDONS.reduce((sum, a) => {
+          const s = this.addons[String(a.id)];
+          return s && s.selected ? sum + (parseFloat(a.priceRaw) || 0) : sum;
+        }, 0);
+      },
+
+      placeOrder() {
+        if (!PRODUCT_ID) {
+          this.orderError = 'Domain product not configured. Please contact support.';
+          return;
+        }
+        this.ordering   = true;
+        this.orderError = '';
+
+        const params = {
+          id:            PRODUCT_ID,
+          multiple:      1,
+          action:        'register',
+          register_sld:  this.selSld,
+          register_tld:  this.selTld,
+          register_years: this.selYears,
+        };
+
+        if (!this.useDefaultNs && this.ns1.trim() && this.ns2.trim()) {
+          params.ns1 = this.ns1.trim();
+          params.ns2 = this.ns2.trim();
+          if (this.ns3.trim()) params.ns3 = this.ns3.trim();
+          if (this.ns4.trim()) params.ns4 = this.ns4.trim();
+        }
+
+        // Attach selected addons
+        const addonPayload = {};
+        Object.entries(this.addons).forEach(([id, state]) => {
+          if (state.selected) {
+            const meta = DOMAIN_ADDONS.find(a => String(a.id) === id);
+            const entry = { selected: true };
+            if (meta && meta.pricingType === 'recurrent' && meta.firstPeriodCode) {
+              entry.period = meta.firstPeriodCode;
+            }
+            addonPayload[id] = entry;
+          }
+        });
+        if (Object.keys(addonPayload).length > 0) {
+          params.addons = addonPayload;
+        }
+
+        const afterAdd = () => {
+          if (this.promoCode) {
+            API.guest.post(
+              'cart/apply_promo',
+              { promocode: this.promoCode },
+              () => {
+                window.location.href = CHECKOUT;
+              },
+              (err) => {
+                const msg = (err && (err.message || err)) || 'Promo code is invalid or has expired.';
+                this.promoError = msg;
+                this.orderError = 'Promo code error: ' + msg + ' Please remove it or try a different code.';
+                this.promoCode  = '';
+                this.promoDiscount = 0;
+                this.ordering   = false;
+              },
+              true
+            );
+          } else {
+            window.location.href = CHECKOUT;
+          }
+        };
+
+        API.guest.post(
+          'cart/add_item',
+          params,
+          afterAdd,
+          (err) => {
+            this.orderError = (err && (err.message || err)) || 'Failed to add domain to cart. Please try again.';
+            this.ordering   = false;
+          },
+          true
+        );
+      },
+
+      applyCoupon() {
+        const code = this.promoInput.trim();
+        if (!code || this.promoLoading || this.promoCode) return;
+        this.promoLoading = true;
+        this.promoError   = '';
+        const payload = PRODUCT_ID
+          ? { promocode: code, product_id: PRODUCT_ID }
+          : { promocode: code };
+        API.guest.post('cart/validate_promo', payload,
+          (promo) => {
+            this.promoLoading  = false;
+            this.promoCode     = code.toUpperCase();
+            this.promoInput    = '';
+            this.promoError    = '';
+            this.promoType     = promo.type  || null;
+            this.promoValue    = promo.value || 0;
+            // Compute discount preview against the currently selected price
+            const base = parseFloat(this.selRegPrice) || 0;
+            if (base > 0 && this.promoType) {
+              if (this.promoType === 'percentage') {
+                this.promoDiscount = Math.round(base * this.promoValue / 100 * 100) / 100;
+              } else if (this.promoType === 'absolute') {
+                this.promoDiscount = Math.min(this.promoValue, base);
+              }
+            }
+          },
+          (err) => {
+            this.promoLoading = false;
+            this.promoError   = (err && err.message) ? err.message : (typeof err === 'string' ? err : 'Invalid or expired promo code.');
+          },
+          true
+        );
+      },
+
+      // expose helpers for Alpine x-text / x-style bindings
+      fmtPrice,
+      tldGradient,
+    };
+  };
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,1949 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% import "macro_functions.html.twig" as mf %}
+
+{% block meta_title %}Managing {{ order.title }}{% endblock %}
+{% block page_header %}Managing {{ order.title }}{% endblock %}
+
+{% set isDomain = order.service_type == 'domain' %}
+{% set isActive = order.status == 'active' %}
+{% set service = client.order_service({'id': order.id}) %}
+{% set daysLeft = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
+
+{% block content %}
+{% set clientProfile = profile %}
+<div class="space-y-5">
+
+    {# Expiry warning #}
+    {% if daysLeft is not null and daysLeft <= 7 and order.status == 'active' %}
+        <div class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
+                    {% if daysLeft <= 3 %}bg-red-500/10 border border-red-500/20 text-red-400{% else %}bg-amber-500/10 border border-amber-500/20 text-amber-400{% endif %}">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            {% if isDomain %}Domain{% else %}Service{% endif %} expires in {{ daysLeft }} day{% if daysLeft != 1 %}s{% endif %} — renew now to avoid interruption.
+        </div>
+    {% endif %}
+
+    {# Status notices #}
+    {% if isDomain and not isActive %}
+        <div class="rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-400">
+            This domain order is not yet active. Domain management options are unavailable until the order is activated.
+        </div>
+    {% elseif isDomain and isActive and not service %}
+        <div class="rounded-xl border border-blue-500/20 bg-blue-500/10 px-5 py-4 text-sm text-blue-400">
+            This domain order is active but the domain registration has not been fully provisioned yet. Contact support if this issue persists.
+        </div>
+    {% endif %}
+
+    {# Domain management panel — shown for all domain orders #}
+    {% if isDomain %}
+    <div class="flex flex-col lg:flex-row gap-5" x-data="{ tab: 'overview', eppModal: false, renewModal: false, cancelModal: false }" x-init="$watch('tab', function(t){ if (t === 'dns') { contactFetched = false; loadContactDetails(); } })">
+
+        {# ===== SIDEBAR NAV ===== #}
+        <aside class="lg:w-52 flex-shrink-0">
+
+            {# Manage group #}
+            <div class="rounded-xl border border-white/[0.08] overflow-hidden mb-3" style="background: rgba(255,255,255,0.02);">
+                <div class="px-4 py-2.5 border-b border-white/[0.06]">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/></svg>
+                        Manage
+                    </p>
+                </div>
+                <nav class="py-1">
+                    {% set navItems = [
+                        { key: 'overview',   label: 'Overview',           icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+                        { key: 'autorenew',  label: 'Auto Renew',         icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
+                        { key: 'protection', label: 'Registrar Lock',     icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+                        { key: 'addons',     label: 'Addons',             icon: 'M12 6v6m0 0v6m0-6h6m-6 0H6' },
+                        { key: 'privatens',  label: 'Nameservers',        icon: 'M5 12h14M12 5l7 7-7 7' },
+                        { key: 'dns',        label: 'Contact Management',  icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+                        { key: 'epp',        label: 'Get EPP Code',       icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' }
+                    ] %}
+                    {% for item in navItems %}
+                    <button @click="tab = '{{ item.key }}'"
+                            :class="tab === '{{ item.key }}' ? 'bg-indigo-500/15 text-indigo-400 border-l-2 border-indigo-500' : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all text-left">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ item.icon }}"/>
+                        </svg>
+                        <span>{{ item.label }}</span>
+                    </button>
+                    {% endfor %}
+                </nav>
+            </div>
+
+            {# Actions group #}
+            <div class="rounded-xl border border-white/[0.08] overflow-hidden" style="background: rgba(255,255,255,0.02);">
+                <div class="px-4 py-2.5 border-b border-white/[0.06]">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Actions
+                    </p>
+                </div>
+                <nav class="py-1">
+                    <button type="button" @click="renewModal = true"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all text-left">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Renew Domain
+                    </button>
+                    <a href="{{ '/order/domain-registration'|url }}"
+                       class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Register a New Domain
+                    </a>
+                </nav>
+            </div>
+
+        </aside>
+
+        {# ===== MAIN CONTENT ===== #}
+        <div class="flex-1 min-w-0">
+
+            {# ── OVERVIEW ── #}
+            <div x-show="tab === 'overview'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6" style="background: rgba(255,255,255,0.02);">
+                    <h2 class="text-sm font-semibold text-white mb-5">Overview</h2>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-5">
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Domain Name</p>
+                            {% if service and service.domain %}
+                            <a href="http://{{ service.domain }}" target="_blank" rel="noopener noreferrer"
+                               class="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+                                {{ service.domain }}
+                            </a>
+                            {% else %}
+                            <p class="text-sm text-white font-medium">{{ order.title }}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">First Payment Amount</p>
+                            <p class="text-sm text-white font-medium">{{ order.total|money(order.currency) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Registration Date</p>
+                            <p class="text-sm text-white font-medium">
+                                {{ (service and service.registered_at) ? service.registered_at|date('l, F jS, Y') : '—' }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Recurring Amount</p>
+                            <p class="text-sm text-white font-medium">
+                                {% if order.price %}{{ order.price|money(order.currency) }} Every {{ order.period|period_title }}{% else %}—{% endif %}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Next Due Date</p>
+                            <p class="text-sm font-medium {% if daysLeft is not null and daysLeft <= 14 %}text-amber-400{% else %}text-white{% endif %}">
+                                {{ (service and service.expires_at) ? service.expires_at|date('l, F jS, Y') : (order.expires_at ? order.expires_at|date('l, F jS, Y') : '—') }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Payment Method</p>
+                            <p class="text-sm text-white font-medium">{{ order.invoice_option|default('—') }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Status</p>
+                            {{ mf.status_badge(order.status) }}
+                        </div>
+                        {% if service %}
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Nameserver 1</p>
+                            <p class="text-sm text-white font-medium font-mono">{{ service.ns1 ?: '—' }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Nameserver 2</p>
+                            <p class="text-sm text-white font-medium font-mono">{{ service.ns2 ?: '—' }}</p>
+                        </div>
+                        {% if service.ns3 %}
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Nameserver 3</p>
+                            <p class="text-sm text-white font-medium font-mono">{{ service.ns3 }}</p>
+                        </div>
+                        {% endif %}
+                        {% if service.ns4 %}
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Nameserver 4</p>
+                            <p class="text-sm text-white font-medium font-mono">{{ service.ns4 }}</p>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Registrar Lock</p>
+                            <p class="text-sm font-medium {% if service.locked %}text-green-400{% else %}text-amber-400{% endif %}">
+                                {% if service.locked %}
+                                <span class="inline-flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> Locked</span>
+                                {% else %}
+                                <span class="inline-flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg> Unlocked</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">Privacy Protection</p>
+                            <p class="text-sm font-medium {% if service.privacy %}text-green-400{% else %}text-gray-400{% endif %}">
+                                {{ service.privacy ? 'Enabled' : 'Disabled' }}
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {# SSL info #}
+                    <div class="mt-6 pt-6 border-t border-white/[0.06]">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-5">
+                            <div>
+                                <p class="text-xs text-gray-500 mb-1">SSL Status</p>
+                                <p class="text-sm text-white font-medium" id="ssl-status">Loading…</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 mb-1">SSL Start Date</p>
+                                <p class="text-sm text-white font-medium" id="ssl-start">Loading…</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 mb-1">SSL Issuer Name</p>
+                                <p class="text-sm text-white font-medium" id="ssl-issuer">Loading…</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 mb-1">SSL Expiry Date</p>
+                                <p class="text-sm text-white font-medium" id="ssl-expiry">Loading…</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── AUTO RENEW ── #}
+            <div x-show="tab === 'autorenew'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6" style="background: rgba(255,255,255,0.02);">
+                    <h2 class="text-sm font-semibold text-white mb-2">Auto Renew</h2>
+                    <p class="text-sm text-gray-400 mb-6">
+                        When automatic renewal is enabled, your domain will be renewed automatically before the expiry date, ensuring no interruption to your service.
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-gray-400">Auto-renewal is managed through your invoice settings.</span>
+                    </div>
+                </div>
+            </div>
+
+            {# ── REGISTRAR LOCK (protection) ── #}
+            <div x-show="tab === 'protection'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6 space-y-6" style="background: rgba(255,255,255,0.02);">
+
+                    {% if not isActive or not service %}
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-lg border {% if isActive %}border-blue-500/20 bg-blue-500/10 text-blue-400{% else %}border-amber-500/20 bg-amber-500/10 text-amber-400{% endif %} text-sm">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        {% if isActive %}Domain service is not yet provisioned. Contact support if this persists.{% else %}Available once the domain order is active.{% endif %}
+                    </div>
+                    {% else %}
+                    <div>
+                        <h2 class="text-sm font-semibold text-white mb-2">Registrar Lock</h2>
+                        <p class="text-sm text-gray-400 mb-5">
+                            Domain locking is a security feature which prevents your domain from being transferred without first unlocking it.
+                            When enabled, a domain cannot be transferred even with the transfer code.
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-white/[0.08]" style="background: rgba(255,255,255,0.03);">
+                            <div class="flex-1 min-w-0">
+                                <p id="lock-status-heading" class="text-sm font-medium text-white mb-0.5">
+                                    {% if service.locked %}Domain is Locked{% else %}Domain is Unlocked{% endif %}
+                                </p>
+                                <p id="lock-status-desc" class="text-xs text-gray-500">
+                                    {% if service.locked %}Your domain is protected from unauthorized transfers.{% else %}Your domain can be transferred to another registrar.{% endif %}
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="btn-lock"
+                                        {% if service.locked %}style="display:none;"{% endif %}
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 text-sm border border-indigo-500/25 transition-all">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                    Lock Domain
+                                </button>
+                                <button id="btn-unlock"
+                                        {% if not service.locked %}style="display:none;"{% endif %}
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm border border-red-500/20 transition-all">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+                                    Unlock Domain
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Privacy Protection #}
+                    <div class="pt-4 border-t border-white/[0.06]">
+                        <h2 class="text-sm font-semibold text-white mb-2">Privacy Protection</h2>
+                        <p class="text-sm text-gray-400 mb-5">
+                            When privacy protection is enabled, your personal contact information is hidden from public WHOIS lookups.
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-white/[0.08]" style="background: rgba(255,255,255,0.03);">
+                            <div class="flex-1 min-w-0">
+                                <p id="pp-status-heading" class="text-sm font-medium text-white mb-0.5">
+                                    Privacy Protection is {% if service.privacy %}Enabled{% else %}Disabled{% endif %}
+                                </p>
+                                <p id="pp-status-desc" class="text-xs text-gray-500">
+                                    {% if service.privacy %}Your WHOIS contact info is hidden from the public.{% else %}Your WHOIS contact info is publicly visible.{% endif %}
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="btn-enable-pp"
+                                        {% if service.privacy %}style="display:none;"{% endif %}
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 text-sm border border-indigo-500/25 transition-all">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    Enable Privacy
+                                </button>
+                                <button id="btn-disable-pp"
+                                        {% if not service.privacy %}style="display:none;"{% endif %}
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-sm border border-orange-500/20 transition-all">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                                    Disable Privacy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Thief Protection #}
+                    <div class="pt-4 border-t border-white/[0.06]">
+                        <h2 class="text-sm font-semibold text-white mb-2">Thief Protection</h2>
+                        <p class="text-sm text-gray-400 mb-5">
+                            An additional domain-theft guard that prevents unauthorised transfers and
+                            blocks changes to privacy protection while active.
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-white/[0.08]" style="background: rgba(255,255,255,0.03);">
+                            <div class="flex-1 min-w-0">
+                                <p id="tp-status-heading" class="text-sm font-medium text-white mb-0.5">
+                                    Thief Protection is {% if service.thief_protected %}<span class="text-green-400">Active</span>{% else %}<span class="text-gray-400">Inactive</span>{% endif %}
+                                </p>
+                                <p id="tp-status-desc" class="text-xs text-gray-500">
+                                    {% if service.thief_protected %}
+                                        Your domain has an extra theft guard enabled. Disable it first if you need to change privacy protection.
+                                    {% else %}
+                                        No active theft guard on this domain.
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="btn-enable-tp"
+                                        {% if service.thief_protected %}style="display:none;"{% endif %}
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 text-sm border border-indigo-500/25 transition-all">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                    Enable Protection
+                                </button>
+                                <button id="btn-disable-tp"
+                                        {% if not service.thief_protected %}style="display:none;"{% endif %}
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-sm border border-orange-500/20 transition-all">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01"/></svg>
+                                    Disable Protection
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% endif %}
+                </div>
+            </div>
+
+            {# ── ADDONS ── #}
+            <div x-show="tab === 'addons'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6" style="background: rgba(255,255,255,0.02);">
+                    <h2 class="text-sm font-semibold text-white mb-5">Addons</h2>
+                    {% set addons = client.order_addons({'id': order.id}) %}
+                    {% if addons|length > 0 %}
+                    <div class="space-y-3">
+                        {% for addon in addons %}
+                        <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl border border-white/[0.08]" style="background: rgba(255,255,255,0.03);">
+                            <div>
+                                <p class="text-sm font-medium text-white">{{ addon.title }}</p>
+                                <p class="text-xs text-gray-500 mt-0.5">
+                                    {{ addon.total|money(addon.currency) }}/{{ addon.period|period_title }}
+                                    {% if addon.expires_at %} &middot; Renews {{ addon.expires_at|date('M j, Y') }}{% endif %}
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                {{ mf.status_badge(addon.status) }}
+                                <a href="{{ '/order/service/manage'|url }}/{{ addon.id }}"
+                                   class="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/10 transition-all">Manage</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="py-10 text-center">
+                        <svg class="w-8 h-8 text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                        <p class="text-sm text-gray-500">No addons found for this domain.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# ── NAMESERVERS ── #}
+            <div x-show="tab === 'privatens'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6" style="background: rgba(255,255,255,0.02);">
+                    {% if not isActive or not service %}
+                    <h2 class="text-sm font-semibold text-white mb-2">Update Nameservers</h2>
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-lg border {% if isActive %}border-blue-500/20 bg-blue-500/10 text-blue-400{% else %}border-amber-500/20 bg-amber-500/10 text-amber-400{% endif %} text-sm">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        {% if isActive %}Domain service is not yet provisioned. Contact support if this persists.{% else %}Available once the domain order is active.{% endif %}
+                    </div>
+                    {% else %}
+                    <h2 class="text-sm font-semibold text-white mb-2">Update Nameservers</h2>
+                    <p class="text-sm text-gray-400 mb-6">
+                        If you would like to host this domain with another company, update the nameservers below.
+                    </p>
+
+                    <form id="form-nameservers" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-medium text-gray-400" for="ns1">Nameserver 1 <span class="text-red-400">*</span></label>
+                                <input type="text" id="ns1" name="ns1" value="{{ service.ns1 }}" required placeholder="ns1.example.com"
+                                       class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-medium text-gray-400" for="ns2">Nameserver 2 <span class="text-red-400">*</span></label>
+                                <input type="text" id="ns2" name="ns2" value="{{ service.ns2 }}" required placeholder="ns2.example.com"
+                                       class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-medium text-gray-400" for="ns3">Nameserver 3</label>
+                                <input type="text" id="ns3" name="ns3" value="{{ service.ns3 }}" placeholder="ns3.example.com"
+                                       class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-medium text-gray-400" for="ns4">Nameserver 4</label>
+                                <input type="text" id="ns4" name="ns4" value="{{ service.ns4 }}" placeholder="ns4.example.com"
+                                       class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            </div>
+                        </div>
+                        <div class="pt-2">
+                            <button type="submit" id="btn-update-ns"
+                                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20"
+                                    style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Save Nameservers
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# ── CONTACT MANAGEMENT ── #}
+            <div x-show="tab === 'dns'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6" style="background: rgba(255,255,255,0.02);">
+                    {% if not isActive or not service %}
+                    <h2 class="text-sm font-semibold text-white mb-2">Contact Management</h2>
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-lg border {% if isActive %}border-blue-500/20 bg-blue-500/10 text-blue-400{% else %}border-amber-500/20 bg-amber-500/10 text-amber-400{% endif %} text-sm">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        {% if isActive %}Domain service is not yet provisioned. Contact support if this persists.{% else %}Available once the domain order is active.{% endif %}
+                    </div>
+                    {% else %}
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-sm font-semibold text-white">Contact Management</h2>
+                        <button type="button" id="btn-refresh-contacts"
+                                title="Fetch live contact data from the registrar and compare with saved values"
+                                class="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Sync WHOIS
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-400 mb-4">
+                        Domain contact details are displayed publicly in WHOIS lookups. This updates the Registrant, Technical, Billing and Admin contacts. Enable privacy protection to hide your information.
+                    </p>
+                    <div id="contact-loading" style="display:none;" class="flex items-center gap-3 px-4 py-3 mb-4 rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 text-sm">
+                        <svg class="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        <span id="contact-loading-text">Loading contact details…</span>
+                    </div>
+                    <div id="contact-error" style="display:none;" class="flex items-center gap-3 px-4 py-3 mb-4 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-sm"></div>
+
+                    <div id="contact-form-wrapper">
+
+                    {# ── Helper macro: renders a 12-field contact form ── #}
+                    {% macro contact_form(id_prefix, role, contact_key, label, data, clientProfile, is_independent) %}
+                    <details class="group rounded-lg border border-white/[0.06] mb-3" open>
+                        <summary class="flex items-center justify-between px-4 py-3 cursor-pointer select-none text-sm font-semibold text-white hover:text-indigo-300 transition-colors list-none">
+                            <span class="flex items-center gap-2">
+                                {{ label }}
+                                {% if role != 'registrant' %}
+                                    {% if is_independent %}
+                                        <span class="text-xs font-normal px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400">Custom</span>
+                                    {% else %}
+                                        <span class="text-xs font-normal px-1.5 py-0.5 rounded bg-white/5 text-gray-500">Using Registrant</span>
+                                    {% endif %}
+                                {% endif %}
+                            </span>
+                            <svg class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </summary>
+                        <div class="px-4 pb-4 pt-1">
+
+                        {% if role != 'registrant' %}
+                        <div class="flex items-center justify-between mb-4 px-3 py-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+                            <div>
+                                <span class="text-xs font-medium text-gray-300">Use separate contact for this role</span>
+                                <p class="text-xs text-gray-600 mt-0.5">When off, the Registrant contact is submitted to the registry for this role</p>
+                            </div>
+                            <button type="button" role="switch" aria-checked="{{ is_independent ? 'true' : 'false' }}"
+                                    id="toggle-{{ id_prefix }}"
+                                    class="contact-role-toggle relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer items-center rounded-full border border-white/10 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 {{ is_independent ? 'bg-indigo-600' : 'bg-gray-700' }}"
+                                    data-prefix="{{ id_prefix }}"
+                                    data-role="{{ role }}"
+                                    data-enabled="{{ is_independent ? '1' : '0' }}">
+                                <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 {{ is_independent ? 'translate-x-[1.1rem]' : 'translate-x-0.5' }}"></span>
+                            </button>
+                        </div>
+                        <div id="form-lock-{{ id_prefix }}" class="{% if is_independent %}hidden{% endif %} flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06] text-xs text-gray-500 mb-3">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            Fields locked — showing Registrant fallback values. Enable the toggle above to use a separate contact for this role.
+                        </div>
+                        {% endif %}
+
+                        <form id="form-whois-{{ id_prefix }}" data-role="{{ role }}" data-contact-key="{{ contact_key }}" class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_first_name">First Name <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_first_name" name="{{ contact_key }}[first_name]" value="{{ data.first_name|default(clientProfile.first_name) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_last_name">Last Name <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_last_name" name="{{ contact_key }}[last_name]" value="{{ data.last_name|default(clientProfile.last_name) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_email">Email <span class="text-red-400">*</span></label>
+                                    <input type="email" id="{{ id_prefix }}_email" name="{{ contact_key }}[email]" value="{{ data.email|default(clientProfile.email) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_company">Company</label>
+                                    <input type="text" id="{{ id_prefix }}_company" name="{{ contact_key }}[company]" value="{{ data.company|default(clientProfile.company) }}"
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_address1">Address Line 1 <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_address1" name="{{ contact_key }}[address1]" value="{{ data.address1|default(clientProfile.address_1) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_address2">Address Line 2</label>
+                                    <input type="text" id="{{ id_prefix }}_address2" name="{{ contact_key }}[address2]" value="{{ data.address2|default(clientProfile.address_2) }}"
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_city">City <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_city" name="{{ contact_key }}[city]" value="{{ data.city|default(clientProfile.city) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_state">State <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_state" name="{{ contact_key }}[state]" value="{{ data.state|default(clientProfile.state) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_postcode">Zip / Postcode <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_postcode" name="{{ contact_key }}[postcode]" value="{{ data.postcode|default(clientProfile.postcode) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_country">Country <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_country" name="{{ contact_key }}[country]" value="{{ data.country|default(clientProfile.country) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_phone_cc">Phone Country Code <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_phone_cc" name="{{ contact_key }}[phone_cc]" value="{{ data.phone_cc|default(clientProfile.phone_cc) }}" required placeholder="+1"
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-medium text-gray-400" for="{{ id_prefix }}_phone">Phone Number <span class="text-red-400">*</span></label>
+                                    <input type="text" id="{{ id_prefix }}_phone" name="{{ contact_key }}[phone]" value="{{ data.phone|default(clientProfile.phone) }}" required
+                                           {% if role != 'registrant' and not is_independent %}disabled{% endif %}
+                                           class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                </div>
+                            </div>
+                            <div class="pt-2 flex items-center gap-3 flex-wrap" id="form-actions-{{ id_prefix }}"
+                                 {% if role != 'registrant' and not is_independent %}style="display:none"{% endif %}>
+                                <button type="submit" disabled
+                                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 opacity-40 cursor-not-allowed"
+                                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Save {{ label }}
+                                </button>
+                                <span id="sync-badge-{{ id_prefix }}" class="sync-status-badge"></span>
+                            </div>
+                        </form>
+                        </div>
+                    </details>
+                    {% endmacro %}
+
+                    {% import _self as forms %}
+                    {{ forms.contact_form('r', 'registrant', 'contact',        'Registrant Contact',     service.contact,         clientProfile, true) }}
+                    {{ forms.contact_form('a', 'admin',      'admin_contact',   'Administrative Contact', service.admin_contact|default({}),    clientProfile, service.admin_contact_is_independent|default(false)) }}
+                    {{ forms.contact_form('t', 'tech',       'tech_contact',    'Technical Contact',      service.tech_contact|default({}),     clientProfile, service.tech_contact_is_independent|default(false)) }}
+                    {{ forms.contact_form('b', 'billing',    'billing_contact', 'Billing Contact',        service.billing_contact|default({}),  clientProfile, service.billing_contact_is_independent|default(false)) }}
+
+                    </div>{# /contact-form-wrapper #}
+                    {% endif %}
+                </div>
+            </div>
+
+            {# ── EPP / TRANSFER CODE ── #}
+            <div x-show="tab === 'epp'" x-cloak>
+                <div class="rounded-xl border border-white/[0.08] p-6" style="background: rgba(255,255,255,0.02);">
+                    <h2 class="text-sm font-semibold text-white mb-2">Domain Secret (EPP Code)</h2>
+                    {% if not isActive or not service %}
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-lg border {% if isActive %}border-blue-500/20 bg-blue-500/10 text-blue-400{% else %}border-amber-500/20 bg-amber-500/10 text-amber-400{% endif %} text-sm">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        {% if isActive %}Domain service is not yet provisioned. Contact support if this persists.{% else %}Available once the domain order is active.{% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-400 mb-6">
+                        Most domain names have a Domain Secret / Authorization Code (EPP Code) associated with them.
+                        This code is typically required when transferring the domain to a new registrar.
+                    </p>
+
+                    <div id="epp-result" style="display:none" class="mb-4 flex items-center gap-3 px-4 py-3 rounded-lg border border-indigo-500/20 bg-indigo-500/10">
+                        <code id="epp-code" class="text-sm text-indigo-300 font-mono flex-1"></code>
+                        <span id="epp-copied" class="hidden text-xs font-medium text-emerald-400 tracking-wide">Copied!</span>
+                        <button id="btn-copy-epp" title="Copy to clipboard"
+                                class="p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-all">
+                            <svg id="epp-icon-copy" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            <svg id="epp-icon-check" class="w-4 h-4 hidden text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </button>
+                    </div>
+
+                    <button id="btn-get-epp"
+                            @click="eppModal = true; initEppModal()"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20"
+                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        Get EPP Code
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>{# /main content #}
+
+        {# ── EPP OTP verification modal (inside Alpine scope so eppModal binding works) ── #}
+        {% if service and isActive %}
+        <div x-show="eppModal" x-cloak
+             @keydown.escape.window="eppModal = false"
+             @epp-modal-close.window="eppModal = false"
+             class="epp-modal-overlay fixed inset-0 z-[60] flex items-center justify-center p-4"
+             style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+            <div @click.outside="eppModal = false"
+                 class="epp-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                        Verify Identity &mdash; EPP Code
+                    </h3>
+                    <button type="button" @click="eppModal = false" class="text-gray-500 hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4">
+                    <p class="text-sm text-gray-400">
+                        For security, a one-time password (OTP) will be sent to your registered email address.
+                        Enter the 6-digit code below to retrieve the EPP / transfer code for this domain.
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <button id="btn-send-otp"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            Send OTP to Email
+                        </button>
+                        <span id="epp-otp-countdown-label" class="text-xs text-gray-500 hidden">
+                            Resend in <span id="epp-otp-seconds">60</span>s
+                        </span>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5" for="epp-otp-input">6-Digit OTP</label>
+                        <input type="text" id="epp-otp-input"
+                               maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
+                               placeholder="&bull;&bull;&bull;&bull;&bull;&bull;"
+                               disabled
+                               class="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white text-center text-xl font-mono tracking-[0.5em] placeholder-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                    </div>
+                    <button id="btn-verify-otp" disabled
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 opacity-40 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        Verify &amp; Get EPP Code
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Domain Renewal modal ── #}
+        {% if service and isActive %}
+        <div x-show="renewModal" x-cloak
+             @keydown.escape.window="renewModal = false"
+             class="renew-modal-overlay fixed inset-0 z-[60] flex items-center justify-center p-4"
+             style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+            <div @click.outside="renewModal = false"
+                 class="renew-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Renew Domain
+                    </h3>
+                    <button type="button" @click="renewModal = false" class="text-gray-500 hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4">
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-lg border border-white/[0.06]" style="background: rgba(255,255,255,0.02);">
+                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <div>
+                            <p class="text-xs text-gray-500">Domain</p>
+                            <p class="text-sm font-medium text-white">{{ order.title }}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5" for="renew-period-select">Renewal Period</label>
+                        <select id="renew-period-select"
+                                class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <option value="1" class="bg-gray-900">1 Year</option>
+                            <option value="2" class="bg-gray-900">2 Years</option>
+                            <option value="3" class="bg-gray-900">3 Years</option>
+                            <option value="5" class="bg-gray-900">5 Years</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5">
+                        <span class="text-xs text-gray-400">Total Amount</span>
+                        <span id="renew-total" class="text-sm font-semibold text-white">{{ order.price|money(order.currency) }}</span>
+                    </div>
+
+                    <div id="renew-error" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
+
+                    <button id="btn-confirm-renew"
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Generate Renewal Invoice
+                    </button>
+                    <p class="text-xs text-gray-600 text-center">You will be redirected to the invoice to complete payment.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>{# /flex layout #}
+
+        {# ── Domain Cancellation Request modal ── #}
+        {% if order.status == 'active' %}
+        <div x-show="cancelModal" x-cloak
+             @keydown.escape.window="cancelModal = false"
+             class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+            <div @click.outside="cancelModal = false"
+                 class="w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        {{ 'Submit Cancellation Request'|trans }}
+                    </h3>
+                    <button type="button" @click="cancelModal = false" class="text-gray-500 hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                {# Already-received state — shown by JS when duplicate request detected #}
+                <div id="cancel-already-domain" class="hidden px-6 py-8 text-center space-y-4">
+                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto"
+                         style="background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.25);">
+                        <svg class="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-white mb-1">{{ 'Request Already Submitted'|trans }}</p>
+                        <p class="text-xs text-gray-400 leading-relaxed">
+                            {{ 'We already have a cancellation request on file for this service. Our team is reviewing it and will get back to you soon — no need to submit again.'|trans }}
+                        </p>
+                    </div>
+                    <button type="button" onclick="document.getElementById('cancel-already-domain').classList.add('hidden'); document.getElementById('cancel-request-form-domain').classList.remove('hidden');"
+                            class="text-xs text-gray-500 hover:text-gray-300 transition-colors underline underline-offset-2">
+                        {{ 'Close'|trans }}
+                    </button>
+                </div>
+
+                <form id="cancel-request-form-domain" class="px-6 py-5 space-y-4">
+                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                    <input type="hidden" name="rel_type" value="order"/>
+                    <input type="hidden" name="rel_id" value="{{ order.id }}"/>
+                    <input type="hidden" name="rel_task" value="cancel"/>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5">{{ 'Help Desk'|trans }}</label>
+                        <select name="support_helpdesk_id"
+                                class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all">
+                            {% for id, name in client.support_helpdesk_get_pairs %}
+                                <option value="{{ id }}" class="bg-gray-900">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5">{{ 'Subject'|trans }}</label>
+                        <input type="text" name="subject" required
+                               class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                               placeholder="{{ 'Cancellation request for'|trans }} {{ order.title }}"/>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5">{{ 'Reason'|trans }}</label>
+                        <textarea name="content" rows="4" required
+                                  class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all resize-none"
+                                  placeholder="{{ 'Please describe why you wish to cancel this service…'|trans }}"></textarea>
+                    </div>
+                    <div id="cancel-error-domain" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
+                    <button type="submit" id="btn-submit-cancel-domain"
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
+                            style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
+                        {{ 'Submit Request'|trans }}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+    {# Non-domain service — optional service partial with renew/cancel modals #}
+    {% elseif not isDomain %}
+    {% if isActive and order.price > 0 and order.service_type not in ['hosting', 'custom'] %}
+    <div x-data="{ renewModal: false, cancelModal: false }">
+
+        {# Renewal modal #}
+        <div x-show="renewModal" x-cloak
+             @keydown.escape.window="renewModal = false"
+             class="renew-modal-overlay fixed inset-0 z-[60] flex items-center justify-center p-4"
+             style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+            <div @click.outside="renewModal = false"
+                 class="renew-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Renew Service
+                    </h3>
+                    <button type="button" @click="renewModal = false" class="text-gray-500 hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4">
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-lg border border-white/[0.06]" style="background: rgba(255,255,255,0.02);">
+                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                        <div>
+                            <p class="text-xs text-gray-500">Service</p>
+                            <p class="text-sm font-medium text-white">{{ order.title }}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5" for="renew-period-select">Renewal Period</label>
+                        <select id="renew-period-select"
+                                class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <option value="1" class="bg-gray-900">1 Year</option>
+                            <option value="2" class="bg-gray-900">2 Years</option>
+                            <option value="3" class="bg-gray-900">3 Years</option>
+                            <option value="5" class="bg-gray-900">5 Years</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5">
+                        <span class="text-xs text-gray-400">Total Amount</span>
+                        <span id="renew-total" class="text-sm font-semibold text-white">{{ order.price|money(order.currency) }}</span>
+                    </div>
+
+                    <div id="renew-error" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
+
+                    <button id="btn-confirm-renew"
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Generate Renewal Invoice
+                    </button>
+                    <p class="text-xs text-gray-600 text-center">You will be redirected to the invoice to complete payment.</p>
+                </div>
+            </div>
+        </div>
+
+        {# ── Service Cancellation Request modal ── #}
+        {% if order.status == 'active' %}
+        <div x-show="cancelModal" x-cloak
+             @keydown.escape.window="cancelModal = false"
+             class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+            <div @click.outside="cancelModal = false"
+                 class="w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        {{ 'Submit Cancellation Request'|trans }}
+                    </h3>
+                    <button type="button" @click="cancelModal = false" class="text-gray-500 hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                {# Already-received state — shown by JS when duplicate request detected #}
+                <div id="cancel-already-service" class="hidden px-6 py-8 text-center space-y-4">
+                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto"
+                         style="background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.25);">
+                        <svg class="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-white mb-1">{{ 'Request Already Submitted'|trans }}</p>
+                        <p class="text-xs text-gray-400 leading-relaxed">
+                            {{ 'We already have a cancellation request on file for this service. Our team is reviewing it and will get back to you soon — no need to submit again.'|trans }}
+                        </p>
+                    </div>
+                    <button type="button" onclick="document.getElementById('cancel-already-service').classList.add('hidden'); document.getElementById('cancel-request-form-service').classList.remove('hidden');"
+                            class="text-xs text-gray-500 hover:text-gray-300 transition-colors underline underline-offset-2">
+                        {{ 'Close'|trans }}
+                    </button>
+                </div>
+
+                <form id="cancel-request-form-service" class="px-6 py-5 space-y-4">
+                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                    <input type="hidden" name="rel_type" value="order"/>
+                    <input type="hidden" name="rel_id" value="{{ order.id }}"/>
+                    <input type="hidden" name="rel_task" value="cancel"/>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5">{{ 'Help Desk'|trans }}</label>
+                        <select name="support_helpdesk_id"
+                                class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all">
+                            {% for id, name in client.support_helpdesk_get_pairs %}
+                                <option value="{{ id }}" class="bg-gray-900">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5">{{ 'Subject'|trans }}</label>
+                        <input type="text" name="subject" required
+                               class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                               placeholder="{{ 'Cancellation request for'|trans }} {{ order.title }}"/>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1.5">{{ 'Reason'|trans }}</label>
+                        <textarea name="content" rows="4" required
+                                  class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all resize-none"
+                                  placeholder="{{ 'Please describe why you wish to cancel this service…'|trans }}"></textarea>
+                    </div>
+                    <div id="cancel-error-service" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
+                    <button type="submit" id="btn-submit-cancel-service"
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
+                            style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
+                        {{ 'Submit Request'|trans }}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Service partial inside x-data scope — Alpine state available to partial buttons #}
+        {% if guest.system_template_exists({'file': 'mod_service' ~ order.service_type ~ '_manage.html.twig'}) %}
+            {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service}) }}
+        {% endif %}
+    </div>{# /x-data: renewModal, cancelModal #}
+
+    {% else %}
+
+    {# ── Non-active order state card (pending_setup / failed / suspended / canceled / fraud) ── #}
+    {% if order.status != 'active' %}
+    {% set _statusColor = {
+        'pending_setup': {'bg': 'rgba(var(--color-primary-rgb),0.08)',  'border': 'rgba(var(--color-primary-rgb),0.20)',  'icon': 'rgb(var(--brand-400))', 'label': 'Pending Activation'},
+        'failed_setup':  {'bg': 'rgba(239,68,68,0.08)',   'border': 'rgba(239,68,68,0.22)',   'icon': '#f87171', 'label': 'Setup Failed'},
+        'failed_renew':  {'bg': 'rgba(239,68,68,0.08)',   'border': 'rgba(239,68,68,0.22)',   'icon': '#f87171', 'label': 'Renewal Failed'},
+        'suspended':     {'bg': 'rgba(245,158,11,0.08)',  'border': 'rgba(245,158,11,0.22)',  'icon': '#fbbf24', 'label': 'Suspended'},
+        'canceled':      {'bg': 'rgba(100,116,139,0.08)', 'border': 'rgba(100,116,139,0.20)', 'icon': '#94a3b8', 'label': 'Cancelled'},
+        'fraud':         {'bg': 'rgba(239,68,68,0.08)',   'border': 'rgba(239,68,68,0.22)',   'icon': '#f87171', 'label': 'Fraud Hold'}
+    } %}
+    {% set _sc = _statusColor[order.status] ?? {'bg': 'rgba(var(--color-primary-rgb),0.08)', 'border': 'rgba(var(--color-primary-rgb),0.20)', 'icon': 'rgb(var(--brand-400))', 'label': order.status|capitalize} %}
+
+    <div class="rounded-2xl p-6" style="background: {{ _sc.bg }}; border: 1px solid {{ _sc.border }};">
+        <div class="flex items-start gap-4">
+            {# Icon #}
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: {{ _sc.bg }}; border: 1px solid {{ _sc.border }};">
+                {% if order.status in ['pending_setup', 'failed_setup', 'failed_renew'] %}
+                <svg class="w-6 h-6" style="color: {{ _sc.icon }};" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                {% elseif order.status == 'suspended' %}
+                <svg class="w-6 h-6" style="color: {{ _sc.icon }};" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                {% elseif order.status == 'canceled' %}
+                <svg class="w-6 h-6" style="color: {{ _sc.icon }};" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                </svg>
+                {% else %}
+                <svg class="w-6 h-6" style="color: {{ _sc.icon }};" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                {% endif %}
+            </div>
+
+            {# Text #}
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2.5 mb-1">
+                    <h2 class="text-sm font-bold" style="color: {{ _sc.icon }};">{{ _sc.label }}</h2>
+                    {{ mf.status_badge(order.status) }}
+                </div>
+                <p class="text-sm text-gray-400 leading-relaxed mb-4">
+                    {% if order.status == 'pending_setup' %}
+                        Your order for <strong class="text-gray-200">{{ order.title }}</strong> has been received and is awaiting activation. This usually completes within a few minutes.
+                        {% if order.invoice_id %}
+                            If payment is required, please complete it using the link below.
+                        {% endif %}
+                    {% elseif order.status == 'failed_setup' %}
+                        We encountered an issue setting up <strong class="text-gray-200">{{ order.title }}</strong>. Please contact support and we will resolve this as soon as possible.
+                    {% elseif order.status == 'failed_renew' %}
+                        Renewal failed for <strong class="text-gray-200">{{ order.title }}</strong>. Please update your payment details or contact support to restore your service.
+                    {% elseif order.status == 'suspended' %}
+                        Your service <strong class="text-gray-200">{{ order.title }}</strong> has been suspended. This may be due to an outstanding invoice or a policy violation. Please contact support to restore access.
+                    {% elseif order.status == 'canceled' %}
+                        Your order for <strong class="text-gray-200">{{ order.title }}</strong> has been cancelled. If you believe this is an error, please open a support ticket.
+                    {% else %}
+                        Your order for <strong class="text-gray-200">{{ order.title }}</strong> is currently on hold. Please contact support for assistance.
+                    {% endif %}
+                </p>
+
+                {# Action row #}
+                <div class="flex flex-wrap items-center gap-3">
+                    {% if order.status in ['pending_setup', 'failed_setup', 'failed_renew'] and order.unpaid_invoice_id|default(false) %}
+                    {% set _pay_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+                    <a href="{{ 'invoice'|url }}/{{ _pay_hash }}"
+                       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all"
+                       style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        Pay Invoice
+                    </a>
+                    {% endif %}
+                    <a href="{{ '/support'|url }}"
+                       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                       style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); color: #9ca3af;">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                        Contact Support
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {# Order meta row #}
+        <div class="mt-5 pt-4 grid grid-cols-2 sm:grid-cols-4 gap-4" style="border-top: 1px solid {{ _sc.border }};">
+            <div>
+                <p class="text-xs text-gray-600 uppercase tracking-wider mb-0.5">Order #</p>
+                <p class="text-sm font-mono font-medium text-gray-300">#{{ order.id }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-600 uppercase tracking-wider mb-0.5">Product</p>
+                <p class="text-sm font-medium text-gray-300 truncate">{{ order.title }}</p>
+            </div>
+            {% if order.price %}
+            <div>
+                <p class="text-xs text-gray-600 uppercase tracking-wider mb-0.5">Price</p>
+                <p class="text-sm font-medium text-gray-300">{{ order.price|money(order.currency) }}{% if order.period %} / {{ order.period|period_title }}{% endif %}</p>
+            </div>
+            {% endif %}
+            <div>
+                <p class="text-xs text-gray-600 uppercase tracking-wider mb-0.5">Created</p>
+                <p class="text-sm font-medium text-gray-300">{{ order.created_at|date('M j, Y') }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}{# /order.status != 'active' #}
+
+    {% endif %}{# /isActive #}
+
+    {# Fallback: render service partial for non-domain services excluded from the
+         isActive+price guard above (e.g. hosting, custom, free services).
+         Mirrors the outer include that existed before the 2026-05-13 refactor. #}
+    {% if guest.system_template_exists({'file': 'mod_service' ~ order.service_type ~ '_manage.html.twig'})
+        and (not isActive or order.price == 0 or order.service_type in ['hosting', 'custom']) %}
+        {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service}) }}
+    {% endif %}
+
+    {% endif %}{# /not isDomain #}
+</div>{# /space-y-5 #}
+{% endblock %}
+
+{% block js %}
+<script>
+var orderId = {{ order.id }};
+var contactFetched = false;
+
+// ── Contact management helpers ──────────────────────────────────────────────
+var CONTACT_FIELDS = ['first_name','last_name','email','company','address1','address2',
+                      'city','state','postcode','country','phone_cc','phone'];
+var CONTACT_ROLE_MAP = { registrant: 'r', admin: 'a', tech: 't', billing: 'b' };
+
+/** Read all 12 contact field values from the form with the given id prefix. */
+function snapshotContact(prefix) {
+    var snap = {};
+    CONTACT_FIELDS.forEach(function(f) {
+        var el = document.getElementById(prefix + '_' + f);
+        snap[f] = el ? (el.value || '') : '';
+    });
+    return snap;
+}
+
+/** Fill form inputs for the given prefix with data from a contact object. */
+function fillContact(prefix, data) {
+    CONTACT_FIELDS.forEach(function(f) {
+        var el = document.getElementById(prefix + '_' + f);
+        if (el) { el.value = (data && data[f] != null) ? data[f] : ''; }
+    });
+}
+
+/** Count fields that differ between two snapshots (empty-normalised). */
+function countDiffs(snap, live) {
+    return CONTACT_FIELDS.filter(function(f) {
+        return (snap[f] || '').trim() !== ((live && live[f]) || '').trim();
+    }).length;
+}
+
+/** Update the sync badge element for the given prefix. */
+function setSyncBadge(prefix, changed) {
+    var badge = document.getElementById('sync-badge-' + prefix);
+    if (!badge) return;
+    if (changed === null) {
+        badge.textContent = '';
+        badge.className = 'sync-status-badge';
+    } else if (changed === 0) {
+        badge.textContent = '\u2713 Matches registrar';
+        badge.className = 'sync-status-badge text-xs text-green-400';
+    } else {
+        badge.textContent = changed + ' field' + (changed !== 1 ? 's' : '') + ' differ from registrar — review and save';
+        badge.className = 'sync-status-badge text-xs text-amber-400';
+    }
+}
+
+/** Enable or disable the Save button of the form with the given id prefix. */
+function setSaveEnabled(prefix, enabled) {
+    // Never enable save for a secondary role whose separate-contact toggle is OFF.
+    if (enabled && prefix !== 'r') {
+        var toggleBtn = document.getElementById('toggle-' + prefix);
+        if (toggleBtn && toggleBtn.dataset.enabled !== '1') { enabled = false; }
+    }
+    var form = document.getElementById('form-whois-' + prefix);
+    if (!form) return;
+    var btn = form.querySelector('button[type="submit"]');
+    if (!btn) return;
+    btn.disabled = !enabled;
+    if (enabled) {
+        btn.classList.remove('opacity-40', 'cursor-not-allowed');
+    } else {
+        btn.classList.add('opacity-40', 'cursor-not-allowed');
+    }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Load contact details from the DATABASE (no registrar API call).
+ * Fast read-only — called on every tab activation.
+ * Disables all Save buttons and clears sync badges after populating forms.
+ */
+function loadContactDetails(force) {
+    if (contactFetched && !force) return;
+    var loading    = document.getElementById('contact-loading');
+    var loadingTxt = document.getElementById('contact-loading-text');
+    var errorEl    = document.getElementById('contact-error');
+    var wrapper    = document.getElementById('contact-form-wrapper');
+    if (!wrapper) return;
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+    if (loading) { loading.style.display = 'flex'; }
+    if (loadingTxt) { loadingTxt.textContent = 'Loading contact details\u2026'; }
+    wrapper.style.opacity = '0.4';
+    wrapper.style.pointerEvents = 'none';
+
+    function hideLoading() {
+        if (loading) loading.style.display = 'none';
+        wrapper.style.opacity = '';
+        wrapper.style.pointerEvents = '';
+    }
+
+    // DB-only read — get_whois_info never calls the registrar.
+    API.client.post('servicedomain/get_whois_info', { order_id: orderId }, function (info) {
+        contactFetched = true;
+        Object.keys(CONTACT_ROLE_MAP).forEach(function (role) {
+            var pfx = CONTACT_ROLE_MAP[role];
+            fillContact(pfx, info[role]);
+            setSaveEnabled(pfx, false);
+            setSyncBadge(pfx, null);
+        });
+        hideLoading();
+    }, function (err) {
+        hideLoading();
+        if (errorEl) {
+            errorEl.textContent = (err && err.message) ? err.message : 'Failed to load contact details.';
+            errorEl.style.display = 'flex';
+        }
+    });
+}
+
+/**
+ * Fetch live contact data from the REGISTRAR, update the forms,
+ * then compare against the current form values (DB state).
+ * Enables Save buttons on roles where the registrar data differs.
+ */
+function syncWhoisContacts() {
+    var loading    = document.getElementById('contact-loading');
+    var loadingTxt = document.getElementById('contact-loading-text');
+    var errorEl    = document.getElementById('contact-error');
+    var wrapper    = document.getElementById('contact-form-wrapper');
+    var syncBtn    = document.getElementById('btn-refresh-contacts');
+    if (!wrapper) return;
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+    if (loading)    { loading.style.display = 'flex'; }
+    if (loadingTxt) { loadingTxt.textContent = 'Fetching live data from registrar\u2026'; }
+    wrapper.style.opacity = '0.4';
+    wrapper.style.pointerEvents = 'none';
+    if (syncBtn) { syncBtn.disabled = true; syncBtn.classList.add('opacity-50'); }
+
+    // Snapshot current form values (DB state) before overwriting.
+    var snapshots = {};
+    Object.keys(CONTACT_ROLE_MAP).forEach(function (role) {
+        snapshots[role] = snapshotContact(CONTACT_ROLE_MAP[role]);
+    });
+
+    function hideLoading() {
+        if (loading) loading.style.display = 'none';
+        wrapper.style.opacity = '';
+        wrapper.style.pointerEvents = '';
+        if (syncBtn) { syncBtn.disabled = false; syncBtn.classList.remove('opacity-50'); }
+    }
+
+    // sync_whois_info fetches from the registrar, saves to DB, returns live values.
+    API.client.post('servicedomain/sync_whois_info', { order_id: orderId }, function (info) {
+        var totalDiffs = 0;
+        Object.keys(CONTACT_ROLE_MAP).forEach(function (role) {
+            var pfx  = CONTACT_ROLE_MAP[role];
+            var live = info[role];
+            fillContact(pfx, live);
+            var diffs = countDiffs(snapshots[role], live);
+            totalDiffs += diffs;
+            setSyncBadge(pfx, diffs);
+            setSaveEnabled(pfx, diffs > 0);
+        });
+        hideLoading();
+        if (totalDiffs === 0) {
+            StablePanel.message('All contacts already match the registrar \u2014 no changes detected.', 'success');
+        } else {
+            StablePanel.message('WHOIS synced. ' + totalDiffs + ' field' + (totalDiffs !== 1 ? 's' : '') + ' updated. Review and save.', 'success');
+        }
+    }, function (err) {
+        hideLoading();
+        if (errorEl) {
+            errorEl.textContent = (err && err.message) ? err.message : 'Failed to sync from registrar.';
+            errorEl.style.display = 'flex';
+        }
+    });
+}
+
+/**
+ * Refresh domain protection status from the local DB cache and update the
+ * protection tab UI. Reads from DB only — no registrar call is made.
+ *
+ * The DB is always authoritative here because every mutation action (lock,
+ * unlock, privacy/thief toggle) writes its result back to the DB on success,
+ * and syncWhois() (cron / activation / renewal) keeps all fields in sync.
+ *
+ * Call this after a protection toggle completes to ensure the UI reflects
+ * the latest DB state without waiting for a page reload.
+ */
+function fetchProtectionStatus() {
+    var lockH = document.getElementById('lock-status-heading');
+    var lockD = document.getElementById('lock-status-desc');
+    var ppH   = document.getElementById('pp-status-heading');
+    var ppD   = document.getElementById('pp-status-desc');
+    var tpH   = document.getElementById('tp-status-heading');
+    var tpD   = document.getElementById('tp-status-desc');
+
+    // Snapshot current content so we can restore it on error.
+    var orig = {
+        lockH: lockH ? lockH.innerHTML : '',
+        lockD: lockD ? lockD.textContent : '',
+        ppH:   ppH   ? ppH.textContent  : '',
+        ppD:   ppD   ? ppD.textContent  : '',
+        tpH:   tpH   ? tpH.innerHTML    : '',
+        tpD:   tpD   ? tpD.textContent  : '',
+    };
+
+    var allBtns = ['btn-lock', 'btn-unlock', 'btn-enable-pp', 'btn-disable-pp', 'btn-enable-tp', 'btn-disable-tp']
+        .map(function(id) { return document.getElementById(id); })
+        .filter(Boolean);
+
+    allBtns.forEach(function(b) { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
+    var loading = '<span class="text-gray-400 animate-pulse">Loading…</span>';
+    if (lockH) lockH.innerHTML = loading;
+    if (ppH)   ppH.innerHTML   = loading;
+    if (tpH)   tpH.innerHTML   = loading;
+
+    API.client.post('servicedomain/get_domain_status', { order_id: orderId }, function(result) {
+        allBtns.forEach(function(b) { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
+
+        // Lock
+        if (lockH) lockH.textContent = result.locked ? 'Domain is Locked' : 'Domain is Unlocked';
+        if (lockD) lockD.textContent = result.locked
+            ? 'Your domain is protected from unauthorized transfers.'
+            : 'Your domain can be transferred to another registrar.';
+        var bLock   = document.getElementById('btn-lock');
+        var bUnlock = document.getElementById('btn-unlock');
+        if (bLock)   bLock.style.display   = result.locked ? 'none' : '';
+        if (bUnlock) bUnlock.style.display  = result.locked ? '' : 'none';
+
+        // Privacy
+        if (ppH) ppH.textContent = 'Privacy Protection is ' + result.privacy_status;
+        if (ppD) ppD.textContent = result.privacy
+            ? 'Your WHOIS contact info is hidden from the public.'
+            : 'Your WHOIS contact info is publicly visible.';
+        var bEnPP  = document.getElementById('btn-enable-pp');
+        var bDisPP = document.getElementById('btn-disable-pp');
+        if (bEnPP)  bEnPP.style.display  = result.privacy ? 'none' : '';
+        if (bDisPP) bDisPP.style.display = result.privacy ? '' : 'none';
+
+        // Thief protection
+        var tpColor = result.thief_protected ? 'text-green-400' : 'text-gray-400';
+        if (tpH) {
+            tpH.textContent = '';
+            tpH.appendChild(document.createTextNode('Thief Protection is '));
+            var tpSpan = document.createElement('span');
+            tpSpan.className = tpColor;
+            tpSpan.textContent = result.thief_protection_status;
+            tpH.appendChild(tpSpan);
+        }
+        if (tpD) tpD.textContent = result.thief_protected
+            ? 'Your domain has an extra theft guard enabled. Disable it first if you need to change privacy protection.'
+            : 'No active theft guard on this domain.';
+        var bEnTP  = document.getElementById('btn-enable-tp');
+        var bDisTP = document.getElementById('btn-disable-tp');
+        if (bEnTP)  bEnTP.style.display  = result.thief_protected ? 'none' : '';
+        if (bDisTP) bDisTP.style.display = result.thief_protected ? '' : 'none';
+
+    }, function() {
+        // Restore original state and re-enable controls on failure.
+        allBtns.forEach(function(b) { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); })
+        if (lockH) lockH.innerHTML   = orig.lockH;
+        if (lockD) lockD.textContent = orig.lockD;
+        if (ppH)   ppH.textContent   = orig.ppH;
+        if (ppD)   ppD.textContent   = orig.ppD;
+        if (tpH)   tpH.innerHTML     = orig.tpH;
+        if (tpD)   tpD.textContent   = orig.tpD;
+    });
+}
+
+/**
+ * Populate nameserver form inputs from the local DB cache.
+ * Inputs already have server-rendered values via Twig; call this only if you
+ * need to re-read from the DB after an NS update without a full page reload.
+ */
+function fetchNameservers() {
+    var form = document.getElementById('form-nameservers');
+    if (!form) return;
+
+    API.client.post('servicedomain/get_nameservers', { order_id: orderId }, function (result) {
+        ['ns1', 'ns2', 'ns3', 'ns4'].forEach(function (ns) {
+            var el = document.getElementById(ns);
+            if (el && result[ns] !== undefined) { el.value = result[ns]; }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    // Spinner SVG injected into buttons while a request is in-flight.
+    var SPINNER = '<svg class="btn-spinner w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>';
+
+    // Disable a button and swap its first SVG for a spinner.
+    function btnSetLoading(btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-60', 'cursor-not-allowed');
+        btn.classList.remove('hover:bg-indigo-500/25', 'hover:bg-red-500/20', 'hover:bg-orange-500/20');
+        var icon = btn.querySelector('svg:not(.btn-spinner)');
+        if (icon) { icon.style.display = 'none'; }
+        btn.insertAdjacentHTML('afterbegin', SPINNER);
+    }
+
+    // Re-enable a button and restore its original icon.
+    function btnClearLoading(btn) {
+        btn.disabled = false;
+        btn.classList.remove('opacity-60', 'cursor-not-allowed');
+        btn.classList.add('hover:bg-indigo-500/25');
+        var spinner = btn.querySelector('.btn-spinner');
+        if (spinner) { spinner.remove(); }
+        var icon = btn.querySelector('svg:not(.btn-spinner)');
+        if (icon) { icon.style.display = ''; }
+    }
+
+    // Generic API post — disables `btn` while in-flight, restores on completion.
+    // onSuccess receives the result; onAfter(success:bool) fires regardless.
+    function apiPost(endpoint, params, successMsg, btn, onAfter) {
+        params = Object.assign({ order_id: orderId }, params);
+        if (btn) btnSetLoading(btn);
+        API.client.post(endpoint, params, function (result) {
+            if (btn) btnClearLoading(btn);
+            StablePanel.message(successMsg, 'success');
+            if (onAfter) onAfter(true, result);
+        }, function (err) {
+            if (btn) btnClearLoading(btn);
+            StablePanel.message((err && err.message) ? err.message : 'An error occurred.', 'error');
+            if (onAfter) onAfter(false, null);
+        });
+    }
+
+    // Renew Domain — modal-based invoice generation
+    (function () {
+        var periodSelect  = document.getElementById('renew-period-select');
+        var renewTotal    = document.getElementById('renew-total');
+        var renewError    = document.getElementById('renew-error');
+        var btnConfirm    = document.getElementById('btn-confirm-renew');
+        var basePrice     = {{ order.price|default(0) }};
+        var currency      = '{{ order.currency|default('') }}';
+        var invoiceBase   = '{{ 'invoice'|url }}';
+
+        function formatMoney(amount) {
+            return currency + ' ' + parseFloat(amount).toFixed(2);
+        }
+
+        if (periodSelect && renewTotal) {
+            periodSelect.addEventListener('change', function () {
+                renewTotal.textContent = formatMoney(basePrice * parseInt(this.value, 10));
+            });
+        }
+
+        if (btnConfirm) {
+            var _renewBtnHTML = btnConfirm.innerHTML;
+            btnConfirm.addEventListener('click', function () {
+                var period = periodSelect ? parseInt(periodSelect.value, 10) : 1;
+                btnConfirm.disabled = true;
+                btnConfirm.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Generating\u2026';
+                if (renewError) { renewError.classList.add('hidden'); renewError.textContent = ''; }
+
+                API.client.post('invoice/renewal_invoice', { order_id: {{ order.id }}, period: period }, function (hash) {
+                    window.location.href = invoiceBase + '/' + hash;
+                }, function (result) {
+                    if (renewError) {
+                        renewError.textContent = result.message || 'Failed to generate invoice. Please try again.';
+                        renewError.classList.remove('hidden');
+                    }
+                    btnConfirm.disabled = false;
+                    btnConfirm.innerHTML = _renewBtnHTML;
+                });
+            });
+        }
+    }());
+
+    // Lock / Unlock
+    var btnLock   = document.getElementById('btn-lock');
+    var btnUnlock = document.getElementById('btn-unlock');
+    if (btnLock) {
+        btnLock.addEventListener('click', function () {
+            apiPost('servicedomain/lock', {}, 'Domain locked successfully.', btnLock, function (ok) {
+                if (ok) {
+                    btnLock.style.display = 'none';
+                    if (btnUnlock) btnUnlock.style.display = '';
+                }
+            });
+        });
+    }
+    if (btnUnlock) {
+        btnUnlock.addEventListener('click', function () {
+            apiPost('servicedomain/unlock', {}, 'Domain unlocked successfully.', btnUnlock, function (ok) {
+                if (ok) {
+                    btnUnlock.style.display = 'none';
+                    if (btnLock) btnLock.style.display = '';
+                }
+            });
+        });
+    }
+
+    // Enable / Disable Privacy Protection
+    var btnEnablePP  = document.getElementById('btn-enable-pp');
+    var btnDisablePP = document.getElementById('btn-disable-pp');
+    if (btnEnablePP) {
+        btnEnablePP.addEventListener('click', function () {
+            apiPost('servicedomain/enable_privacy_protection', {}, 'Privacy protection enabled.', btnEnablePP, function (ok) {
+                if (ok) {
+                    btnEnablePP.style.display = 'none';
+                    if (btnDisablePP) btnDisablePP.style.display = '';
+                }
+            });
+        });
+    }
+    if (btnDisablePP) {
+        btnDisablePP.addEventListener('click', function () {
+            apiPost('servicedomain/disable_privacy_protection', {}, 'Privacy protection disabled.', btnDisablePP, function (ok) {
+                if (ok) {
+                    btnDisablePP.style.display = 'none';
+                    if (btnEnablePP) btnEnablePP.style.display = '';
+                }
+            });
+        });
+    }
+
+    // Enable / Disable Thief Protection (maps to registrar lock)
+    var btnEnableTP  = document.getElementById('btn-enable-tp');
+    var btnDisableTP = document.getElementById('btn-disable-tp');
+    if (btnEnableTP) {
+        btnEnableTP.addEventListener('click', function () {
+            apiPost('servicedomain/lock', {}, 'Thief protection enabled.', btnEnableTP, function (ok) {
+                if (ok) {
+                    btnEnableTP.style.display = 'none';
+                    if (btnDisableTP) btnDisableTP.style.display = '';
+                }
+            });
+        });
+    }
+    if (btnDisableTP) {
+        btnDisableTP.addEventListener('click', function () {
+            apiPost('servicedomain/unlock', {}, 'Thief protection disabled.', btnDisableTP, function (ok) {
+                if (ok) {
+                    btnDisableTP.style.display = 'none';
+                    if (btnEnableTP) btnEnableTP.style.display = '';
+                }
+            });
+        });
+    }
+
+    // Nameservers form
+    var formNs   = document.getElementById('form-nameservers');
+    var btnNsSub = document.getElementById('btn-update-ns');
+    if (formNs) {
+        formNs.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var data = {
+                order_id: orderId,
+                ns1: document.getElementById('ns1').value,
+                ns2: document.getElementById('ns2').value,
+                ns3: document.getElementById('ns3').value,
+                ns4: document.getElementById('ns4').value
+            };
+            if (btnNsSub) btnSetLoading(btnNsSub);
+            API.client.post('servicedomain/update_nameservers', data, function () {
+                if (btnNsSub) btnClearLoading(btnNsSub);
+                StablePanel.message('Nameservers updated successfully.', 'success');
+            }, function (err) {
+                if (btnNsSub) btnClearLoading(btnNsSub);
+                StablePanel.message((err && err.message) ? err.message : 'Failed to update nameservers.', 'error');
+            });
+        });
+    }
+
+    // Sync WHOIS button — fetch from registrar and compare with DB values.
+    var btnRefreshContacts = document.getElementById('btn-refresh-contacts');
+    if (btnRefreshContacts) {
+        btnRefreshContacts.addEventListener('click', function () {
+            syncWhoisContacts();
+        });
+    }
+
+    // WHOIS / Contact forms — one delegated handler for all 4 role forms.
+    var contactWrapper = document.getElementById('contact-form-wrapper');
+    if (contactWrapper) {
+
+        /** True when the secondary role's separate-contact toggle is ON (registrant always true). */
+        function isSeparateContactEnabled(prefix) {
+            if (prefix === 'r') return true;
+            var tb = document.getElementById('toggle-' + prefix);
+            return tb ? (tb.dataset.enabled === '1') : false;
+        }
+
+        /**
+         * Apply visual + functional state for a secondary contact toggle.
+         * @param {string}  prefix    - role id prefix (a / t / b)
+         * @param {boolean} isEnabled
+         */
+        function applyContactToggleState(prefix, isEnabled) {
+            var btn     = document.getElementById('toggle-' + prefix);
+            var lock    = document.getElementById('form-lock-' + prefix);
+            var actions = document.getElementById('form-actions-' + prefix);
+            var form    = document.getElementById('form-whois-' + prefix);
+            if (!form) return;
+
+            if (btn) {
+                btn.dataset.enabled = isEnabled ? '1' : '0';
+                btn.setAttribute('aria-checked', isEnabled ? 'true' : 'false');
+                var thumb = btn.querySelector('span');
+                if (isEnabled) {
+                    btn.classList.remove('bg-gray-700'); btn.classList.add('bg-indigo-600');
+                    if (thumb) { thumb.classList.remove('translate-x-0.5'); thumb.classList.add('translate-x-[1.1rem]'); }
+                } else {
+                    btn.classList.remove('bg-indigo-600'); btn.classList.add('bg-gray-700');
+                    if (thumb) { thumb.classList.remove('translate-x-[1.1rem]'); thumb.classList.add('translate-x-0.5'); }
+                }
+            }
+            if (lock)    { lock.style.display    = isEnabled ? 'none' : 'flex'; }
+            if (actions) { actions.style.display = isEnabled ? ''     : 'none'; }
+            form.querySelectorAll('input[name]').forEach(function (inp) { inp.disabled = !isEnabled; });
+            if (!isEnabled) { setSaveEnabled(prefix, false); setSyncBadge(prefix, null); }
+        }
+
+        // Toggle click — enable/disable a secondary role's own contact.
+        contactWrapper.addEventListener('click', function (e) {
+            var btn = e.target.closest('.contact-role-toggle');
+            if (!btn) return;
+            var prefix     = btn.dataset.prefix;
+            var role       = btn.dataset.role;
+            var nowEnabled = btn.dataset.enabled !== '1';
+
+            if (!nowEnabled) {
+                // Turning OFF: wipe own contact from DB — this role reverts to registrant data.
+                applyContactToggleState(prefix, false); // optimistic UI update
+                API.client.post('servicedomain/update_contacts', {
+                    order_id: orderId, role: role, clear_own_contact: true
+                }, function () {
+                    StablePanel.message('Contact reverted to Registrant data.', 'success');
+                }, function (err) {
+                    applyContactToggleState(prefix, true); // revert toggle on API failure
+                    StablePanel.message((err && err.message) ? err.message : 'Failed to revert contact.', 'error');
+                });
+            } else {
+                // Turning ON: unlock the form — user edits and saves independently.
+                applyContactToggleState(prefix, true);
+            }
+        });
+
+        // Enable Save when the user manually edits a field (only when toggle is ON).
+        contactWrapper.addEventListener('input', function (e) {
+            var form = e.target.closest('form[data-role]');
+            if (!form) return;
+            var prefix = form.id.replace('form-whois-', '');
+            if (!isSeparateContactEnabled(prefix)) return;
+            setSaveEnabled(prefix, true);
+        });
+
+        contactWrapper.addEventListener('submit', function (e) {
+            if (!e.target.matches('form[data-role]')) return;
+            e.preventDefault();
+            var form       = e.target;
+            var role       = form.dataset.role;
+            var contactKey = form.dataset.contactKey;
+            var prefix     = form.id.replace('form-whois-', '');
+            var btnSub     = form.querySelector('button[type="submit"]');
+
+            // Guard: never submit for a locked secondary contact form.
+            if (!isSeparateContactEnabled(prefix)) return;
+
+            var data = { order_id: orderId, role: role };
+            data[contactKey] = {};
+            form.querySelectorAll('input[name]').forEach(function (input) {
+                var m = input.name.match(/^\w+\[(\w+)\]$/);
+                if (m) { data[contactKey][m[1]] = input.value; }
+            });
+            if (btnSub) btnSetLoading(btnSub);
+            API.client.post('servicedomain/update_contacts', data, function () {
+                if (btnSub) btnClearLoading(btnSub);
+                // Save succeeded — disable button and clear diff badge.
+                setSaveEnabled(prefix, false);
+                setSyncBadge(prefix, null);
+                StablePanel.message('Contact details updated successfully.', 'success');
+            }, function (err) {
+                if (btnSub) btnClearLoading(btnSub);
+                StablePanel.message((err && err.message) ? err.message : 'Failed to update contacts.', 'error');
+            });
+        });
+    }
+
+    // EPP Code — OTP-gated retrieval
+    var btnGetEpp          = document.getElementById('btn-get-epp');
+    var eppResult          = document.getElementById('epp-result');
+    var eppCodeEl          = document.getElementById('epp-code');
+    var btnCopyEpp         = document.getElementById('btn-copy-epp');
+    var btnSendOtp         = document.getElementById('btn-send-otp');
+    var btnVerifyOtp       = document.getElementById('btn-verify-otp');
+    var eppOtpInput        = document.getElementById('epp-otp-input');
+    var eppCountdownLabel  = document.getElementById('epp-otp-countdown-label');
+    var eppSecondsEl       = document.getElementById('epp-otp-seconds');
+    var eppCountdownTimer  = null;
+
+    /** Reset modal UI to its initial state (called each time the modal opens). */
+    function initEppModal() {
+        if (eppCountdownTimer) { clearInterval(eppCountdownTimer); eppCountdownTimer = null; }
+        if (btnSendOtp) {
+            btnSendOtp.disabled = false;
+            btnSendOtp.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+        if (btnVerifyOtp) {
+            btnVerifyOtp.disabled = true;
+            btnVerifyOtp.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+        if (eppOtpInput) { eppOtpInput.value = ''; eppOtpInput.disabled = true; }
+        if (eppCountdownLabel) eppCountdownLabel.classList.add('hidden');
+    }
+
+    /** Start the 60-second resend cooldown after an OTP is dispatched. */
+    function startOtpCooldown() {
+        var remaining = 60;
+        if (eppSecondsEl) eppSecondsEl.textContent = remaining;
+        if (eppCountdownLabel) eppCountdownLabel.classList.remove('hidden');
+        if (btnSendOtp) { btnSendOtp.disabled = true; btnSendOtp.classList.add('opacity-60', 'cursor-not-allowed'); }
+        eppCountdownTimer = setInterval(function () {
+            remaining--;
+            if (eppSecondsEl) eppSecondsEl.textContent = remaining;
+            if (remaining <= 0) {
+                clearInterval(eppCountdownTimer);
+                eppCountdownTimer = null;
+                if (eppCountdownLabel) eppCountdownLabel.classList.add('hidden');
+                if (btnSendOtp) { btnSendOtp.disabled = false; btnSendOtp.classList.remove('opacity-60', 'cursor-not-allowed'); }
+            }
+        }, 1000);
+    }
+
+    if (btnSendOtp) {
+        btnSendOtp.addEventListener('click', function () {
+            btnSetLoading(btnSendOtp);
+            API.client.post('servicedomain/send_epp_otp', { order_id: orderId }, function () {
+                btnClearLoading(btnSendOtp);
+                startOtpCooldown();
+                if (eppOtpInput) { eppOtpInput.disabled = false; eppOtpInput.focus(); }
+                StablePanel.message('OTP sent to your registered email address.', 'success');
+            }, function (err) {
+                btnClearLoading(btnSendOtp);
+                StablePanel.message((err && err.message) ? err.message : 'Failed to send OTP. Please try again.', 'error');
+            });
+        });
+    }
+
+    if (eppOtpInput) {
+        eppOtpInput.addEventListener('input', function () {
+            // Strip non-digits and enforce max length.
+            eppOtpInput.value = eppOtpInput.value.replace(/\D/g, '').slice(0, 6);
+            var ready = eppOtpInput.value.length === 6;
+            if (btnVerifyOtp) {
+                btnVerifyOtp.disabled = !ready;
+                if (ready) {
+                    btnVerifyOtp.classList.remove('opacity-40', 'cursor-not-allowed');
+                } else {
+                    btnVerifyOtp.classList.add('opacity-40', 'cursor-not-allowed');
+                }
+            }
+        });
+    }
+
+    if (btnVerifyOtp) {
+        btnVerifyOtp.addEventListener('click', function () {
+            var otp = eppOtpInput ? eppOtpInput.value.trim() : '';
+            if (otp.length !== 6) return;
+            btnSetLoading(btnVerifyOtp);
+            API.client.post('servicedomain/get_transfer_code', { order_id: orderId, otp: otp }, function (result) {
+                btnClearLoading(btnVerifyOtp);
+                // Close the modal.
+                window.dispatchEvent(new Event('epp-modal-close'));
+                if (eppCountdownTimer) { clearInterval(eppCountdownTimer); eppCountdownTimer = null; }
+                // Display the EPP code in the panel.
+                if (eppCodeEl)  eppCodeEl.textContent = result;
+                if (eppResult)  eppResult.style.display = 'flex';
+                // Lock the trigger button to prevent re-fetching.
+                if (btnGetEpp) {
+                    btnGetEpp.disabled = true;
+                    btnGetEpp.classList.add('opacity-60', 'cursor-not-allowed');
+                    var svgIcon = btnGetEpp.querySelector('svg');
+                    btnGetEpp.innerHTML = '';
+                    if (svgIcon) btnGetEpp.appendChild(svgIcon);
+                    btnGetEpp.insertAdjacentText('beforeend', ' EPP Code Retrieved');
+                }
+                StablePanel.message('EPP code retrieved successfully.', 'success');
+            }, function (err) {
+                btnClearLoading(btnVerifyOtp);
+                StablePanel.message((err && err.message) ? err.message : 'Invalid OTP. Please try again.', 'error');
+            });
+        });
+    }
+
+    if (btnCopyEpp) {
+        var eppIconCopy  = document.getElementById('epp-icon-copy');
+        var eppIconCheck = document.getElementById('epp-icon-check');
+        var eppCopied    = document.getElementById('epp-copied');
+        var eppCopyTimer = null;
+
+        btnCopyEpp.addEventListener('click', function () {
+            if (!eppCodeEl || !navigator.clipboard) return;
+            navigator.clipboard.writeText(eppCodeEl.textContent.trim()).then(function () {
+                // Show check icon + label
+                eppIconCopy.classList.add('hidden');
+                eppIconCheck.classList.remove('hidden');
+                eppCopied.classList.remove('hidden');
+                btnCopyEpp.classList.add('text-emerald-400');
+                btnCopyEpp.classList.remove('text-gray-400');
+
+                clearTimeout(eppCopyTimer);
+                eppCopyTimer = setTimeout(function () {
+                    eppIconCheck.classList.add('hidden');
+                    eppIconCopy.classList.remove('hidden');
+                    eppCopied.classList.add('hidden');
+                    btnCopyEpp.classList.remove('text-emerald-400');
+                    btnCopyEpp.classList.add('text-gray-400');
+                }, 2000);
+            });
+        });
+    }
+
+    // SSL certificate info via crt.sh (public Certificate Transparency log)
+    {% if isDomain and service %}
+    (function () {
+        var domain = {{ service.domain|json_encode|raw }};
+        var fmt = function (d) {
+            if (!d) return '—';
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        };
+        fetch('https://crt.sh/?CN=' + encodeURIComponent(domain) + '&output=json')
+            .then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
+            .then(function (certs) {
+                if (!certs || !certs.length) throw new Error('none');
+                // Pick the most recently issued certificate
+                certs.sort(function (a, b) { return b.id - a.id; });
+                var c = certs[0];
+                var now    = new Date();
+                var start  = c.not_before ? new Date(c.not_before) : null;
+                var expiry = c.not_after  ? new Date(c.not_after)  : null;
+
+                var statusEl = document.getElementById('ssl-status');
+                if (statusEl) {
+                    if (expiry && expiry > now) {
+                        statusEl.textContent = 'Active';
+                        statusEl.className = 'text-sm font-medium text-green-400';
+                    } else {
+                        statusEl.textContent = 'Expired';
+                        statusEl.className = 'text-sm font-medium text-red-400';
+                    }
+                }
+                var startEl = document.getElementById('ssl-start');
+                if (startEl) startEl.textContent = fmt(start);
+
+                var issuerEl = document.getElementById('ssl-issuer');
+                if (issuerEl) {
+                    var raw = c.issuer_name || '';
+                    var m = raw.match(/CN\s*=\s*([^,]+)/);
+                    issuerEl.textContent = m ? m[1].trim() : (raw || '—');
+                }
+                var expiryEl = document.getElementById('ssl-expiry');
+                if (expiryEl) expiryEl.textContent = fmt(expiry);
+            })
+            .catch(function () {
+                var el = document.getElementById('ssl-status');
+                if (el) el.textContent = 'Unavailable';
+                ['ssl-start', 'ssl-issuer', 'ssl-expiry'].forEach(function (id) {
+                    var e = document.getElementById(id);
+                    if (e) e.textContent = '—';
+                });
+            });
+    }());
+    {% endif %}
+
+    // Cancellation Request — submits a support ticket with rel_task=cancel
+    (function () {
+        var ALREADY_RECEIVED_PHRASES = [
+            'we have already received this request',
+            'already received this request',
+            'already received'
+        ];
+
+        function isAlreadyReceivedError(msg) {
+            if (!msg) return false;
+            var lower = msg.toLowerCase();
+            return ALREADY_RECEIVED_PHRASES.some(function (phrase) { return lower.indexOf(phrase) !== -1; });
+        }
+
+        function showAlreadyReceived(formId, alreadyId) {
+            var form = document.getElementById(formId);
+            var already = document.getElementById(alreadyId);
+            if (form) form.classList.add('hidden');
+            if (already) already.classList.remove('hidden');
+        }
+
+        function bindCancelForm(formId, errorId, btnId, alreadyId) {
+            var form = document.getElementById(formId);
+            if (!form) return;
+            var errorEl = document.getElementById(errorId);
+            var btn = document.getElementById(btnId);
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (btn) { btn.disabled = true; btn.textContent = '{{ 'Submitting…'|trans }}'; }
+                if (errorEl) { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
+                var data = {};
+                new FormData(form).forEach(function (v, k) { data[k] = v; });
+                API.client.post('support/ticket_create', data,
+                    function () {
+                        StablePanel.message('{{ 'Your cancellation request has been received. We will review it shortly.'|trans }}', 'success');
+                        form.reset();
+                        // Close the Alpine modal
+                        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                    },
+                    function (res) {
+                        var msg = (res && res.message) ? res.message : '{{ 'An error occurred. Please try again.'|trans }}';
+                        if (btn) { btn.disabled = false; btn.textContent = '{{ 'Submit Request'|trans }}'; }
+                        if (isAlreadyReceivedError(msg)) {
+                            showAlreadyReceived(formId, alreadyId);
+                        } else {
+                            if (errorEl) { errorEl.textContent = msg; errorEl.classList.remove('hidden'); }
+                        }
+                    }
+                );
+            });
+        }
+        bindCancelForm('cancel-request-form-domain',  'cancel-error-domain',  'btn-submit-cancel-domain',  'cancel-already-domain');
+        bindCancelForm('cancel-request-form-service', 'cancel-error-service', 'btn-submit-cancel-service', 'cancel-already-service');
+    }());
+
+});
+</script>
+{% endblock %}
+

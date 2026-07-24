@@ -1,0 +1,926 @@
+{% if order.status == 'active' and not service %}
+<div class="rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-400">
+  Your hosting account is being provisioned. This may take a few minutes — please refresh the page shortly. Contact support if the issue persists.
+</div>
+{% elseif order.status == 'active' and service %}
+{% set server = service.server %}
+{% set hp = service.hosting_plan %}
+{% set daysUntilDue = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
+{% set upgradables = client.order_upgradables({ 'id': order.id }) %}
+{% set period_labels = {'1W': 'Weekly', '1M': 'Monthly', '3M': 'Quarterly', '6M': 'Semi-Annual', '1Y': 'Annual', '2Y': 'Biennial', '3Y': 'Triennial'} %}
+{% set period_label = order.period ? period_labels[order.period]|default('Billing') : 'Billing' %}
+
+<div x-data="hostingDash()" data-order-id="{{ order.id }}" class="space-y-6"
+     @acct-panel-close.window="activePanel = null">
+
+  {# ==== 1. Page Header ==== #}
+  <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+    <div>
+      <nav class="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
+        <a href="{{ '/order/service'|url }}" class="hover:text-[color:var(--color-primary)] transition-colors">My Services</a>
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-slate-600">Manage Hosting</span>
+      </nav>
+      <div class="flex items-center gap-3 flex-wrap">
+        <h2 class="text-2xl font-bold text-slate-900 hm-title">{{ order.title }}</h2>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold border border-emerald-200">
+          <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+          Active
+        </span>
+      </div>
+      {% if service.domain %}
+      <a href="http://{{ service.domain }}" target="_blank" rel="noopener"
+         class="mt-1.5 text-sm text-[color:var(--color-primary)] hover:underline font-mono inline-flex items-center gap-1.5 transition-colors">
+        {{ service.domain }}
+        <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+      {% if service.domain_order_id %}
+      <a href="{{ '/order/service/manage'|url }}/{{ service.domain_order_id }}"
+         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all hm-btn-outline">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3"/></svg>
+        Manage Domain
+      </a>
+      {% endif %}
+      {% if order.unpaid_invoice_id %}
+      {% set _unpaid_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+      <a href="{{ 'invoice'|url }}/{{ _unpaid_hash }}"
+         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+         style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Pay Invoice
+      </a>
+      {% endif %}
+      {% if order.price > 0 %}
+      <button type="button" @click="renewModal = true"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all hm-btn-outline">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Renew
+      </button>
+      {% endif %}
+      <a href="{{ 'api/client/servicehosting/get_login_url'|url({ 'order_id': order.id, 'CSRFToken': CSRFToken }) }}"
+         data-api-jsonp="onAfterLoginLinkCreated"
+         class="api-link inline-flex items-center gap-1.5 px-5 py-2 rounded-lg text-white text-sm font-semibold shadow-md transition-all hover:opacity-90 active:scale-[0.99]"
+         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" class="w-4 h-4" style="color:white"><g fill="currentColor" clip-path="url(#cp-btn)"><path d="M6.016 8.084h4.543l-.7 2.692c-.106.372-.31.673-.601.904-.293.23-.638.345-1.028.345H6.113a2.05 2.05 0 0 0-1.275.425 2.167 2.167 0 0 0-.77 1.143 2.03 2.03 0 0 0-.027 1.027c.07.319.204.602.39.85.186.248.425.443.726.594.292.15.62.221.965.221h1.284c.24 0 .434.098.594.292.15.195.195.408.133.656l-.806 2.976H5.919a5.77 5.77 0 0 1-2.666-.63 6.11 6.11 0 0 1-2.02-1.673 6 6 0 0 1-1.089-2.4c-.195-.895-.168-1.807.071-2.746l.08-.301a5.946 5.946 0 0 1 2.126-3.17 5.827 5.827 0 0 1 3.596-1.204ZM8.31 20.2l3.959-14.826c.106-.372.31-.673.602-.904.292-.23.638-.345 1.027-.345h4.198c.957 0 1.843.213 2.657.629a6.2 6.2 0 0 1 2.02 1.674A6.15 6.15 0 0 1 23.88 8.81a5.571 5.571 0 0 1-.08 2.746l-.08.3a6.218 6.218 0 0 1-.806 1.78 6.093 6.093 0 0 1-1.293 1.4 5.892 5.892 0 0 1-1.674.904 5.884 5.884 0 0 1-1.93.318h-3.64l.726-2.71c.106-.363.31-.655.602-.885a1.62 1.62 0 0 1 1.027-.346h1.16c.479 0 .913-.15 1.294-.443a2.06 2.06 0 0 0 .753-1.142 1.86 1.86 0 0 0 .026-.983 2.336 2.336 0 0 0-.39-.85 2.026 2.026 0 0 0-.726-.603c-.292-.15-.62-.23-.965-.23h-2.25l-2.931 10.911c-.107.363-.31.656-.603.886-.292.23-.628.346-1 .346l-2.79-.01Z"/></g><defs><clipPath id="cp-btn"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg>
+        Login to cPanel
+      </a>
+    </div>
+  </div>
+
+  {# ==== 2. Metric Bento Grid ==== #}
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+
+    <div class="hm-stat bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1.5">Username</p>
+      {% if service.username %}
+      <p class="text-base font-bold text-slate-800 hm-val font-mono truncate">{{ service.username }}</p>
+      {% else %}
+      <p class="text-sm text-slate-400 italic">Pending</p>
+      {% endif %}
+    </div>
+
+    <div class="hm-stat bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1.5">Server IP</p>
+      <p class="text-base font-bold text-slate-800 hm-val font-mono truncate">{{ server.ip ?: '---' }}</p>
+    </div>
+
+    <div class="hm-stat bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1.5">Disk</p>
+      <p class="text-base font-bold text-slate-800 hm-val">{{ hp.quota ? hp.quota ~ ' MB' : 'Unlimited' }}</p>
+    </div>
+
+    <div class="hm-stat bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1.5">Bandwidth</p>
+      <p class="text-base font-bold text-slate-800 hm-val">{{ hp.bandwidth ? hp.bandwidth ~ ' MB' : 'Unlimited' }}</p>
+    </div>
+
+    <div class="hm-stat bg-white rounded-xl border border-slate-200 shadow-sm p-5 col-span-2 sm:col-span-1" style="border-left: 4px solid var(--color-primary);">
+      <p class="text-xs font-semibold uppercase tracking-widest mb-1.5" style="color: var(--color-primary);">{{ period_label }} Price</p>
+      <p class="text-xl font-bold text-slate-800 hm-val">{% if order.price %}{{ order.price|money(order.currency) }}{% else %}---{% endif %}</p>
+    </div>
+
+  </div>
+
+  {# ==== 3. Main 3-column Grid ==== #}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    {# Left 2/3 #}
+    <div class="lg:col-span-2 space-y-6">
+
+      {# Account Details + Server Details (2-col on md+) #}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {# Account Details card #}
+        <div class="hm-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="hm-card-hdr px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"/></svg>
+              Account Details
+            </h3>
+          </div>
+          <div class="px-5 py-1">
+
+            <div class="hm-row flex items-center justify-between py-3 border-b border-slate-50">
+              <span class="text-sm text-slate-500">Username</span>
+              <div class="flex items-center gap-1.5">
+                {% if not service.username %}
+                <span class="text-sm text-slate-400 italic">Pending provisioning</span>
+                {% else %}
+                <span class="text-sm font-medium text-slate-800 hm-val font-mono">{{ service.username }}</span>
+                {% endif %}
+                {% if service.username %}
+                <button @click="copy('{{ service.username }}', 'username')"
+                        :class="copiedKey === 'username' ? 'text-emerald-500' : 'text-slate-300 hover:text-[color:var(--color-primary)]'"
+                        class="transition-colors">
+                  <svg x-show="copiedKey !== 'username'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <svg x-show="copiedKey === 'username'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="hm-row flex items-center justify-between py-3 border-b border-slate-50">
+              <span class="text-sm text-slate-500">Domain</span>
+              <a href="http://{{ service.domain }}" target="_blank" rel="noopener"
+                 class="text-sm font-medium text-[color:var(--color-primary)] hover:underline inline-flex items-center gap-1 truncate max-w-[160px]">
+                {{ service.domain ?: '---' }}
+                {% if service.domain %}
+                <svg class="w-3 h-3 opacity-50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                {% endif %}
+              </a>
+            </div>
+
+            <div class="hm-row flex items-center justify-between py-3 border-b border-slate-50">
+              <span class="text-sm text-slate-500">Hosting Plan</span>
+              <span class="px-2 py-0.5 text-[11px] font-bold rounded uppercase border"
+                    style="background:rgba(var(--color-primary-rgb),0.08); color:var(--color-primary); border-color:rgba(var(--color-primary-rgb),0.2);">
+                {{ hp.name ?: order.title }}
+              </span>
+            </div>
+
+            <div class="hm-row flex items-center justify-between py-3">
+              <span class="text-sm text-slate-500">Next Due Date</span>
+              {% if order.expires_at %}
+              <span class="text-sm font-medium hm-val {% if daysUntilDue is not null and daysUntilDue <= 14 %}text-amber-600{% else %}text-slate-800{% endif %}">
+                {{ order.expires_at|date('M j, Y') }}
+                {% if daysUntilDue is not null and daysUntilDue > 0 and daysUntilDue <= 30 %}
+                <span class="ml-1 text-[11px] {% if daysUntilDue <= 7 %}text-red-500{% else %}text-amber-500{% endif %}">({{ daysUntilDue }}d)</span>
+                {% endif %}
+              </span>
+              {% else %}
+              <span class="text-sm text-slate-400 italic">No expiry</span>
+              {% endif %}
+            </div>
+
+          </div>
+        </div>
+
+        {# Server Details card #}
+        <div class="hm-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="hm-card-hdr px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+              Server Details
+            </h3>
+          </div>
+          <div class="p-5 space-y-4">
+
+            <div>
+              <p class="text-xs text-slate-400 mb-1.5">Hostname</p>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-sm font-medium text-slate-800 hm-val font-mono truncate flex-1">{{ server.hostname ?: '---' }}</span>
+                {% if server.hostname %}
+                <button @click="copy('{{ server.hostname }}', 'hostname')"
+                        :class="copiedKey === 'hostname' ? 'text-emerald-500' : 'text-slate-300 hover:text-[color:var(--color-primary)]'"
+                        class="transition-colors flex-shrink-0">
+                  <svg x-show="copiedKey !== 'hostname'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <svg x-show="copiedKey === 'hostname'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+
+            <div>
+              <p class="text-xs text-slate-400 mb-1.5">IP Address</p>
+              <div class="flex items-center gap-2">
+                <span class="hm-mono text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md">{{ server.ip ?: '---' }}</span>
+                {% if server.ip %}
+                <button @click="copy('{{ server.ip }}', 'server_ip')"
+                        :class="copiedKey === 'server_ip' ? 'text-emerald-500' : 'text-slate-400 hover:text-[color:var(--color-primary)]'"
+                        class="transition-colors">
+                  <svg x-show="copiedKey !== 'server_ip'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <svg x-show="copiedKey === 'server_ip'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Nameservers</p>
+              {% set nsEntries = [
+                { label: 'NS1', value: server.ns1 },
+                { label: 'NS2', value: server.ns2 },
+                { label: 'NS3', value: server.ns3 },
+                { label: 'NS4', value: server.ns4 }
+              ] %}
+              {% if server.ns1 or server.ns2 or server.ns3 or server.ns4 %}
+              {% for ns in nsEntries %}
+              {% if ns.value %}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-mono text-slate-600 hm-val truncate flex-1">{{ ns.value }}</span>
+                <button @click="copy('{{ ns.value }}', '{{ ns.label|lower }}')"
+                        :class="copiedKey === '{{ ns.label|lower }}' ? 'text-emerald-500' : 'text-slate-300 hover:text-[color:var(--color-primary)]'"
+                        class="transition-colors flex-shrink-0">
+                  <svg x-show="copiedKey !== '{{ ns.label|lower }}'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <svg x-show="copiedKey === '{{ ns.label|lower }}'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </button>
+              </div>
+              {% endif %}
+              {% endfor %}
+              {% else %}
+              <p class="text-sm text-slate-400">Not configured</p>
+              {% endif %}
+            </div>
+
+          </div>
+        </div>
+
+      </div>{# /Account + Server 2-col #}
+
+      {# Account Management section #}
+      {% if settings.show_account_management|default('1') != '0' %}
+      <div class="hm-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="hm-card-hdr px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Account Management
+          </h3>
+          {% if settings.acct_show_cancel|default('1') != '0' %}
+          <button type="button" @click="cancelModal = true"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 border border-red-200 hover:border-red-300 hover:bg-red-50 transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+            Cancel Service
+          </button>
+          {% endif %}
+        </div>
+        <div class="divide-y divide-slate-100">
+
+          {% if settings.acct_show_password|default('1') != '0' %}
+          <div>
+            <button @click="toggle('password')"
+                    class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-[rgba(var(--color-primary-rgb),0.1)] group-hover:text-[color:var(--color-primary)] transition-colors flex-shrink-0 hm-icon-circle">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-slate-800 hm-mgmt-title">Change Password</p>
+                  <p class="text-xs text-slate-500 hm-mgmt-desc">Update your hosting account password for security</p>
+                </div>
+              </div>
+              <svg class="w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0"
+                   :class="activePanel === 'password' ? 'rotate-90' : ''"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <div x-show="activePanel === 'password'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+              <form class="acct-form pt-4 space-y-4"
+                    action="{{ 'api/client/servicehosting/change_password'|url }}"
+                    {{ fb_api_form({message: 'Your cPanel password has been updated successfully.'|trans}) }}>
+                <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                <input type="hidden" name="order_id" value="{{ order.id }}">
+                <div class="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs text-slate-500 mb-1.5">New Password</label>
+                    <input type="password" name="password" required autocomplete="new-password"
+                           class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors"
+                           placeholder="New password">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-500 mb-1.5">Confirm Password</label>
+                    <input type="password" name="password_confirm" required autocomplete="new-password"
+                           class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors"
+                           placeholder="Confirm password">
+                  </div>
+                </div>
+                <button type="submit" class="px-5 py-2 rounded-lg text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                  Update Password
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if settings.acct_show_domain|default('1') != '0' %}
+          <div>
+            <button @click="toggle('domain')"
+                    class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-[rgba(var(--color-primary-rgb),0.1)] group-hover:text-[color:var(--color-primary)] transition-colors flex-shrink-0 hm-icon-circle">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-slate-800 hm-mgmt-title">Change Domain</p>
+                  <p class="text-xs text-slate-500 hm-mgmt-desc">Update the primary domain for this account</p>
+                </div>
+              </div>
+              <svg class="w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0"
+                   :class="activePanel === 'domain' ? 'rotate-90' : ''"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <div x-show="activePanel === 'domain'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+              <form class="acct-form pt-4 space-y-4"
+                    action="{{ 'api/client/servicehosting/change_domain'|url }}"
+                    {{ fb_api_form({message: 'Primary domain has been updated. DNS propagation may take a few minutes.'|trans}) }}>
+                <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                <input type="hidden" name="order_id" value="{{ order.id }}">
+                <div class="flex gap-3">
+                  <div class="flex-1">
+                    <label class="block text-xs text-slate-500 mb-1.5">Domain Name</label>
+                    <input type="text" name="sld" value="{{ request.domain|default(service.sld) }}" required
+                           class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors"
+                           placeholder="example">
+                  </div>
+                  <div class="w-28">
+                    <label class="block text-xs text-slate-500 mb-1.5">Extension</label>
+                    <input type="text" name="tld" value="{{ request.tld|default(service.tld) }}" required
+                           class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors"
+                           placeholder=".com">
+                  </div>
+                </div>
+                <button type="submit" class="px-5 py-2 rounded-lg text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                  Update Domain
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if settings.acct_show_username|default('1') != '0' %}
+          <div>
+            <button @click="toggle('username')"
+                    class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-[rgba(var(--color-primary-rgb),0.1)] group-hover:text-[color:var(--color-primary)] transition-colors flex-shrink-0 hm-icon-circle">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-slate-800 hm-mgmt-title">Change Username</p>
+                  <p class="text-xs text-slate-500 hm-mgmt-desc">{% if service.username %}Current: <span class="font-mono">{{ service.username }}</span>{% else %}Not yet provisioned{% endif %}</p>
+                </div>
+              </div>
+              <svg class="w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0"
+                   :class="activePanel === 'username' ? 'rotate-90' : ''"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <div x-show="activePanel === 'username'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+              <form class="acct-form pt-4 space-y-4"
+                    action="{{ 'api/client/servicehosting/change_username'|url }}"
+                    {{ fb_api_form({message: 'Username updated. Use your new username to log in to cPanel.'|trans}) }}>
+                <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                <input type="hidden" name="order_id" value="{{ order.id }}">
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1.5">New Username</label>
+                  <input type="text" name="username" value="{{ request.username|default(service.username) }}" required
+                         class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors"
+                         placeholder="{{ service.username }}">
+                </div>
+                <button type="submit" class="px-5 py-2 rounded-lg text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                  Update Username
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if upgradables %}
+          <div>
+            <button @click="toggle('upgrade')"
+                    class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors group">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-[rgba(var(--color-primary-rgb),0.1)] group-hover:text-[color:var(--color-primary)] transition-colors flex-shrink-0 hm-icon-circle">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-slate-800 hm-mgmt-title">Upgrade Plan</p>
+                  <p class="text-xs text-slate-500 hm-mgmt-desc">Request an upgrade to a higher hosting plan</p>
+                </div>
+              </div>
+              <svg class="w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0"
+                   :class="activePanel === 'upgrade' ? 'rotate-90' : ''"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <div x-show="activePanel === 'upgrade'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+              <form class="acct-form pt-4 space-y-4"
+                    action="{{ 'api/client/support/ticket_create'|url }}"
+                    {{ fb_api_form({message: 'Upgrade request submitted. Our team will review and apply the changes shortly.'|trans}) }}>
+                <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+                <input type="hidden" name="rel_type" value="order">
+                <input type="hidden" name="rel_id" value="{{ order.id }}">
+                <input type="hidden" name="rel_task" value="upgrade">
+                {% set helpdesks = client.support_helpdesk_get_pairs %}
+                {% if helpdesks|length > 1 %}
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1.5">Help Desk</label>
+                  <select name="support_helpdesk_id"
+                          class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors">
+                    {% for id, name in helpdesks %}
+                    <option value="{{ id }}">{{ name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                {% else %}
+                <input type="hidden" name="support_helpdesk_id" value="{{ helpdesks|keys|first }}"/>
+                {% endif %}
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1.5">Upgrade To</label>
+                  <select name="rel_new_value" required
+                          class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors">
+                    <option value="">— Select a plan —</option>
+                    {% for id, name in upgradables %}
+                    <option value="{{ id }}">{{ name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1.5">Subject</label>
+                  <input type="text" name="subject" required
+                         value="{{ 'Upgrade request for'|trans }} {{ order.title }}"
+                         class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1.5">Notes <span class="text-slate-400 font-normal">(optional)</span></label>
+                  <textarea name="content" rows="3"
+                            class="hm-input w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[color:var(--color-primary)] focus:ring-1 focus:ring-[rgba(var(--color-primary-rgb),0.2)] transition-colors resize-none"
+                            placeholder="{{ 'Any additional notes for this upgrade request...'|trans }}">{{ ('I would like to upgrade ' ~ order.title)|trans }}</textarea>
+                </div>
+                <button type="submit" class="px-5 py-2 rounded-lg text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                  Submit Upgrade Request
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endif %}{# /upgradables #}
+
+        </div>
+      </div>
+      {% endif %}{# /show_account_management #}
+
+    </div>{# /left 2/3 #}
+
+    {# Right 1/3: Resource Usage sidebar #}
+    {% if settings.show_resource_usage|default('1') != '0' %}
+    <div>
+      <div class="hm-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-24">
+        <div class="hm-card-hdr px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Resource Usage
+          </h3>
+        </div>
+        <div class="p-5 space-y-6">
+
+          <div class="space-y-2">
+            <div class="flex justify-between items-end">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-tighter text-slate-400">Disk Space</p>
+                <p class="text-sm font-semibold text-slate-800 hm-val mt-1">
+                  <span x-show="!statsLoading && stats?.disk?.unlimited" style="display:none;">Unlimited</span>
+                  <span x-show="!statsLoading && stats?.disk && !stats.disk.unlimited && stats.disk.megabytes_used !== null"
+                        x-text="formatMB(stats?.disk?.megabytes_used) + ' of ' + formatMB(stats?.disk?.megabytes_limit)"></span>
+                  <span x-show="!statsLoading && (!stats?.disk || (!stats.disk.unlimited && stats.disk.megabytes_used === null))">{{ hp.quota ? hp.quota ~ ' MB' : 'Unlimited' }}</span>
+                  <span x-show="statsLoading" class="inline-block w-20 h-4 rounded bg-slate-100 animate-pulse" style="display:none;"></span>
+                </p>
+              </div>
+              <span x-show="stats?.disk && !stats?.disk?.unlimited && stats.disk.megabytes_used !== null"
+                    x-text="Math.round(stats?.disk?.percent_used ?? 0) + '%'"
+                    :class="(stats?.disk?.percent_used ?? 0) > 85 ? 'text-red-600 bg-red-50' : (stats?.disk?.percent_used ?? 0) > 60 ? 'text-amber-600 bg-amber-50' : ''"
+                    :style="(stats?.disk?.percent_used ?? 0) <= 60 ? 'color: var(--color-primary); background: rgba(var(--color-primary-rgb),0.08)' : ''"
+                    class="text-xs font-bold px-2 py-0.5 rounded"></span>
+            </div>
+            <div class="hm-progress-bg h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div x-show="stats?.disk && !stats?.disk?.unlimited && stats.disk.megabytes_used !== null"
+                   class="h-full rounded-full transition-[width] duration-700 ease-out"
+                   :class="(stats?.disk?.percent_used ?? 0) > 85 ? 'bg-red-500' : (stats?.disk?.percent_used ?? 0) > 60 ? 'bg-amber-500' : ''"
+                   :style="'width:' + Math.min(100, stats?.disk?.percent_used ?? 0) + '%; ' + ((stats?.disk?.percent_used ?? 0) <= 60 ? 'background-color: var(--color-primary)' : '')"
+                   style="display:none;"></div>
+              <div x-show="(!stats?.disk || stats.disk.unlimited || stats.disk.megabytes_used === null) && !statsLoading"
+                   class="h-full rounded-full bg-emerald-400" style="width:100%; display:none;"></div>
+              <div x-show="statsLoading" class="h-full w-1/3 rounded-full bg-slate-200 animate-pulse" style="display:none;"></div>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex justify-between items-end">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-tighter text-slate-400">Bandwidth</p>
+                <p class="text-sm font-semibold text-slate-800 hm-val mt-1">
+                  <span x-show="!statsLoading && stats?.bandwidth?.unlimited" style="display:none;">Unlimited</span>
+                  <span x-show="!statsLoading && stats?.bandwidth && !stats.bandwidth.unlimited && stats.bandwidth.megabytes_used !== null"
+                        x-text="formatMB(stats?.bandwidth?.megabytes_used) + ' of ' + formatMB(stats?.bandwidth?.megabytes_limit)"></span>
+                  <span x-show="!statsLoading && (!stats?.bandwidth || (!stats.bandwidth.unlimited && stats.bandwidth.megabytes_used === null))">{{ hp.bandwidth ? hp.bandwidth ~ ' MB' : 'Unlimited' }}</span>
+                  <span x-show="statsLoading" class="inline-block w-20 h-4 rounded bg-slate-100 animate-pulse" style="display:none;"></span>
+                </p>
+              </div>
+              <span x-show="stats?.bandwidth && !stats?.bandwidth?.unlimited"
+                    x-text="Math.round(stats?.bandwidth?.percent_used ?? 0) + '%'"
+                    :class="(stats?.bandwidth?.percent_used ?? 0) > 85 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50'"
+                    class="text-xs font-bold px-2 py-0.5 rounded"></span>
+              <span x-show="(stats?.bandwidth?.unlimited || (!stats?.bandwidth && !statsLoading))"
+                    class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded" style="display:none;">Optimal</span>
+            </div>
+            <div class="hm-progress-bg h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div x-show="stats?.bandwidth && !stats?.bandwidth?.unlimited && stats.bandwidth.megabytes_used !== null"
+                   class="h-full rounded-full transition-[width] duration-700 ease-out"
+                   :class="(stats?.bandwidth?.percent_used ?? 0) > 85 ? 'bg-red-500' : 'bg-emerald-500'"
+                   :style="'width:' + Math.min(100, stats?.bandwidth?.percent_used ?? 0) + '%'"
+                   style="display:none;"></div>
+              <div x-show="(!stats?.bandwidth || stats.bandwidth.unlimited || stats.bandwidth.megabytes_used === null) && !statsLoading"
+                   class="h-full rounded-full bg-emerald-400" style="width:100%; display:none;"></div>
+              <div x-show="statsLoading" class="h-full w-1/3 rounded-full bg-slate-200 animate-pulse" style="display:none;"></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-50">
+            <div class="hm-mini-stat bg-slate-50 p-3.5 rounded-lg text-center">
+              <p class="text-[10px] uppercase font-bold text-slate-400 mb-1">Email Accounts</p>
+              <div class="flex items-baseline justify-center gap-1">
+                <span x-show="statsLoading" class="inline-block w-6 h-5 rounded bg-slate-200 animate-pulse" style="display:none;"></span>
+                <span x-show="!statsLoading && stats?.emails?.count !== undefined"
+                      x-text="stats?.emails?.count"
+                      class="text-lg font-bold text-slate-800 hm-val tabular-nums" style="display:none;"></span>
+                <span x-show="!statsLoading && stats?.emails?.count === undefined"
+                      class="text-sm font-medium text-slate-400">N/A</span>
+                <span x-show="!statsLoading && stats?.emails?.count !== undefined"
+                      class="text-xs text-slate-400" style="display:none;">/ {{ hp.max_pop is defined and hp.max_pop ? hp.max_pop : '&infin;' }}</span>
+              </div>
+            </div>
+            <div class="hm-mini-stat bg-slate-50 p-3.5 rounded-lg text-center">
+              <p class="text-[10px] uppercase font-bold text-slate-400 mb-1">Addon Domains</p>
+              <div class="flex items-baseline justify-center gap-1">
+                <span x-show="statsLoading" class="inline-block w-6 h-5 rounded bg-slate-200 animate-pulse" style="display:none;"></span>
+                <span x-show="!statsLoading && stats?.domains?.addon_count !== undefined"
+                      x-text="stats?.domains?.addon_count"
+                      class="text-lg font-bold text-slate-800 hm-val tabular-nums" style="display:none;"></span>
+                <span x-show="!statsLoading && stats?.domains?.addon_count === undefined"
+                      class="text-sm font-medium text-slate-400">N/A</span>
+                <span x-show="!statsLoading && stats?.domains?.addon_count !== undefined"
+                      class="text-xs text-slate-400" style="display:none;">/ {{ hp.max_addon is defined and hp.max_addon ? hp.max_addon : '&infin;' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div x-show="stats?.disk?.inodes_limit > 0" style="display:none;">
+            <div class="flex justify-between text-xs text-slate-400 mb-1.5">
+              <span>Inodes</span>
+              <span x-text="(stats?.disk?.inodes_used ?? 0).toLocaleString() + ' / ' + (stats?.disk?.inodes_limit ?? 0).toLocaleString()"></span>
+            </div>
+            <div class="hm-progress-bg h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-[width] duration-700"
+                   :class="(stats?.disk?.inodes_used ?? 0) / (stats?.disk?.inodes_limit || 1) > 0.85 ? 'bg-red-500' : 'bg-sky-500'"
+                   :style="'width:' + Math.min(100, Math.round((stats?.disk?.inodes_used ?? 0) / (stats?.disk?.inodes_limit || 1) * 100)) + '%'"></div>
+            </div>
+          </div>
+
+          {# Support section — merged into card #}
+          <div class="pt-4 border-t border-slate-100">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hm-icon-circle"
+                   style="background: rgba(var(--color-primary-rgb), 0.08); color: var(--color-primary);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-slate-700 hm-mgmt-title">Need Technical Support?</p>
+                <p class="text-[11px] text-slate-400 leading-tight hm-mgmt-desc">Our team is here to help</p>
+              </div>
+            </div>
+            <button type="button" @click="ticketModal = true"
+                    class="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold border transition-all hover:bg-slate-50 active:scale-[0.98] hm-btn-outline"
+                    style="color: var(--color-primary); border-color: rgba(var(--color-primary-rgb), 0.3);">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Open Ticket
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+    {% endif %}
+
+  </div>{# /main 3-col grid #}
+
+  {# Renew #}
+  <template x-teleport="body">
+  <div x-show="renewModal" x-cloak
+       @keydown.escape.window="renewModal = false"
+       class="renew-modal-overlay fixed inset-0 z-[9999] flex items-center justify-center p-4"
+       style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+    <div @click.outside="renewModal = false"
+         class="renew-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+         style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+      <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Renew Service
+        </h3>
+        <button type="button" @click="renewModal = false" class="text-gray-500 hover:text-white transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div class="flex items-center gap-3 px-4 py-3 rounded-lg border border-white/[0.06]" style="background: rgba(255,255,255,0.02);">
+          <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+          </svg>
+          <div>
+            <p class="text-xs text-gray-500">Service</p>
+            <p class="text-sm font-medium text-white">{{ order.title }}</p>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5" for="renew-period-select">Renewal Period</label>
+          <select id="renew-period-select"
+                  class="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+            <option value="1" class="bg-gray-900">1 Year</option>
+            <option value="2" class="bg-gray-900">2 Years</option>
+            <option value="3" class="bg-gray-900">3 Years</option>
+            <option value="5" class="bg-gray-900">5 Years</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between px-4 py-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5">
+          <span class="text-xs text-gray-400">Total Amount</span>
+          <span id="renew-total" class="text-sm font-semibold text-white">{{ order.price|money(order.currency) }}</span>
+        </div>
+        <div id="renew-error" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
+        <button id="btn-confirm-renew"
+                class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm
+                       font-semibold transition-all focus:outline-none
+                       focus:ring-2 focus:ring-indigo-500"
+                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+          </svg>
+          Generate Renewal Invoice
+        </button>
+        <p class="text-xs text-gray-600 text-center">You will be redirected to the invoice to complete payment.</p>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  {# ── Cancel Service modal ─────────────────────────────────────────── #}
+  <template x-teleport="body">
+  <div x-show="cancelModal" x-cloak
+       @keydown.escape.window="cancelModal = false"
+       @modal-close.window="if ($event.detail.modal === 'cancelModal') cancelModal = false"
+       class="renew-modal-overlay fixed inset-0 z-[9999] flex items-center justify-center p-4"
+       style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+    <div @click.outside="cancelModal = false"
+         class="renew-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+         style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+      <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+          </svg>
+          Request Cancellation
+        </h3>
+        <button type="button" @click="cancelModal = false" class="text-gray-500 hover:text-white transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="px-6 py-5">
+        <form class="acct-form space-y-4"
+              action="{{ 'api/client/support/ticket_create'|url }}"
+              {{ fb_api_form({message: 'Cancellation request submitted. Your service will remain active until our team reviews it.'|trans}) }}>
+          <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+          <input type="hidden" name="rel_type" value="order">
+          <input type="hidden" name="rel_id" value="{{ order.id }}">
+          <input type="hidden" name="rel_task" value="cancel">
+          {% set helpdesks = client.support_helpdesk_get_pairs %}
+          {% if helpdesks|length > 1 %}
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">Help Desk</label>
+            <select name="support_helpdesk_id"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] text-sm text-white
+                           focus:outline-none focus:border-indigo-500/50 transition-colors"
+                    style="background:rgba(255,255,255,0.04);">
+              {% for id, name in helpdesks %}
+              <option value="{{ id }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% else %}
+          <input type="hidden" name="support_helpdesk_id" value="{{ helpdesks|keys|first }}"/>
+          {% endif %}
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">Subject</label>
+            <input type="text" name="subject" required
+                   value="{{ 'Cancellation request for'|trans }} {{ order.title }}"
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] text-sm text-white
+                          placeholder-gray-700 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                   style="background:rgba(255,255,255,0.04);">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">Reason for Cancellation</label>
+            <textarea name="content" rows="3" required
+                      class="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] text-sm text-white
+                             placeholder-gray-700 focus:outline-none focus:border-indigo-500/50 transition-colors resize-none"
+                      style="background:rgba(255,255,255,0.04);"
+                      placeholder="{{ 'Please tell us why you\'d like to cancel...'|trans }}"></textarea>
+          </div>
+          <div class="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/20"
+               style="background:rgba(239,68,68,0.05);">
+            <svg class="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p class="text-xs text-red-400 leading-relaxed">
+              {{ 'Cancellation requests are reviewed by our team. Your service will remain active until the request is processed.'|trans }}
+            </p>
+          </div>
+          <button type="submit"
+                  class="w-full px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all
+                         hover:opacity-90 active:scale-[0.98]"
+                  style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+            {{ 'Submit Cancellation Request'|trans }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  </template>
+
+  {# Open Ticket Modal #}
+  <template x-teleport="body">
+  <div x-show="ticketModal" x-cloak
+       @keydown.escape.window="ticketModal = false"
+       @modal-close.window="if ($event.detail.modal === 'ticketModal') ticketModal = false"
+       class="renew-modal-overlay fixed inset-0 z-[9999] flex items-center justify-center p-4"
+       style="background:rgba(15,23,42,0.65); backdrop-filter:blur(4px);">
+    <div @click.outside="ticketModal = false"
+         class="renew-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
+         style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-white/[0.06]">
+        <svg class="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        <h3 class="text-sm font-semibold text-white">{{ 'Open Support Ticket'|trans }}</h3>
+        <button type="button" @click="ticketModal = false" class="ml-auto text-gray-500 hover:text-white transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="px-6 py-5">
+        <form class="acct-form space-y-4"
+              action="{{ 'api/client/support/ticket_create'|url }}"
+              {{ fb_api_form({message: "Support ticket opened. We'll get back to you as soon as possible."|trans}) }}>
+          <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+          <input type="hidden" name="rel_type" value="order">
+          <input type="hidden" name="rel_id" value="{{ order.id }}">
+          {% set helpdesks = client.support_helpdesk_get_pairs %}
+          {% if helpdesks|length > 1 %}
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">{{ 'Help Desk'|trans }}</label>
+            <select name="support_helpdesk_id"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] text-sm text-white
+                           focus:outline-none focus:border-indigo-500/50 transition-colors"
+                    style="background:rgba(255,255,255,0.04);">
+              {% for id, name in helpdesks %}
+              <option value="{{ id }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% else %}
+          <input type="hidden" name="support_helpdesk_id" value="{{ helpdesks|keys|first }}"/>
+          {% endif %}
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">{{ 'Subject'|trans }}</label>
+            <input type="text" name="subject" required
+                   value="{{ 'Support request for'|trans }} {{ order.title }}"
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] text-sm text-white
+                          placeholder-gray-700 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                   style="background:rgba(255,255,255,0.04);">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1.5">{{ 'Message'|trans }}</label>
+            <textarea name="content" rows="4" required
+                      class="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] text-sm text-white
+                             placeholder-gray-700 focus:outline-none focus:border-indigo-500/50 transition-colors resize-none"
+                      style="background:rgba(255,255,255,0.04);"
+                      placeholder="{{ 'Describe your issue in detail...'|trans }}"></textarea>
+          </div>
+          <button type="submit"
+                  class="w-full px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all
+                         hover:opacity-90 active:scale-[0.98]"
+                  style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+            {{ 'Submit Ticket'|trans }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  </template>
+
+
+
+</div>
+
+<script>
+function hostingDash() {
+  return {
+    activePanel: null,
+    copiedKey: null,
+    renewModal: false,
+    cancelModal: false,
+    ticketModal: false,
+    stats: null,
+    statsLoading: true,
+    init() {
+      const orderId = this.$el.dataset.orderId;
+      API.client.get(
+        'servicehosting/get_hosting_stats',
+        { order_id: orderId },
+        (d) => {
+          this.stats = (d && typeof d === 'object' && ('disk' in d || 'bandwidth' in d)) ? d : null;
+          this.statsLoading = false;
+        },
+        () => { this.statsLoading = false; },
+        false
+      );
+    },
+    formatMB(mb) {
+      if (mb === null || mb === undefined) return '\u2014';
+      if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+      return Math.round(mb) + ' MB';
+    },
+    toggle(panel) {
+      this.activePanel = this.activePanel === panel ? null : panel;
+    },
+    copy(text, key) {
+      if (!text || text === '—') return;
+      navigator.clipboard.writeText(text).then(() => {
+        this.copiedKey = key || true;
+        clearTimeout(this._copyTimer);
+        this._copyTimer = setTimeout(() => { this.copiedKey = null; }, 2000);
+      }).catch(() => {});
+    }
+  };
+}
+
+// ── Account Management: show processing state on submit (Issue 2) ──────────
+document.querySelectorAll('.acct-form button[type="submit"]').forEach((btn) => {
+  const originalHTML = btn.innerHTML;
+  btn.closest('form').addEventListener('submit', () => {
+    btn.innerHTML =
+      '<svg class="animate-spin w-4 h-4 inline-block mr-1.5" fill="none" viewBox="0 0 24 24">' +
+        '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+        '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 14.627 0 20 12h-4a4 4 0 00-4 4c0 2.21-1.79 4-4 4S0 14.21 0 12z"></path>' +
+      '</svg>Processing...';
+  });
+  // Reset text when api-form re-enables the button (on success or error)
+  new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
+      if (m.attributeName === 'disabled' && !btn.disabled) {
+        btn.innerHTML = originalHTML;
+      }
+    });
+  }).observe(btn, { attributes: true });
+});
+
+function onAfterLoginLinkCreated(url) {
+  window.open(url, '_blank');
+}
+</script>
+{% endif %}

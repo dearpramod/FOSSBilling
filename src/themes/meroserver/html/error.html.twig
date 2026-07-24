@@ -1,0 +1,339 @@
+{% extends 'layout_public.html.twig' %}
+
+{# ── Classify the error into a "kind" so the rest of the template can branch cleanly ── #}
+{% set msg = exception.message|default('')|lower %}
+{% set code = exception.code|default(0) %}
+
+{# ── For 404s: extract the attempted URL from "Page /foo/bar not found" ── #}
+{% set attempted_url = '' %}
+{% if code == 404 %}
+    {% set _parts = exception.message|default('')|split(' ') %}
+    {% if _parts|length >= 2 and _parts[0] == 'Page' %}
+        {% set attempted_url = _parts[1] %}
+    {% endif %}
+{% endif %}
+
+{# Map FOSSBilling internal (code=0) exceptions to a type by inspecting the message #}
+{% if code == 404 %}
+    {% set kind = 'not_found' %}
+{% elseif code == 403 %}
+    {% set kind = 'forbidden' %}
+{% elseif code == 401 %}
+    {% set kind = 'unauthorized' %}
+{% elseif code == 503 %}
+    {% set kind = 'maintenance' %}
+{% elseif 'ticket' in msg and ('not found' in msg or 'does not exist' in msg or 'access' in msg) %}
+    {% set kind = 'ticket_not_found' %}
+{% elseif 'ticket' in msg %}
+    {% set kind = 'ticket_error' %}
+{% elseif 'news' in msg and ('not found' in msg or 'does not exist' in msg) %}
+    {% set kind = 'news_not_found' %}
+{% elseif ('invoice' in msg or 'payment' in msg) and ('not found' in msg or 'does not exist' in msg) %}
+    {% set kind = 'invoice_not_found' %}
+{% elseif ('article' in msg or 'knowledge base' in msg or 'kb' in msg) and ('not found' in msg or 'does not exist' in msg) %}
+    {% set kind = 'kb_not_found' %}
+{% elseif 'order' in msg and 'not activated' in msg %}
+    {% set kind = 'order_not_activated' %}
+{% elseif 'not found' in msg or 'does not exist' in msg or 'no record' in msg %}
+    {% set kind = 'not_found' %}
+{% elseif 'permission' in msg or 'access denied' in msg or 'not allowed' in msg or 'forbidden' in msg %}
+    {% set kind = 'forbidden' %}
+{% elseif 'login' in msg or 'logged in' in msg or 'authenticated' in msg or 'session' in msg %}
+    {% set kind = 'unauthorized' %}
+{% elseif 'invalid' in msg or 'required' in msg or 'missing' in msg %}
+    {% set kind = 'validation' %}
+{% else %}
+    {% set kind = 'server_error' %}
+{% endif %}
+
+{% block meta_title %}
+    {%- if kind == 'ticket_not_found' %}Ticket Not Found
+    {%- elseif kind == 'ticket_error' %}Ticket Error
+    {%- elseif kind == 'not_found' %}Page Not Found
+    {%- elseif kind == 'order_not_activated' %}Order Not Activated
+    {%- elseif kind == 'forbidden' %}Access Denied
+    {%- elseif kind == 'unauthorized' %}Authentication Required
+    {%- elseif kind == 'maintenance' %}Under Maintenance
+    {%- elseif kind == 'validation' %}Invalid Request
+    {%- else %}Something Went Wrong
+    {%- endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+    @keyframes scan-err { 0% { top: 0; } 100% { top: 100%; } }
+    .error-scan-line {
+        position: absolute; left: 0; right: 0; height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(var(--color-primary-rgb), .45), transparent);
+        animation: scan-err 3s linear infinite;
+    }
+    @keyframes float-err { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .error-icon-float { animation: float-err 4s ease-in-out infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="py-20 sm:py-28 px-4">
+    <div class="max-w-2xl mx-auto text-center">
+
+        {# ── Icon / error code box ── #}
+        <div class="relative inline-flex flex-col items-center justify-center w-44 h-44 mx-auto mb-10 rounded-2xl card-glass overflow-hidden select-none error-icon-float"
+             style="box-shadow: 0 0 60px rgba(var(--color-primary-rgb), .08);">
+            <div class="error-scan-line"></div>
+
+            {# corner decorators #}
+            <div class="absolute top-3 left-3  w-5 h-5 border-l-2 border-t-2 rounded-tl-md" style="border-color:rgba(var(--color-primary-rgb),.4);"></div>
+            <div class="absolute top-3 right-3 w-5 h-5 border-r-2 border-t-2 rounded-tr-md" style="border-color:rgba(var(--color-primary-rgb),.4);"></div>
+            <div class="absolute bottom-3 left-3  w-5 h-5 border-l-2 border-b-2 rounded-bl-md" style="border-color:rgba(var(--color-primary-rgb),.4);"></div>
+            <div class="absolute bottom-3 right-3 w-5 h-5 border-r-2 border-b-2 rounded-br-md" style="border-color:rgba(var(--color-primary-rgb),.4);"></div>
+
+            {# Central icon — differs by kind #}
+            {% if kind == 'ticket_not_found' or kind == 'ticket_error' %}
+                {# Ticket / chat icon #}
+                <svg class="w-14 h-14 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color:var(--color-primary); opacity:.85;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">ticket_error</span>
+            {% elseif kind == 'forbidden' %}
+                <svg class="w-14 h-14 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color:var(--color-primary); opacity:.85;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+                <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">forbidden</span>
+            {% elseif kind == 'unauthorized' %}
+                <svg class="w-14 h-14 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color:var(--color-primary); opacity:.85;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">unauthorized</span>
+            {% elseif kind == 'maintenance' %}
+                <svg class="w-14 h-14 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color:var(--color-primary); opacity:.85;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">maintenance</span>
+            {% elseif kind == 'order_not_activated' %}
+                <svg class="w-14 h-14 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color:var(--color-primary); opacity:.85;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">not_activated</span>
+            {% elseif kind == 'validation' %}
+                <svg class="w-14 h-14 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color:var(--color-primary); opacity:.85;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">bad_request</span>
+            {% else %}
+                {# 404 / server_error — show the numeric code #}
+                <span class="text-6xl font-bold leading-none"
+                      style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+                    {{ code > 0 ? code : '!' }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-3">
+                    <div class="w-1.5 h-1.5 rounded-full" style="background:var(--color-primary);"></div>
+                    <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+                        {{ kind == 'not_found' ? 'not_found' : 'server_error' }}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+
+        {# ── Heading ── #}
+        <h1 class="err-heading text-3xl sm:text-4xl font-bold text-white mb-4 leading-tight">
+            {%- if kind == 'ticket_not_found' -%}Ticket Not Found
+            {%- elseif kind == 'ticket_error' -%}Ticket Error
+            {%- elseif kind == 'news_not_found' -%}Article Not Found
+            {%- elseif kind == 'invoice_not_found' -%}Invoice Not Found
+            {%- elseif kind == 'kb_not_found' -%}Article Not Found
+            {%- elseif kind == 'order_not_activated' -%}Order Not Activated
+            {%- elseif kind == 'not_found' -%}Page Not Found
+            {%- elseif kind == 'forbidden' -%}Access Denied
+            {%- elseif kind == 'unauthorized' -%}Authentication Required
+            {%- elseif kind == 'maintenance' -%}Under Maintenance
+            {%- elseif kind == 'validation' -%}Invalid Request
+            {%- else -%}Something Went Wrong
+            {%- endif %}
+        </h1>
+
+        {# ── Description ── #}
+        <p class="err-desc text-gray-400 text-base leading-relaxed mb-10 max-w-md mx-auto">
+            {%- if kind == 'ticket_not_found' -%}
+                This support ticket doesn't exist, was deleted, or you don't have permission to view it. Check your ticket list for open requests.
+            {%- elseif kind == 'ticket_error' -%}
+                There was a problem loading this support ticket. Please go back to your tickets and try again.
+            {%- elseif kind == 'news_not_found' -%}
+                This news article doesn't exist or may have been removed. Browse our latest news for recent updates.
+            {%- elseif kind == 'invoice_not_found' -%}
+                This invoice doesn't exist or the link may have expired. Check your invoices list for your billing history.
+            {%- elseif kind == 'kb_not_found' -%}
+                This knowledge base article doesn't exist or may have been moved. Browse the knowledge base for help.
+            {%- elseif kind == 'order_not_activated' -%}
+                This order has not been activated yet. It may still be pending payment or processing. Check your orders for the current status or contact support if you need assistance.
+            {%- elseif kind == 'not_found' -%}
+                The page you're looking for doesn't exist or may have been moved.{% if attempted_url %} <code class="err-url-chip">{{ attempted_url|e }}</code>{% endif %} Let's get you back on track.
+            {%- elseif kind == 'forbidden' -%}
+                You don't have permission to access this resource. Log in with an authorised account or contact support.
+            {%- elseif kind == 'unauthorized' -%}
+                You need to be signed in to view this page. Please log in to continue.
+            {%- elseif kind == 'maintenance' -%}
+                The system is currently undergoing scheduled maintenance. Please check back shortly.
+            {%- elseif kind == 'validation' -%}
+                The request contained invalid or missing data. Please review your input and try again.
+            {%- else -%}
+                {{ exception.message|default('An unexpected error occurred. Please try again or contact support if the problem persists.')|e }}
+            {%- endif %}
+        </p>
+
+        {# ── Action buttons — contextual per kind ── #}
+        <div class="flex flex-wrap items-center justify-center gap-3 mb-14">
+
+            {# Primary CTA #}
+            {% if kind == 'news_not_found' %}
+            <a href="{{ '/news'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 12h6m-6-4h3"/>
+                </svg>
+                Browse News
+            </a>
+            {% elseif kind == 'invoice_not_found' %}
+            <a href="{{ '/invoice'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                My Invoices
+            </a>
+            {% elseif kind == 'kb_not_found' %}
+            <a href="{{ '/support/kb'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                </svg>
+                Knowledge Base
+            </a>
+            {% elseif kind == 'order_not_activated' %}
+            <a href="{{ '/order'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+                My Orders
+            </a>
+            {% elseif kind == 'ticket_not_found' or kind == 'ticket_error' %}
+            <a href="{{ '/support'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                My Tickets
+            </a>
+            {% elseif kind == 'unauthorized' %}
+            <a href="{{ '/login'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                </svg>
+                Sign In
+            </a>
+            {% else %}
+            <a href="{{ '/'|url }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
+               style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.3);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                Go Home
+            </a>
+            {% endif %}
+
+            {# Secondary — Go Back #}
+            <button onclick="history.back()"
+                    class="err-btn-ghost inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-gray-300 text-sm font-medium border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.07] hover:text-white transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Go Back
+            </button>
+
+            {# Tertiary — Contact Support (not shown for ticket errors to avoid loop, not for maintenance) #}
+            {% if kind not in ['ticket_not_found','ticket_error','invoice_not_found','maintenance','order_not_activated'] %}
+            <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
+               class="err-btn-ghost inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-gray-300 text-sm font-medium border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.07] hover:text-white transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                Contact Support
+            </a>
+            {% endif %}
+        </div>
+
+        {# ── Suggested pages (404 / ticket errors) ── #}
+        {% if kind in ['not_found','ticket_not_found','ticket_error'] %}
+        <div>
+            <p class="err-section-label text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4">You might be looking for</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+                <a href="{{ '/'|url }}"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl card-glass transition-all hover:border-white/[0.14] hover:-translate-y-0.5">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-400 group-hover:text-white transition-colors">Home</span>
+                </a>
+
+                <a href="{{ '/support'|url }}"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl card-glass transition-all hover:border-white/[0.14] hover:-translate-y-0.5">
+                    <div class="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-400 group-hover:text-white transition-colors">Support</span>
+                </a>
+
+                <a href="{{ '/order'|url }}"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl card-glass transition-all hover:border-white/[0.14] hover:-translate-y-0.5">
+                    <div class="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-400 group-hover:text-white transition-colors">Order</span>
+                </a>
+
+                <a href="{{ '/support/kb'|url }}"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl card-glass transition-all hover:border-white/[0.14] hover:-translate-y-0.5">
+                    <div class="w-9 h-9 rounded-lg bg-sky-500/10 flex items-center justify-center group-hover:bg-sky-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-400 group-hover:text-white transition-colors">Knowledge Base</span>
+                </a>
+
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</section>
+{% endblock %}

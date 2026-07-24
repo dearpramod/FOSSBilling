@@ -1,0 +1,1010 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{# ── Pre-fetch category data so meta_title can use it (skipped on single-product pages) ── #}
+{% if not request.product %}
+{% set all_categories = guest.product_category_get_list({'per_page': 100}) %}
+{% set currency = guest.cart_get_currency %}
+{% set currency_fmt_js = currency.symbol|default(currency.code|default('')) ~ '__PRICE__' %}
+
+{# ── Determine which categories to show (used in both hero and product grid) ── #}
+{% set matched = [] %}
+{% for cat in all_categories.list %}
+    {% if 'server' in cat.title|lower or 'vps' in cat.title|lower or 'dedicated' in cat.title|lower or 'cloud' in cat.title|lower %}
+        {% set matched = matched|merge([cat]) %}
+    {% endif %}
+{% endfor %}
+{% set show_categories = matched|length > 0 ? matched : all_categories.list %}
+{% set _hero_cat = show_categories|length > 0 ? show_categories|first : null %}
+
+{# ── Parse hero content from category description ── #}
+{# Format: > quoted → badge span | # H1 → title | paragraph → p | * item / - item → li #}
+{% set _tagline = '' %}
+{% set _title = '' %}
+{% set _paragraphs = [] %}
+{% set _bullets = [] %}
+{% if _hero_cat and _hero_cat.description %}
+    {% set _lines = _hero_cat.description|split('\n') %}
+    {% for _line in _lines %}
+        {% set _line = _line|trim %}
+        {% if _line starts with '> ' %}
+            {% set _tagline = _line[2:]|trim %}
+        {% elseif _line starts with '# ' %}
+            {% set _title = _line[2:]|trim %}
+        {% elseif _line starts with '## ' %}
+            {# skip level-2 headings #}
+        {% elseif _line starts with '* ' or _line starts with '- ' %}
+            {% set _bullets = _bullets|merge([_line[2:]|trim]) %}
+        {% elseif _line %}
+            {% set _paragraphs = _paragraphs|merge([_line]) %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+{% endif %}
+
+{% block meta_title %}{% if settings.category_title_in_tab|default('1') != '0' and _hero_cat and _hero_cat.title %}{{ _hero_cat.title }}{% else %}Server Plans{% endif %}{% endblock %}
+{% block page_header %}Servers{% endblock %}
+
+{% block content %}
+
+{# ── If a specific product is selected, show its order form ── #}
+{# product may come from the controller (slug route) or from ?product=ID query param #}
+{% if product is not defined and request.product %}
+{% set product = guest.product_get({'id': request.product}) %}
+{% endif %}
+{% if product is defined and product %}
+{% set pricing = product.pricing %}
+{% set periods = guest.system_periods %}
+{% set first_period = '' %}
+{% if pricing.type == 'recurrent' %}{% for code, prices in pricing.recurrent %}{% if first_period == '' and prices.enabled %}{% set first_period = code %}{% endif %}{% endfor %}{% endif %}
+{# Build base monthly price for savings calculation #}
+{% set _base_mo_price = 0 %}
+{% if pricing.type == 'recurrent' and pricing.recurrent['1M'] is defined and pricing.recurrent['1M'].enabled %}{% set _base_mo_price = pricing.recurrent['1M'].price %}{% endif %}
+{% set _period_months = {'1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36} %}
+
+<div class="ord-srv-detail">
+    <a href="{{ '/order/vps'|url }}" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark-link-muted transition-colors mb-4">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to Server Plans
+    </a>
+    <div class="flex items-end gap-3 mb-6">
+        <h1 class="text-2xl font-bold text-slate-900 ord-srv-heading">{{ product.title }}</h1>
+        <span class="mb-1 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide"
+              style="background:rgba(var(--color-primary-rgb),0.12);color:var(--color-primary);">
+            {{ pricing.type == 'recurrent' ? 'Subscription' : (pricing.type == 'once' ? 'One-time' : 'Free') }}
+        </span>
+    </div>
+
+    {# Check for a per-product override first: mod_serviceserver_order_form_{id}.html.twig #}
+    {% set service_order_tpl_product = 'mod_service' ~ product.type ~ '_order_form_' ~ product.id ~ '.html.twig' %}
+    {% set service_order_tpl = guest.system_template_exists({ 'file': service_order_tpl_product })
+        ? service_order_tpl_product
+        : 'mod_service' ~ product.type ~ '_order_form.html.twig' %}
+    {% if guest.system_template_exists({ 'file': service_order_tpl }) %}
+        {{ include(service_order_tpl) }}
+    {% else %}
+
+    {% include 'partial_order_product_component.html.twig' %}
+
+    {# ══ Two-column Stitch layout ══ #}
+    <div x-data="orderProduct({{ product.id }}, '{{ first_period }}')" class="ord-srv-layout">
+
+        {# ═══ LEFT COLUMN ═══ #}
+        <div class="ord-srv-main">
+
+            {# ── Billing cycle card grid (Stitch) ── #}
+            {% if pricing.type == 'recurrent' %}
+            {% set _period_keys = [] %}
+            {% for code, prices in pricing.recurrent %}{% if prices.enabled %}{% set _period_keys = _period_keys|merge([code]) %}{% endif %}{% endfor %}
+            {% set _best_period = _period_keys|last %}
+            <section class="ord-srv-section-card">
+                <div class="flex items-center justify-between mb-5">
+                    <h3 class="text-base font-semibold ord-srv-heading flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Select billing cycle
+                    </h3>
+                    <span class="text-emerald-600 text-xs font-semibold flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                        Longer plans save more
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 {% if _period_keys|length >= 3 %}sm:grid-cols-3{% endif %} gap-3">
+                    {% for code, prices in pricing.recurrent %}{% if prices.enabled %}
+                    {% set _months = _period_months[code] ?? 1 %}
+                    {% set _savings = _base_mo_price > 0 and _months > 1 ? ((1 - prices.price / (_base_mo_price * _months)) * 100)|round : 0 %}
+                    {% set _mo_equiv = _months > 1 ? (prices.price / _months)|round(2) : 0 %}
+                    {% set _suffix = code == '1M' ? '/mo' : (code == '3M' ? '/qtr' : (code == '6M' ? '/6mo' : (code == '1Y' ? '/yr' : (code == '2Y' ? '/2yr' : '/3yr')))) %}
+                    <div @click="selectedPeriod = '{{ code }}'"
+                         class="relative flex flex-col p-4 border-2 rounded-xl cursor-pointer transition-all select-none {% if code == _best_period and _period_keys|length > 1 %}mt-3{% endif %}"
+                         :class="selectedPeriod === '{{ code }}' ? 'ord-period-tile-on' : 'ord-period-tile-off'">
+                        {# Best value badge #}
+                        {% if code == _best_period and _period_keys|length > 1 %}
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap" style="background:#10b981;">Best Value</div>
+                        {% endif %}
+                        {# Radio dot (top-right) #}
+                        <div class="absolute top-3 right-3 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0"
+                             :class="selectedPeriod === '{{ code }}' ? 'ord-radio-tile-on' : 'ord-radio-tile-off'">
+                            <div class="w-2 h-2 rounded-full transition-transform" style="background:var(--color-primary);"
+                                 :class="selectedPeriod === '{{ code }}' ? 'scale-100' : 'scale-0'"></div>
+                        </div>
+                        {# Period label #}
+                        <div class="mb-4 pr-6">
+                            <span class="text-sm font-medium ord-srv-muted">{{ periods[code] ?? code }}</span>
+                            {% if prices.setup is defined and prices.setup > 0 %}
+                            <p class="text-xs ord-srv-dimmed mt-0.5">+ {{ prices.setup|money_convert }} setup</p>
+                            {% endif %}
+                        </div>
+                        {# Price + mo equiv #}
+                        <div class="mt-auto">
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-xl font-bold ord-srv-heading">{{ prices.price|money_convert }}</span>
+                                <span class="text-xs ord-srv-dimmed">{{ _suffix }}</span>
+                            </div>
+                            {% if _mo_equiv > 0 %}
+                            <div class="text-emerald-600 text-[11px] font-semibold mt-1">{{ _mo_equiv|money_convert }}/mo equiv.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}{% endfor %}
+                </div>
+            </section>
+            {% elseif pricing.type == 'once' %}
+            <div class="ord-srv-section-card flex items-center justify-between">
+                <span class="text-sm ord-srv-muted">One-time payment</span>
+                <span class="text-2xl font-bold ord-srv-heading">{{ pricing.once.price|money_convert }}</span>
+            </div>
+            {% elseif pricing.type == 'free' %}
+            <div class="ord-srv-section-card flex items-center justify-between">
+                <span class="text-sm ord-srv-muted">Free plan</span>
+                <span class="text-2xl font-bold text-emerald-500">{{ 0|money_convert }}</span>
+            </div>
+            {% endif %}
+
+            {# ── Custom configuration card (formbuilder) ── #}
+            {% if product.form_id is defined and product.form_id and guest.extension_is_on({ 'mod': 'formbuilder' }) %}
+            {% set form = guest.formbuilder_get({ 'id': product.form_id }) %}
+            <section class="ord-srv-section-card-divided" x-ref="formbuilderSection">
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold ord-srv-heading">Custom Configuration</h4>
+                        <p class="ord-srv-dimmed text-xs mt-0.5">Fill in the details below to configure your order</p>
+                    </div>
+                </div>
+                <div class="p-6">
+                    {{ include('mod_formbuilder_build.html.twig', ignore_missing: true) }}
+                </div>
+            </section>
+            {% endif %}
+
+            {# ── Optional add-ons card ── #}
+            {% if product.addons is defined and product.addons is not empty %}
+            <section class="ord-srv-section-card-divided">
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold ord-srv-heading">Optional Add-ons</h4>
+                        <p class="ord-srv-dimmed text-xs mt-0.5">{{ product.addons|length }} available</p>
+                    </div>
+                </div>
+                <div class="p-5 space-y-3">
+                    {% for i, addon in product.addons %}
+                    {% set addon_default_period = '' %}
+                    {% if addon.pricing.type == 'recurrent' %}{% for acode, aprices in addon.pricing.recurrent %}{% if addon_default_period == '' and aprices.enabled %}{% set addon_default_period = acode %}{% endif %}{% endfor %}{% endif %}
+                    <div @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
+                         class="ord-addon-card rounded-xl p-4 transition-all cursor-pointer"
+                         :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'ord-addon-active' : ''">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-start gap-3 flex-1 min-w-0">
+                                <div class="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all"
+                                     :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'ord-chk-on' : 'ord-chk-off'">
+                                    <svg x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" x-cloak class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-sm font-semibold ord-srv-heading">{{ addon.title }}</span>
+                                        {% if i == 0 %}<span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider" style="background:rgba(var(--color-primary-rgb),0.12);color:var(--color-primary);">Recommended</span>{% endif %}
+                                    </div>
+                                    {% if addon.description %}<p class="text-xs mt-1 leading-relaxed ord-srv-dimmed">{{ addon.description|striptags|slice(0,120) }}{{ addon.description|striptags|length > 120 ? '…' : '' }}</p>{% endif %}
+                                </div>
+                            </div>
+                            <div class="text-right flex-shrink-0">
+                                {% if addon.pricing.type == 'once' %}
+                                <span class="text-sm font-bold ord-srv-heading">{{ addon.pricing.once.price | money_convert }}</span>
+                                <span class="text-xs block ord-srv-dimmed">one-time</span>
+                                {% elseif addon.pricing.type == 'free' %}
+                                <span class="text-sm font-bold text-emerald-500">Free</span>
+                                {% elseif addon.pricing.type == 'recurrent' %}
+                                <span class="text-sm font-bold ord-srv-heading"
+                                      x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : (addonRawPrices['{{ addon.id }}'] && addonRawPrices['{{ addon.id }}']['{{ addon_default_period }}'] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}']['{{ addon_default_period }}']) : '')">{{ addon_default_period ? (addon.pricing.recurrent[addon_default_period].price | money_convert) : '&mdash;' }}</span>
+                                <span class="text-xs block ord-srv-dimmed"
+                                      x-text="'/' + (addonPeriodLabels[selectedPeriod] || addonPeriodLabels['{{ addon_default_period }}'] || '{{ addon_default_period }}')">{{ addon_default_period ? ('/' ~ addon_default_period) : '' }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            {# Error message #}
+            <div x-show="errorMsg" x-cloak class="p-4 rounded-xl border border-red-200 bg-red-50">
+                <p class="text-sm text-red-600" x-text="errorMsg"></p>
+            </div>
+
+            {# Mobile CTA #}
+            <div class="ord-srv-mobile-cta">
+                <button type="button"
+                        @click="addToCart({% if pricing.type == 'free' %}'free'{% elseif pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
+                        :disabled="loading{% if pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
+                        class="w-full py-4 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 20px rgba(var(--color-primary-rgb),0.3);">
+                    <span x-show="!loading" class="flex items-center gap-2">Continue to Checkout <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg></span>
+                    <span x-show="loading" class="flex items-center gap-2"><svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Adding…</span>
+                </button>
+            </div>
+        </div>
+
+        {# ═══ RIGHT COLUMN — sticky white sidebar (Stitch) ═══ #}
+        <div class="ord-srv-sidebar self-start">
+            {% set currency = guest.cart_get_currency %}
+            <div class="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden sticky top-6 ord-srv-sidebar-card">
+
+                {# Header row #}
+                <div class="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between ord-srv-sidebar-hd">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Order Summary</span>
+                    <span class="px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-500">{{ currency.code }}</span>
+                </div>
+
+                <div class="p-5 space-y-4">
+
+                    {# Line items #}
+                    <div class="space-y-2">
+                        <h5 class="font-bold text-slate-900 text-sm ord-srv-heading">{{ product.title }}</h5>
+
+                        {% if pricing.type == 'recurrent' %}
+                        <div x-show="selectedPeriod" class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 ord-srv-muted" x-text="(periodLabels[selectedPeriod] || selectedPeriod) + ' plan'"></span>
+                            <span class="font-semibold text-slate-900 ord-srv-heading" x-text="formatMoney(productRawPrices[selectedPeriod] || 0)"></span>
+                        </div>
+                        <div x-show="!selectedPeriod" class="text-xs text-slate-400 italic">Select a billing period above</div>
+                        {% elseif pricing.type == 'once' %}
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 ord-srv-muted">One-time</span>
+                            <span class="font-semibold text-slate-900 ord-srv-heading">{{ pricing.once.price|money_convert }}</span>
+                        </div>
+                        {% endif %}
+
+                        {% for addon in product.addons ?? [] %}
+                        {% set addon_default_period = '' %}
+                        {% if addon.pricing.type == 'recurrent' %}{% for acode, aprices in addon.pricing.recurrent %}{% if addon_default_period == '' and aprices.enabled %}{% set addon_default_period = acode %}{% endif %}{% endfor %}{% endif %}
+                        <div x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" x-cloak class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 ord-srv-muted">{{ addon.title }}</span>
+                            {% if addon.pricing.type == 'free' %}
+                            <span class="font-semibold text-emerald-500">Free</span>
+                            {% elseif addon.pricing.type == 'once' %}
+                            <span class="font-semibold text-slate-900 ord-srv-heading">{{ addon.pricing.once.price|money_convert }}</span>
+                            {% else %}
+                            <span class="font-semibold text-slate-900 ord-srv-heading" x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : '—'"></span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+
+                        <div x-show="couponDiscount > 0" x-cloak class="flex items-center justify-between text-sm pt-2 border-t border-slate-100">
+                            <span class="text-emerald-600">Coupon discount</span>
+                            <span class="font-semibold text-emerald-600" x-text="'−' + formatMoney(couponDiscount)"></span>
+                        </div>
+                    </div>
+
+                    {# Total — Stitch: big 40px font #}
+                    <div class="pt-4 border-t border-slate-100">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Due Today</span>
+                        <div class="text-[2.25rem] leading-none font-black text-slate-900 mt-1 ord-srv-heading"
+                             x-text="calcTotal({% if pricing.type == 'once' %}'once'{% elseif pricing.type == 'free' %}'free'{% else %}selectedPeriod || '{{ first_period }}'{% endif %})"></div>
+                    </div>
+
+                    {# Coupon — always-visible input + Apply button #}
+                    <div class="space-y-2">
+                        <div x-show="!couponApplied" class="flex gap-2">
+                            <div class="relative flex-1 min-w-0">
+                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                <input type="text" x-model="couponCode"
+                                       @keydown.enter.prevent="applyCoupon()"
+                                       @input="couponError = null"
+                                       placeholder="Promo code"
+                                       class="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 border border-slate-200 bg-slate-50 transition-all">
+                            </div>
+                            <button type="button" @click="applyCoupon()"
+                                    :disabled="!couponCode.trim() || couponLoading"
+                                    class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style="background:var(--color-primary);">
+                                <span x-show="!couponLoading">Apply</span>
+                                <span x-show="couponLoading" class="flex items-center">
+                                    <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                </span>
+                            </button>
+                        </div>
+                        <p x-show="couponError" x-cloak x-text="couponError" class="text-xs text-red-500"></p>
+                        <div x-show="couponApplied" x-cloak class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                <span class="text-xs font-mono font-bold text-emerald-700 uppercase tracking-wide" x-text="couponCode"></span>
+                            </div>
+                            <button type="button"
+                                    @click="couponApplied = false; couponDiscount = 0; couponCode = ''; promoType = null; promoValue = 0; promoPeriods = []; couponError = null;"
+                                    class="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium ml-3">Remove</button>
+                        </div>
+                    </div>
+
+                    {# Continue button #}
+                    <button type="button"
+                            @click="addToCart({% if pricing.type == 'free' %}'free'{% elseif pricing.type == 'once' %}'once'{% else %}selectedPeriod{% endif %})"
+                            :disabled="loading{% if pricing.type == 'recurrent' %} || !selectedPeriod{% endif %}"
+                            class="w-full py-4 rounded-xl text-base font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 8px 24px rgba(var(--color-primary-rgb),0.25);">
+                        <span x-show="!loading" class="flex items-center gap-2">
+                            Continue
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                        </span>
+                        <span x-show="loading" class="flex items-center gap-2">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            Adding to cart…
+                        </span>
+                    </button>
+
+                    {# Guarantee #}
+                    <div class="flex items-center justify-center gap-2 pt-1">
+                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <span class="text-xs font-semibold text-emerald-600">30-day money-back guarantee</span>
+                    </div>
+                </div>
+
+                {# Footer — terms #}
+                <div class="px-5 py-3 bg-slate-50 border-t border-slate-100 ord-srv-sidebar-ft">
+                    <p class="text-[10px] text-slate-400 text-center leading-relaxed">
+                        By ordering, you agree to our
+                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-slate-500 underline hover:text-indigo-600">Terms of Service</a>
+                        and Privacy Policy. All taxes are calculated at checkout.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+
+
+<div class="relative rounded-2xl overflow-hidden mb-10 p-8"
+     style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.12) 0%, rgba(var(--color-secondary-rgb),0.08) 100%); border: 1px solid rgba(var(--color-primary-rgb),0.2);">
+    <div class="absolute inset-0 pointer-events-none"
+         style="background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 32px 32px;"></div>
+    <div class="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-8">
+        <div class="flex-1 min-w-0">
+            {% if _tagline %}
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                <span>{{ _tagline }}</span>
+            </div>
+            {% endif %}
+            <h1 class="text-2xl font-bold text-white mb-2">{{ _title ?: (_hero_cat ? _hero_cat.title : 'Server Plans') }}</h1>
+            {% for _para in _paragraphs %}
+            <p class="text-sm text-gray-400 max-w-xl leading-relaxed mb-1">{{ _para }}</p>
+            {% endfor %}
+        </div>
+        {% if _bullets %}
+        <div class="flex flex-col gap-2 shrink-0">
+            {% for _bullet in _bullets %}
+            <div class="flex items-center gap-2 text-sm text-gray-300">
+                <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <li class="list-none">{{ _bullet }}</li>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ===== PRODUCTS ===== #}
+
+<div class="space-y-12">
+    {% for category in show_categories %}
+        {% set cat_products = category.products|sort((a,b) => a.priority <=> b.priority) %}
+        {% if cat_products %}
+
+            {# ── Collect all enabled billing periods across products in this category ── #}
+            {% set all_period_order = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] %}
+            {% set period_meta = {
+                '1W': {'label': 'Weekly',   'months': 0.25},
+                '1M': {'label': 'Monthly',  'months': 1},
+                '3M': {'label': '3 Months', 'months': 3},
+                '6M': {'label': '6 Months', 'months': 6},
+                '1Y': {'label': '1 Year',   'months': 12},
+                '2Y': {'label': '2 Years',  'months': 24},
+                '3Y': {'label': '3 Years',  'months': 36}
+            } %}
+            {% set enabled_periods = [] %}
+            {% for pk in all_period_order %}
+                {% set pk_on = false %}
+                {% for p in cat_products %}
+                    {% if p.pricing.recurrent[pk] is defined and p.pricing.recurrent[pk].enabled %}
+                        {% set pk_on = true %}
+                    {% endif %}
+                {% endfor %}
+                {% if pk_on %}{% set enabled_periods = enabled_periods|merge([pk]) %}{% endif %}
+            {% endfor %}
+
+            {# ── Build pricing JSON for Alpine ── #}
+            {% set all_pricings = [] %}
+            {% for p in cat_products %}{% set all_pricings = all_pricings|merge([p.pricing]) %}{% endfor %}
+
+            <div x-data="{
+                    period: '{{ enabled_periods|first|default('1M') }}',
+                    allPricings: {{ all_pricings|json_encode }},
+                    currencyFormat: {{ currency_fmt_js|json_encode }},
+                    currencyRate: {{ currency.conversion_rate|default(1) }},
+                    currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
+                    fmt(price) {
+                        const converted = parseFloat(price) * this.currencyRate;
+                        let num;
+                        switch (parseInt(this.currencyPriceFormat)) {
+                            case 2: num = converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); break;
+                            case 3: num = converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); break;
+                            case 4: num = Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); break;
+                            case 5: num = Math.round(converted).toString(); break;
+                            default: num = converted.toFixed(2);
+                        }
+                        return this.currencyFormat.replace('__PRICE__', num);
+                    },
+                    fmtNum(price) {
+                        const converted = parseFloat(price) * this.currencyRate;
+                        switch (parseInt(this.currencyPriceFormat)) {
+                            case 2: return converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                            case 3: return converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                            case 4: return Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                            case 5: return Math.round(converted).toString();
+                            default: return converted.toFixed(2);
+                        }
+                    },
+                    getPrice(pricing, key) {
+                        if (!pricing) return null;
+                        if (pricing.type === 'free') return 0;
+                        if (pricing.type === 'once') {
+                            const v = pricing.once ? parseFloat(pricing.once.price) : NaN;
+                            return isNaN(v) ? null : v;
+                        }
+                        if (!pricing.recurrent) return null;
+                        const p = pricing.recurrent[key];
+                        if (!p || !p.enabled) return null;
+                        const v = parseFloat(p.price);
+                        return isNaN(v) ? null : v;
+                    },
+                    monthlyEquiv(price, key) {
+                        const m = { '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 }[key] || 1;
+                        return price / m;
+                    },
+                    maxSavings(periodKey) {
+                        const results = this.allPricings.map(pr => {
+                            const mo  = this.getPrice(pr, '1M');
+                            const tot = this.getPrice(pr, periodKey);
+                            if (mo === null || tot === null || mo <= 0) return null;
+                            const pct = Math.round((1 - this.monthlyEquiv(tot, periodKey) / mo) * 100);
+                            return pct > 0 ? pct : null;
+                        }).filter(v => v !== null);
+                        return results.length ? Math.max(...results) : null;
+                    }
+                }">
+
+                {# ── Billing period switcher ── #}
+                {% if enabled_periods|length > 1 %}
+                <div class="flex justify-center mb-8">
+                    <div class="overflow-x-auto max-w-full pb-1">
+                    <div class="inline-flex items-center gap-1 p-1 rounded-full border border-white/10 bg-white/[0.04]">
+                        {% for pk in enabled_periods %}
+                        {% set pmeta = period_meta[pk] %}
+                        <button @click="period='{{ pk }}'"
+                                :class="period==='{{ pk }}' ? 'bg-white text-gray-900 shadow' : 'text-gray-400 hover:text-white'"
+                                class="relative inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap">
+                            {{ pmeta.label }}
+                            {% if pk != '1M' %}
+                            <template x-if="maxSavings('{{ pk }}') !== null">
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none"
+                                      :class="period==='{{ pk }}' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'"
+                                      x-text="'Save ' + maxSavings('{{ pk }}') + '%'">
+                                </span>
+                            </template>
+                            {% endif %}
+                        </button>
+                        {% endfor %}
+                    </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-{% if cat_products|length >= 4 %}4{% elseif cat_products|length == 3 %}3{% else %}2{% endif %} gap-5">
+                    {% for i, product in cat_products %}
+                        {% set pricing_json = product.pricing|json_encode %}
+
+                        {# Parse description features — try HTML delimiters, then newlines, then markdown bullets #}
+                        {% set desc_raw = product.description|default('')|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim %}
+                        {% set desc_features = desc_raw|split('|||')|filter(l => l|trim != '') %}
+                        {% if desc_features|length <= 1 and product.description %}
+                            {% set desc_features = [] %}
+                            {% set plain = product.description|striptags|trim %}
+                            {% for item in plain|split('\n') %}
+                                {% set feat = item|replace({'* ': '', '- ': ''})|trim %}
+                                {% if feat %}{% set desc_features = desc_features|merge([feat]) %}{% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        {% if desc_features|length <= 1 %}
+                            {% set desc_features = ['Full Root Access', 'NVMe SSD Storage', 'DDoS Protection', '24/7 Support'] %}
+                        {% endif %}
+
+                        <div class="relative rounded-2xl border flex flex-col transition-all sm:hover:scale-[1.01]
+                              {% if i == 1 %}border-indigo-500/40{% else %}border-white/[0.08] hover:border-indigo-500/25{% endif %}"
+                             style="{% if i == 1 %}background: linear-gradient(180deg, rgba(var(--color-primary-rgb),0.08) 0%, rgba(var(--color-primary-rgb),0.03) 100%);{% else %}background: rgba(255,255,255,0.02);{% endif %}"
+                             x-data="{ pricing: {{ pricing_json }} }">
+
+                            {% if i == 1 %}
+                                <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs font-bold text-white" style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                                    ★ Most Popular
+                                </div>
+                            {% endif %}
+
+                            <div class="p-5 flex-1">
+                                <h3 class="text-sm font-bold text-white mb-1">{{ product.title }}</h3>
+
+                                {# Dynamic pricing #}
+                                <div class="py-4 border-y border-white/5 my-4">
+                                    <template x-if="pricing.type === 'recurrent' || pricing.recurrent">
+                                        <div>
+                                            <template x-if="getPrice(pricing, period) !== null">
+                                                <div>
+                                                    <template x-if="period !== '1M' && monthlyEquiv(getPrice(pricing, period), period) && getPrice(pricing, '1M') !== null">
+                                                        <div class="flex items-center gap-2 mb-1">
+                                                            <span class="text-sm text-gray-500 line-through" x-text="fmt(getPrice(pricing, '1M'))"></span>
+                                                            <template x-if="getPrice(pricing, '1M') > 0">
+                                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-extrabold text-white" style="background: #65a30d; transform: rotate(-2deg); letter-spacing: 0.02em;"
+                                                                      x-text="Math.round((1 - monthlyEquiv(getPrice(pricing, period), period) / getPrice(pricing, '1M')) * 100) + '% OFF'"></span>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    <div class="flex items-baseline gap-0.5">
+                                                        <span class="text-sm font-semibold text-gray-400 leading-none"
+                                                              x-text="currencyFormat.split('__PRICE__')[0].trim()"></span>
+                                                        <span class="text-3xl font-extrabold text-white tabular-nums leading-none"
+                                                              x-text="fmtNum(period === '1M' ? getPrice(pricing, period) : monthlyEquiv(getPrice(pricing, period), period))"></span>
+                                                        <span class="text-sm font-semibold text-gray-400 leading-none"
+                                                              x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
+                                                        <span class="text-sm text-gray-500 ml-0.5">/mo</span>
+                                                    </div>
+                                                    <template x-if="period !== '1M' && getPrice(pricing, '1M') !== null">
+                                                        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                                                            Billed as <span x-text="fmt(getPrice(pricing, period))"></span>
+                                                            / <span x-text="{ '1W': 'week', '3M': '3 mo', '6M': '6 mo', '1Y': 'yr', '2Y': '2 yr', '3Y': '3 yr' }[period] || period"></span>.
+                                                        </p>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <template x-if="getPrice(pricing, period) === null">
+                                                <p class="text-sm text-gray-600 italic">Not available for this period</p>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    {% if product.pricing.type == 'once' %}
+                                        <div class="flex items-baseline gap-1">
+                                            <span class="text-3xl font-bold text-white" x-text="fmt({{ product.pricing.once.price }})"></span>
+                                            <span class="text-sm text-gray-500">once</span>
+                                        </div>
+                                    {% elseif product.pricing.type == 'free' %}
+                                        <div class="flex items-baseline gap-1">
+                                            <span class="text-3xl font-bold text-green-400">Free</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                {# Feature bullets #}
+                                <ul class="space-y-2">
+                                    {% for bullet in desc_features|slice(0, 4) %}
+                                    <li class="flex items-center gap-2 text-xs text-gray-400">
+                                        <svg class="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                        {{ bullet|trim }}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+
+                            <div class="p-5 pt-0">
+                                <template x-if="!(pricing.type === 'recurrent' || pricing.recurrent) || getPrice(pricing, period) !== null">
+                                    <a href="{{ ('/order/' ~ product.slug)|url }}"
+                                       class="block w-full text-center py-2.5 rounded-xl text-sm font-semibold transition-all
+                                              {% if i == 1 %}text-white hover:opacity-90{% else %}bg-white/5 hover:bg-indigo-500/15 text-gray-300 hover:text-white border border-white/10 hover:border-indigo-500/30{% endif %}"
+                                       {% if i == 1 %}style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));"{% endif %}>
+                                        Deploy Now &rarr;
+                                    </a>
+                                </template>
+                                <template x-if="(pricing.type === 'recurrent' || pricing.recurrent) && getPrice(pricing, period) === null">
+                                    <span class="block w-full text-center py-2.5 rounded-xl text-sm font-bold bg-white/[0.03] text-gray-600 cursor-not-allowed">Not available</span>
+                                </template>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+
+    {% if not show_categories %}
+        <div class="text-center py-20 text-gray-600">
+            <svg class="w-12 h-12 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 10h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
+            </svg>
+            <p class="text-sm">No server plans available yet. Check back soon.</p>
+        </div>
+    {% endif %}
+</div>
+
+{# ====== FEATURE: NVMe PERFORMANCE — text left, visual right ====== #}
+<section class="py-24 overflow-hidden border-t border-white/[0.05] mt-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+            <div class="flex-1 reveal-left">
+                <p class="text-xs font-semibold text-indigo-400 uppercase tracking-widest mb-3">Performance</p>
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-5 leading-tight">Blazing-fast NVMe storage</h2>
+                <p class="text-gray-400 text-sm leading-relaxed mb-8">
+                    Our NVMe SSDs deliver up to 10× faster read/write speeds than traditional SATA drives.
+                    Every plan runs on enterprise-grade PCIe NVMe storage — giving your apps the I/O throughput they need to perform at their peak.
+                </p>
+                <ul class="space-y-3">
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-indigo-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">PCIe 4.0 NVMe — up to 7,000 MB/s sequential read</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-indigo-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">1 Gbps dedicated network uplink per node</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-indigo-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">Latest-gen AMD EPYC / Intel Xeon processors</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="flex-1 flex justify-center reveal-right">
+                <div class="relative w-full max-w-sm">
+                    <div class="absolute inset-0 rounded-3xl blur-3xl opacity-25" style="background: radial-gradient(ellipse, var(--color-primary), transparent 70%);"></div>
+                    <div class="relative rounded-2xl border border-white/10 p-6" style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.08) 0%, rgba(var(--color-secondary-rgb),0.05) 100%);">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-3 text-center">Sequential Read Speed</p>
+                        <div class="flex items-baseline gap-1 justify-center mb-6">
+                            <span class="text-5xl font-black text-white counter" data-target="7000">0</span>
+                            <span class="text-xl font-bold text-indigo-400">MB/s</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div>
+                                <div class="flex justify-between text-xs text-gray-500 mb-1.5"><span>NVMe (Our VPS)</span><span class="text-indigo-300">7,000 MB/s</span></div>
+                                <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)"><div class="h-full rounded-full perf-bar" style="background:linear-gradient(90deg,var(--color-primary),var(--color-secondary));width:0" data-width="100%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-gray-500 mb-1.5"><span>SATA SSD</span><span>550 MB/s</span></div>
+                                <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)"><div class="h-full rounded-full perf-bar" style="background:rgba(255,255,255,0.2);width:0" data-width="8%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-gray-500 mb-1.5"><span>HDD</span><span>150 MB/s</span></div>
+                                <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)"><div class="h-full rounded-full perf-bar" style="background:rgba(255,255,255,0.1);width:0" data-width="2%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ====== FEATURE: SECURITY — text right, visual left ====== #}
+<section class="py-24 overflow-hidden border-t border-white/[0.05]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col lg:flex-row-reverse items-center gap-12 lg:gap-20">
+            <div class="flex-1 reveal-right">
+                <p class="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-3">Security</p>
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-5 leading-tight">Security that never sleeps</h2>
+                <p class="text-gray-400 text-sm leading-relaxed mb-8">
+                    Enterprise-grade DDoS mitigation, network-level firewalling, and automated threat detection protect your workloads around the clock — so you can focus on building, not defending.
+                </p>
+                <ul class="space-y-3">
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-violet-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">Always-on DDoS protection at no extra cost</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-violet-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">Configurable software firewall from your control panel</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-violet-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">Isolated KVM hypervisor — your data stays yours</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="flex-1 flex justify-center reveal-left">
+                <div class="relative w-full max-w-sm">
+                    <div class="absolute inset-0 rounded-3xl blur-3xl opacity-20" style="background: radial-gradient(ellipse, var(--color-secondary), transparent 70%);"></div>
+                    <div class="relative rounded-2xl border border-white/10 p-6" style="background: linear-gradient(135deg, rgba(var(--color-secondary-rgb),0.08) 0%, rgba(var(--color-primary-rgb),0.04) 100%);">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-4 text-center">Threat Shield — Live</p>
+                        <div class="flex justify-center mb-5">
+                            <div class="w-20 h-20 rounded-full border-2 border-violet-500/30 flex items-center justify-center shield-pulse">
+                                <div class="w-14 h-14 rounded-full border-2 border-violet-500/50 flex items-center justify-center">
+                                    <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-white/[0.05]" style="background:rgba(255,255,255,0.02)">
+                                <span class="text-xs text-gray-400">DDoS Mitigation</span>
+                                <span class="flex items-center gap-1.5 text-xs text-green-400"><span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span> Active</span>
+                            </div>
+                            <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-white/[0.05]" style="background:rgba(255,255,255,0.02)">
+                                <span class="text-xs text-gray-400">Firewall</span>
+                                <span class="flex items-center gap-1.5 text-xs text-green-400"><span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span> Enabled</span>
+                            </div>
+                            <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-white/[0.05]" style="background:rgba(255,255,255,0.02)">
+                                <span class="text-xs text-gray-400">Threats blocked today</span>
+                                <span class="text-xs font-mono text-violet-300 counter" data-target="2847">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ====== FEATURE: RELIABILITY — text left, visual right ====== #}
+<section class="py-24 overflow-hidden border-t border-white/[0.05]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+            <div class="flex-1 reveal-left">
+                <p class="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Reliability</p>
+                <h2 class="text-3xl sm:text-4xl font-bold text-white mb-5 leading-tight">99.9% uptime you can count on</h2>
+                <p class="text-gray-400 text-sm leading-relaxed mb-8">
+                    Redundant power, redundant networking, and live migration mean your servers keep running even during planned maintenance. Backed by a real SLA with prorated credits for any downtime.
+                </p>
+                <ul class="space-y-3">
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">Dual-power feeds and UPS battery backup</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">Redundant 10 Gbps backbone connectivity</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center mt-0.5 flex-shrink-0">
+                            <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-300">SLA-backed credits for any unplanned downtime</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="flex-1 flex justify-center reveal-right">
+                <div class="relative w-full max-w-sm">
+                    <div class="absolute inset-0 rounded-3xl blur-3xl opacity-15" style="background: radial-gradient(ellipse, #10b981, transparent 70%);"></div>
+                    <div class="relative rounded-2xl border border-white/10 p-6" style="background: linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(var(--color-primary-rgb),0.04) 100%);">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-2 text-center">Network Uptime — Last 90 days</p>
+                        <div class="flex items-baseline gap-0.5 justify-center mb-5">
+                            <span class="text-4xl font-black text-white">99.97</span>
+                            <span class="text-lg font-bold text-emerald-400">%</span>
+                        </div>
+                        <div class="uptime-grid grid gap-0.5 mb-3" style="grid-template-columns: repeat(30, minmax(0, 1fr));">
+                            {% for j in 1..90 %}
+                                <div class="uptime-bar rounded-sm" style="height:28px; background: rgba(16,185,129,{% if j in [23,47] %}0.2{% else %}0.65{% endif %}); opacity:0; transform:scaleY(0); transition: opacity 0.25s ease {{ (j * 0.012)|round(3) }}s, transform 0.25s ease {{ (j * 0.012)|round(3) }}s;"></div>
+                            {% endfor %}
+                        </div>
+                        <p class="text-xs text-gray-600 text-center">2 minor incidents in 90 days</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endif %}
+{% endblock %}
+
+{% block js %}
+<style>
+/* ── Server product detail layout ── */
+.ord-srv-detail { max-width: 1100px; margin: 0 auto; }
+.ord-srv-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: start; }
+.ord-srv-main { display: flex; flex-direction: column; gap: 1.25rem; }
+/* Sidebar column: self-start so sticky on inner card works */
+.ord-srv-sidebar { align-self: start; }
+/* Base card — white bg + subtle border in light; near-transparent in dark */
+.ord-srv-card { border-radius: 1rem; border: 1px solid rgba(0,0,0,0.09); background: #fff; padding: 1.5rem; }
+[data-theme="dark"] .ord-srv-card { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.025); }
+
+/* ── Semantic color tokens ── */
+.ord-srv-heading { color: #0f172a; }
+.ord-srv-muted   { color: #64748b; }
+.ord-srv-dimmed  { color: #94a3b8; }
+[data-theme="dark"] .ord-srv-heading { color: #f1f5f9; }
+[data-theme="dark"] .ord-srv-muted   { color: #94a3b8; }
+[data-theme="dark"] .ord-srv-dimmed  { color: #64748b; }
+
+/* ── Section cards — Stitch white cards ── */
+.ord-srv-section-card { background: #fff; border: 1px solid rgba(0,0,0,0.09); border-radius: 1rem; padding: 1.5rem; }
+[data-theme="dark"] .ord-srv-section-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+
+/* Divided section card (slate-50 header bar + content body) */
+.ord-srv-section-card-divided { background: #fff; border: 1px solid rgba(0,0,0,0.09); border-radius: 1rem; overflow: hidden; }
+[data-theme="dark"] .ord-srv-section-card-divided { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+.ord-srv-section-hd { background: #f8fafc; border-bottom: 1px solid rgba(0,0,0,0.07); padding: 1rem 1.25rem; }
+[data-theme="dark"] .ord-srv-section-hd { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.06); }
+
+/* ── Billing period tile cards ── */
+.ord-period-tile-on  { border-color: var(--color-primary) !important; background: rgba(var(--color-primary-rgb),0.06) !important; }
+.ord-period-tile-off { border-color: rgba(0,0,0,0.12); background: #fff; }
+.ord-period-tile-off:hover { border-color: rgba(0,0,0,0.25); background: #f8fafc; }
+[data-theme="dark"] .ord-period-tile-off { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); }
+[data-theme="dark"] .ord-period-tile-off:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); }
+
+/* Radio dot states on period tiles */
+.ord-radio-tile-on  { border-color: var(--color-primary); }
+.ord-radio-tile-off { border-color: rgba(0,0,0,0.25); }
+[data-theme="dark"] .ord-radio-tile-off { border-color: rgba(255,255,255,0.3); }
+
+/* ── Sidebar white card (Stitch-style) + dark mode overrides ── */
+.ord-srv-sidebar-card { background: #fff; }
+[data-theme="dark"] .ord-srv-sidebar-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+[data-theme="dark"] .ord-srv-sidebar-hd { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .ord-srv-sidebar-ft { background: rgba(255,255,255,0.03); border-top-color: rgba(255,255,255,0.06); }
+
+/* Add-on cards */
+.ord-addon-card { border: 1.5px solid rgba(0,0,0,0.1); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: transparent; }
+.ord-addon-card:hover { border-color: rgba(0,0,0,0.22); }
+[data-theme="dark"] .ord-addon-card { border-color: rgba(255,255,255,0.09); }
+[data-theme="dark"] .ord-addon-card:hover { border-color: rgba(255,255,255,0.2); }
+.ord-addon-active { border-color: var(--color-primary) !important; background: rgba(var(--color-primary-rgb),0.07) !important; }
+/* Checkbox inside addon */
+.ord-chk-on { border-color: var(--color-primary); background: var(--color-primary); }
+.ord-chk-off { border-color: rgba(0,0,0,0.25); background: transparent; }
+[data-theme="dark"] .ord-chk-off { border-color: rgba(255,255,255,0.3); }
+/* Mobile CTA */
+.ord-srv-mobile-cta { display: block; }
+@media (min-width: 1024px) {
+  .ord-srv-layout { grid-template-columns: 1fr 380px; gap: 2rem; }
+  .ord-srv-mobile-cta { display: none; }
+}
+/* ── Formbuilder field styles (order form) ── */
+.fb-section-card { border-radius: 1rem; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); background: rgba(0,0,0,0.02); }
+[data-theme="dark"] .fb-section-card { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.025); }
+.fb-section-header { border-bottom: 1px solid rgba(0,0,0,0.07); }
+[data-theme="dark"] .fb-section-header { border-bottom-color: rgba(255,255,255,0.06); }
+.fb-label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: inherit; }
+.fb-input, .fb-select, .fb-textarea { width: 100%; font-size: 0.875rem; outline: none; border: 1.5px solid rgba(0,0,0,0.12); border-radius: 0.75rem; background: rgba(255,255,255,0.8); color: inherit; transition: border-color 0.15s, background 0.15s; }
+[data-theme="dark"] .fb-input,[data-theme="dark"] .fb-select,[data-theme="dark"] .fb-textarea { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); }
+.fb-input { padding: 0.625rem 0.875rem; }
+.fb-input::placeholder, .fb-textarea::placeholder { color: rgba(0,0,0,0.3); }
+[data-theme="dark"] .fb-input::placeholder,[data-theme="dark"] .fb-textarea::placeholder { color: rgba(255,255,255,0.25); }
+.fb-select { padding: 0.625rem 2.5rem 0.625rem 0.875rem; appearance: none; cursor: pointer; }
+.fb-textarea { padding: 0.75rem 0.875rem; resize: vertical; }
+.fb-input:focus, .fb-select:focus, .fb-textarea:focus { border-color: var(--color-primary); }
+.fb-radio-opt { display: flex; align-items: center; gap: 0.625rem; padding: 0.75rem; border: 1.5px solid rgba(0,0,0,0.1); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: transparent; }
+.fb-radio-opt:hover { border-color: rgba(0,0,0,0.22); }
+[data-theme="dark"] .fb-radio-opt { border-color: rgba(255,255,255,0.1); }
+[data-theme="dark"] .fb-radio-opt:hover { border-color: rgba(255,255,255,0.2); }
+.fb-radio-checked { border-color: var(--color-primary) !important; background: rgba(var(--color-primary-rgb),0.08) !important; }
+.fb-chk-opt { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1.5px solid rgba(0,0,0,0.08); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s; }
+[data-theme="dark"] .fb-chk-opt { border-color: rgba(255,255,255,0.08); }
+
+.reveal-up, .reveal-left, .reveal-right {
+    opacity: 0;
+    transition: opacity 0.65s ease, transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-up    { transform: translateY(30px); }
+.reveal-left  { transform: translateX(-30px); }
+.reveal-right { transform: translateX(30px); }
+.reveal-up.visible, .reveal-left.visible, .reveal-right.visible {
+    opacity: 1;
+    transform: translate(0, 0);
+}
+.shield-pulse {
+    animation: shieldPulse 2.5s ease-in-out infinite;
+}
+@keyframes shieldPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--color-secondary-rgb),0.4); }
+    50%       { box-shadow: 0 0 0 14px rgba(var(--color-secondary-rgb),0); }
+}
+</style>
+<script>
+(function () {
+    var revEls = document.querySelectorAll('.reveal-up, .reveal-left, .reveal-right');
+    var revObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) {
+            if (e.isIntersecting) { e.target.classList.add('visible'); revObs.unobserve(e.target); }
+        });
+    }, { threshold: 0.1 });
+    revEls.forEach(function(el) { revObs.observe(el); });
+
+    var bars = document.querySelectorAll('.perf-bar');
+    if (bars.length) {
+        var barObs = new IntersectionObserver(function(entries) {
+            entries.forEach(function(e) {
+                if (e.isIntersecting) {
+                    var w = e.target.getAttribute('data-width');
+                    e.target.style.transition = 'width 1.1s cubic-bezier(0.16,1,0.3,1)';
+                    e.target.style.width = w;
+                    barObs.unobserve(e.target);
+                }
+            });
+        }, { threshold: 0.3 });
+        bars.forEach(function(b) { barObs.observe(b); });
+    }
+
+    var uptimeBars = document.querySelectorAll('.uptime-bar');
+    if (uptimeBars.length) {
+        var uObs = new IntersectionObserver(function(entries) {
+            entries.forEach(function(e) {
+                if (e.isIntersecting) {
+                    uptimeBars.forEach(function(b) { b.style.opacity = '1'; b.style.transform = 'scaleY(1)'; });
+                    uObs.disconnect();
+                }
+            });
+        }, { threshold: 0.2 });
+        if (uptimeBars[0]) uObs.observe(uptimeBars[0]);
+    }
+
+    function runCounter(el, target, ms) {
+        var start = performance.now();
+        (function tick(now) {
+            var p = Math.min((now - start) / ms, 1);
+            var eased = 1 - Math.pow(1 - p, 3);
+            el.textContent = Math.floor(eased * target).toLocaleString();
+            if (p < 1) requestAnimationFrame(tick);
+            else el.textContent = target.toLocaleString();
+        })(start);
+    }
+
+    var counters = document.querySelectorAll('.counter');
+    if (counters.length) {
+        var cObs = new IntersectionObserver(function(entries) {
+            entries.forEach(function(e) {
+                if (e.isIntersecting) {
+                    runCounter(e.target, parseInt(e.target.dataset.target, 10), 1400);
+                    cObs.unobserve(e.target);
+                }
+            });
+        }, { threshold: 0.4 });
+        counters.forEach(function(c) { cObs.observe(c); });
+    }
+}());
+</script>
+
+{% endblock %}

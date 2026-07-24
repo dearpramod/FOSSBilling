@@ -7,35 +7,28 @@
 {% import "macro_functions.html.twig" as mf %}
 
 {% block content %}
-<div class="space-y-6">
+{% set attachment_count = ticket.messages|filter(message => message.attachment|default(false))|length %}
+<div class="ref-ticket-page space-y-6" x-data="{ ticketView: 'all' }">
 
     {# ── Breadcrumbs ── #}
-    <nav class="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm">
-        <a href="{{ '/'|url }}" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Home</a>
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <nav class="ref-ticket-breadcrumb">
+        <a href="{{ '/dashboard'|url }}">Home</a>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
         </svg>
-        <a href="{{ '/support'|url }}" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Support</a>
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <a href="{{ '/support'|url }}">Support</a>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
         </svg>
-        <span class="text-slate-900 dark:text-white font-medium">Ticket #{{ ticket.id }}</span>
+        <span>Ticket #{{ ticket.id }}</span>
     </nav>
 
     {# ── Ticket Header ── #}
-    <div class="flex items-center justify-between gap-4 flex-wrap">
-        <div class="flex items-center gap-4 flex-wrap">
-            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ ticket.subject }}</h2>
-            {{ mf.status_badge(ticket.status) }}
-        </div>
+    <div class="ref-ticket-hero">
+        <h1>{{ ticket.subject }}</h1>
         <div class="relative" x-data="{ manageOpen: false }" @click.outside="manageOpen = false">
             <button @click="manageOpen = !manageOpen"
-                    class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
+                    class="ref-btn ref-btn-yellow">
                 Manage Ticket
                 <svg class="w-4 h-4 transition-transform duration-200" :class="manageOpen ? 'rotate-180' : ''"
                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,17 +64,18 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
         {# ── LEFT: Message thread + Reply form ── #}
-        <div class="lg:col-span-8 space-y-5">
+        <div class="ref-ticket-main lg:col-span-8 space-y-5">
 
             {# Message thread #}
-            <div class="space-y-0">
+            <div class="ref-ticket-thread space-y-0">
                 {% for msg in ticket.messages|reverse %}
                     {% set is_staff = msg.admin_id is defined and msg.admin_id %}
                     {% set loop_last = loop.last %}
                     {% set name_parts = msg.author.name|default('?')|split(' ') %}
                     {% set first_letter = name_parts[0]|slice(0,1)|upper %}
 
-                    <div class="flex items-start gap-3 {% if not loop_last %}pb-5{% endif %}">
+                    <div x-show="ticketView === 'all' || {{ msg.attachment|default(false) ? 'true' : 'false' }}"
+                         class="flex items-start gap-3 {% if not loop_last %}pb-5{% endif %}">
                         {# Avatar + vertical thread line #}
                         <div class="flex flex-col items-center flex-shrink-0">
                             <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold select-none
@@ -122,17 +116,37 @@
                                 <div class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed {% if not is_staff %}pr-6{% endif %}">
                                     {{ msg.content|markdown|raw }}
                                 </div>
+                                {% if msg.attachment|default(false) %}
+                                <div class="mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.07]">
+                                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.05] text-xs text-slate-600 dark:text-slate-300">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15.172 7 8.586 13.586a2 2 0 1 0 2.828 2.828l6.414-6.586a4 4 0 0 0-5.656-5.656l-6.415 6.585a6 6 0 1 0 8.486 8.486L20.5 13"/></svg>
+                                        {{ msg.attachment }}
+                                    </span>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                 {% else %}
                     <div class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No messages yet.</div>
                 {% endfor %}
+                {% if attachment_count == 0 %}
+                <div x-show="ticketView === 'attachments'" class="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                    No attachments in this ticket.
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="ref-ticket-tabs">
+                <button type="button" @click="ticketView = 'all'" :class="{ 'active': ticketView === 'all' }">All</button>
+                <button type="button" @click="ticketView = 'attachments'" :class="{ 'active': ticketView === 'attachments' }">
+                    Attachments{% if attachment_count %} ({{ attachment_count }}){% endif %}
+                </button>
             </div>
 
             {# Reply form (open) or closed notice #}
             {% if ticket.status != 'closed' %}
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl shadow-sm overflow-hidden">
+            <div class="ref-ticket-reply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl shadow-sm overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-2.5">
                     <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background: rgba(var(--color-primary-rgb),0.10);">
                         <svg class="w-3.5 h-3.5" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +186,7 @@
                 </form>
             </div>
             {% else %}
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 flex items-center justify-between">
+            <div class="ref-ticket-reply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 flex items-center justify-between">
                 <p class="text-sm text-slate-500 dark:text-slate-400">This ticket is closed.</p>
                 <a href="{{ '/support'|url }}"
                    class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline transition-colors">
@@ -184,10 +198,10 @@
         </div>
 
         {# ── RIGHT: Sidebar ── #}
-        <div class="lg:col-span-4 space-y-5">
+        <div class="ref-ticket-sidebar lg:col-span-4 space-y-5">
 
             {# Ticket Details card #}
-            <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-2xl shadow-sm overflow-hidden">
+            <div class="ref-ticket-details bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-2xl shadow-sm overflow-hidden">
                 <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700/50">
                     <h3 class="text-base font-semibold text-slate-900 dark:text-white">Ticket Details</h3>
                 </div>

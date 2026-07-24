@@ -1,0 +1,507 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Invoice #{{ invoice.serie }}{{ invoice.nr }}{% endblock %}
+{% block page_header %}{% endblock %}
+
+{% block content %}
+{% set company = guest.system_company %}
+{% set balance = client ? client.client_balance_get_total : 0 %}
+{# Deposit invoices cannot be paid with credits — circular funding #}
+{% set is_deposit_invoice = false %}
+{% for line in invoice.lines %}{% if line.type == 'deposit' %}{% set is_deposit_invoice = true %}{% endif %}{% endfor %}
+
+<div class="ref-invoice-detail max-w-7xl space-y-6">
+
+    {# ── Status banner ── #}
+    {% if invoice.status == 'unpaid' %}
+    <div class="ref-invoice-alert ref-invoice-alert-unpaid flex items-center justify-between gap-6 p-4 rounded-xl border shadow-sm"
+         style="background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.12);">
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <span class="text-[18px] leading-7 font-semibold text-red-600 dark:text-red-400">Payment Required</span>
+        </div>
+        <p class="text-sm text-red-600/80 dark:text-red-400/70">This invoice is currently unpaid. Please complete payment to avoid service interruption.</p>
+    </div>
+    {% elseif invoice.status == 'paid' %}
+    <div class="ref-invoice-alert ref-invoice-alert-paid flex items-center gap-3 p-4 rounded-xl border"
+         style="background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.18);">
+        <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Invoice Paid — Thank you!</span>
+    </div>
+    {% endif %}
+
+    {# ── Invoice header: title + meta + actions ── #}
+    <header class="ref-invoice-detail-hero flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+            <span class="ref-invoice-detail-eyebrow">Billing document</span>
+            <h1 class="text-[30px] leading-[38px] tracking-[-0.02em] font-bold text-slate-900 dark:text-white mb-2">
+                Invoice #{{ invoice.serie }}{{ invoice.nr }}
+            </h1>
+            <div class="flex flex-wrap items-center gap-3">
+                {# Status badge #}
+                {% if invoice.status == 'paid' %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400 text-xs font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Paid
+                </span>
+                {% elseif invoice.status == 'unpaid' %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 text-xs font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Unpaid
+                </span>
+                {% else %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400 text-xs font-medium">
+                    {{ invoice.status|capitalize }}
+                </span>
+                {% endif %}
+                {# Issued date #}
+                <span class="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    Issued: {{ invoice.created_at|date("M j, Y") }}
+                </span>
+                {% if invoice.due_at %}
+                <span class="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Due: {{ invoice.due_at|date("M j, Y") }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="ref-invoice-detail-actions flex items-center gap-2 flex-shrink-0">
+            <div class="ref-invoice-amount">
+                <span>{{ invoice.status == 'unpaid' ? 'Amount due' : 'Invoice total' }}</span>
+                <strong>{{ invoice.total|money(invoice.currency) }}</strong>
+            </div>
+            <a href="{{ 'invoice/print'|url }}/{{ invoice.hash }}" target="_blank"
+               class="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] text-sm font-medium transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                Print
+            </a>
+            <a href="{{ 'invoice/print'|url }}/{{ invoice.hash }}" target="_blank"
+               class="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] text-sm font-medium transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Download PDF
+            </a>
+        </div>
+    </header>
+
+    {# ── Two-column layout: left invoice, right sidebar ── #}
+    <div class="ref-invoice-detail-layout flex flex-col lg:flex-row gap-6 items-start">
+
+    {# ── LEFT: invoice details ── #}
+    <div class="flex-1 min-w-0 space-y-6">
+
+        {# Billing Info Card #}
+        <div class="ref-invoice-parties bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+            {# Bill From #}
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Bill From</p>
+                <h3 class="text-lg font-semibold mb-1" style="color: var(--color-primary);">{{ company.name }}</h3>
+                <div class="text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
+                    {% if company.address|default(false) %}<p>{{ company.address }}</p>{% endif %}
+                    {% if company.email|default(false) %}<p>{{ company.email }}</p>{% endif %}
+                    {% if company.tel|default(false) %}<p>{{ company.tel }}</p>{% endif %}
+                </div>
+            </div>
+            {# Bill To #}
+            {% if invoice.buyer %}
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Bill To</p>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    {{ invoice.buyer.first_name }} {{ invoice.buyer.last_name }}
+                </h3>
+                <div class="text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
+                    {% if invoice.buyer.company %}<p>{{ invoice.buyer.company }}</p>{% endif %}
+                    {% if invoice.buyer.address %}<p>{{ invoice.buyer.address }}</p>{% endif %}
+                    <p>{{ invoice.buyer.email }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Line items table #}
+        <div class="ref-invoice-lines bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm overflow-hidden">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/[0.05]">
+                        <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Qty</th>
+                        <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Unit Price</th>
+                        <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Total</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                    {% for item in invoice.lines %}
+                    <tr class="ref-invoice-line hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors">
+                        <td class="px-6 py-5">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ item.title }}</p>
+                            {% if item.period %}<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ item.period|period_title }}</p>{% endif %}
+                        </td>
+                        <td class="px-6 py-5 text-sm text-slate-600 dark:text-slate-400 text-center">{{ item.quantity }}</td>
+                        <td class="px-6 py-5 text-sm text-slate-600 dark:text-slate-400 text-right">{{ item.price|money(invoice.currency) }}</td>
+                        <td class="px-6 py-5 text-sm font-semibold text-slate-900 dark:text-white text-right">{{ (item.price * item.quantity)|money(invoice.currency) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {# Totals #}
+            <div class="ref-invoice-totals px-6 py-6 bg-slate-50 dark:bg-white/[0.02] border-t border-slate-100 dark:border-white/[0.05] flex justify-end">
+                <div class="w-full max-w-xs space-y-3">
+                    {% if invoice.tax > 0 %}
+                    <div class="flex justify-between text-sm text-slate-600 dark:text-slate-400">
+                        <span>Subtotal</span>
+                        <span>{{ (invoice.total - invoice.tax)|money(invoice.currency) }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-slate-600 dark:text-slate-400">
+                        <span>Tax</span>
+                        <span>{{ invoice.tax|money(invoice.currency) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if invoice.discount|default(0) > 0 %}
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-600 dark:text-slate-400">Discount</span>
+                        <span class="text-emerald-600 dark:text-emerald-400 font-medium">−{{ invoice.discount|money(invoice.currency) }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between items-baseline pt-3 border-t border-slate-200 dark:border-white/[0.08]">
+                        <span class="text-2xl font-bold text-slate-900 dark:text-white">Grand Total</span>
+                        <span class="text-2xl font-bold" style="color: var(--color-primary);">{{ invoice.total|money(invoice.currency) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if invoice.notes %}
+        <div class="bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm px-6 py-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Notes</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">{{ invoice.notes }}</p>
+        </div>
+        {% endif %}
+
+        {# Transaction history — processed only, matching admin panel columns #}
+        {% set transactions = client.invoice_transaction_get_list({ 'invoice_hash': invoice.hash, 'per_page': 50 }) %}
+        {% if transactions.list|length > 0 %}
+        <div class="bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Transaction History</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/[0.05]">
+                            <th class="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
+                            <th class="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Gateway Txn ID</th>
+                            <th class="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                            <th class="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Gateway</th>
+                            <th class="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                            <th class="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                        {% for tx in transactions.list %}
+                        <tr class="hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors">
+                            <td class="px-6 py-3.5">
+                                <span class="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">#{{ tx.id }}</span>
+                            </td>
+                            <td class="px-6 py-3.5">
+                                {% if tx.txn_id %}
+                                    <code class="text-xs px-2 py-0.5 rounded font-mono" style="background: rgba(var(--color-primary-rgb,99,102,241),0.08); color: var(--color-primary);">{{ tx.txn_id }}</code>
+                                {% else %}
+                                    <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-3.5 text-sm text-slate-600 dark:text-slate-300">{{ tx.type|default('—') }}</td>
+                            <td class="px-6 py-3.5 text-sm text-slate-800 dark:text-slate-200">{{ tx.gateway|default('—') }}</td>
+                            <td class="px-6 py-3.5 text-sm font-semibold text-slate-900 dark:text-white">{{ tx.amount|money(tx.currency) }}</td>
+                            <td class="px-6 py-3.5 text-xs text-slate-500 dark:text-slate-400">{{ tx.created_at|date("M j, Y · g:i A") }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Footer bar #}
+        <div class="flex items-center justify-between gap-4">
+            <a href="{{ '/invoice'|url }}"
+               class="flex items-center gap-2 text-sm font-medium hover:underline transition-colors"
+               style="color: var(--color-primary);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                Back to Invoices
+            </a>
+            <p class="text-xs text-slate-400 dark:text-slate-500 italic">
+                Thank you for choosing {{ company.name }} for your web infrastructure.
+            </p>
+        </div>
+
+    </div>{# end left column #}
+
+    {# ── RIGHT: payment sidebar (unpaid only) ── #}
+    {% if invoice.status == 'unpaid' %}
+    <div class="ref-invoice-payment-rail w-full lg:w-[360px] flex-shrink-0">
+    <div class="space-y-4">
+
+        {# Payment Method card #}
+        {% set gateways = guest.invoice_gateways %}
+        {% set invoice_total = invoice.total %}
+
+        {# Build ordered gateway list + real-gateway flag #}
+        {% set gateway_order = ['Khalti', 'ClientBalance', 'Esewa', 'QRPayment', 'BankTransfer'] %}
+        {% set ordered_gateways = [] %}
+        {% for code in gateway_order %}
+            {% for gw in gateways %}
+                {% if gw.code == code or (code == 'Esewa' and 'esewa' in gw.title|lower) %}
+                    {% set ordered_gateways = ordered_gateways|merge([gw]) %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+        {% for gw in gateways %}
+            {% set found = false %}
+            {% for og in ordered_gateways %}{% if og.id == gw.id %}{% set found = true %}{% endif %}{% endfor %}
+            {% if not found %}{% set ordered_gateways = ordered_gateways|merge([gw]) %}{% endif %}
+        {% endfor %}
+        {% set has_real_gateways = false %}
+        {% for gw in ordered_gateways %}{% if gw.code != 'ClientBalance' %}{% set has_real_gateways = true %}{% endif %}{% endfor %}
+
+        {# Find first real gateway ID for default selection #}
+        {% set default_gw_id = '' %}
+        {% for gw in ordered_gateways %}{% if gw.code != 'ClientBalance' and default_gw_id == '' %}{% set default_gw_id = gw.id %}{% endif %}{% endfor %}
+
+        {# Pass gateway URL map to Alpine via window global (avoids double-quote collision in HTML attr) #}
+        <script>
+        window.__invoicePayData = {
+            gatewayUrls: {
+                {% for gw in ordered_gateways %}{% if gw.code != 'ClientBalance' %}{{ gw.id|json_encode|raw }}: {{ (('invoice/banklink'|url) ~ '/' ~ invoice.hash ~ '/' ~ gw.id)|json_encode|raw }}{% if not loop.last %},{% endif %}{% endif %}{% endfor %}
+            },
+            defaultGateway: {{ default_gw_id|json_encode|raw }}
+        };
+        </script>
+
+        <div class="ref-invoice-payment bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm overflow-hidden"
+             x-data="invoicePay()">
+
+            <div class="px-5 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+                <h3 class="text-[18px] leading-7 font-semibold text-slate-900 dark:text-white">Payment Method</h3>
+            </div>
+
+            <div class="p-4 space-y-2">
+
+                {% for gateway in ordered_gateways %}
+                    {% if gateway.code == 'ClientBalance' %}
+                    {# ── Account Balance option ── #}
+                    {# Deposit (add-funds) invoices cannot be paid with credits — that is circular #}
+                    {% if not is_deposit_invoice %}
+                    {# balance_ok = client has enough credits to cover the full invoice total #}
+                    {% set balance_ok = balance >= invoice_total %}
+                    <template x-if="!payResult">
+                        <button @click="{{ balance_ok ? 'selectGateway(\'balance\')' : '' }}"
+                                {% if not balance_ok %}disabled{% endif %}
+                                class="w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left
+                                       {% if balance_ok %}cursor-pointer{% else %}opacity-50 cursor-not-allowed{% endif %}"
+                                :class="selectedGateway === 'balance' ? 'border-[color:var(--color-primary)] bg-[color:rgba(var(--color-primary-rgb,99,102,241),0.05)]' : 'border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/20'">
+                            {# Radio dot #}
+                            <div class="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center flex-shrink-0 transition-all"
+                                 :style="selectedGateway === 'balance' ? 'border-color:var(--color-primary)' : ''">
+                                <div class="w-2 h-2 rounded-full transition-transform"
+                                     :style="'background:var(--color-primary);transform:' + (selectedGateway === 'balance' ? 'scale(1)' : 'scale(0)')"></div>
+                            </div>
+                            {# Icon #}
+                            <div class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center flex-shrink-0"
+                                 style="{{ balance_ok ? 'color: var(--color-primary)' : 'color: #94a3b8' }}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-slate-900 dark:text-white">Account Balance</p>
+                                {% if balance_ok %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Available: {{ balance|money(invoice.currency) }}</p>
+                                {% elseif balance > 0 %}
+                                <p class="text-xs text-red-500 dark:text-red-400">Insufficient — {{ balance|money(invoice.currency) }} of {{ invoice_total|money(invoice.currency) }} needed</p>
+                                {% else %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400">No credits available</p>
+                                {% endif %}
+                            </div>
+                        </button>
+                    </template>
+                    <template x-if="payResult">
+                        <div class="w-full flex items-center gap-3 p-3.5 rounded-xl border text-sm font-medium"
+                             :class="payResult.type === 'full' ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/25 text-green-700 dark:text-green-400' : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/25 text-amber-700 dark:text-amber-400'">
+                            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span x-text="payResult.type === 'full' ? 'Paid in full!' : 'Partial applied — ' + payResult.remaining_fmt + ' remaining'"></span>
+                        </div>
+                    </template>
+                    {% endif %}{# end not is_deposit_invoice #}
+                    {% else %}
+                    {# ── External gateway option ── #}
+                    <button type="button" @click="selectGateway('{{ gateway.id }}')"
+                            class="w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer"
+                            :class="selectedGateway === '{{ gateway.id }}' ? 'border-[color:var(--color-primary)] bg-[color:rgba(var(--color-primary-rgb,99,102,241),0.05)]' : 'border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/20'">
+                        {# Radio dot #}
+                        <div class="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center flex-shrink-0 transition-all"
+                             :style="selectedGateway === '{{ gateway.id }}' ? 'border-color:var(--color-primary)' : ''">
+                            <div class="w-2 h-2 rounded-full transition-transform"
+                                 :style="'background:var(--color-primary);transform:' + (selectedGateway === '{{ gateway.id }}' ? 'scale(1)' : 'scale(0)')"></div>
+                        </div>
+                        {# Icon #}
+                        <div class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center flex-shrink-0 p-1.5">
+                            {% if gateway.code == 'Khalti' %}
+                            <svg class="w-full h-full text-purple-500" viewBox="0 0 240 240" fill="currentColor">
+                                <g transform="translate(0,240) scale(0.1,-0.1)">
+                                    <path d="M1755 1961 c-27 -11 -298 -105 -601 -210 -304 -104 -567 -197 -585 -206 -99 -50 -133 -130 -88 -205 46 -74 140 -125 324 -173 l90 -24 125 104 c171 143 382 284 486 323 40 15 28 4 -36 -35 -85 -52 -226 -163 -292 -231 -65 -68 -138 -170 -138 -193 0 -9 24 -29 57 -46 168 -88 282 -269 299 -476 5 -51 11 -78 18 -76 26 9 74 90 105 178 18 52 121 335 228 629 208 572 211 586 165 633 -28 28 -96 31 -157 8z"/>
+                                    <path d="M784 841 c-53 -24 -109 -91 -123 -148 -35 -136 73 -273 214 -273 100 0 192 73 215 171 32 134 -75 269 -215 269 -27 0 -68 -9 -91 -19z"/>
+                                </g>
+                            </svg>
+                            {% elseif 'esewa' in gateway.title|lower %}
+                            <svg class="w-full h-full text-green-500" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="24" cy="24" r="21.5" fill="none"/>
+                                <path d="M32.69 27.75a7.91 7.91 0 0 1-5.1 6.12h0a7.94 7.94 0 0 1-10.16-4.74l-1.76-4.84a7.94 7.94 0 0 1 4.74-10.16h0a7.94 7.94 0 0 1 10.16 4.74l.88 2.42l-14.9 5.42M45.5 24h-8"/>
+                            </svg>
+                            {% elseif gateway.code == 'QRPayment' or 'qr' in gateway.title|lower %}
+                            <svg class="w-full h-full text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm14 3h3m-3 3h3m-6-6h3v3h-3v-3zm3 3h3v3h-3v-3z"/>
+                            </svg>
+                            {% elseif gateway.code == 'BankTransfer' or 'bank' in gateway.title|lower %}
+                            <svg class="w-full h-full text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M3 10h18M12 3l9 7H3l9-7zM5 10v8M9 10v8M15 10v8M19 10v8"/>
+                            </svg>
+                            {% else %}
+                            <svg class="w-full h-full text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1 min-w-0 text-left">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ gateway.title }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                {% if gateway.code == 'Khalti' %}Instant digital payment
+                                {% elseif 'esewa' in gateway.title|lower %}Nepal's first digital wallet
+                                {% elseif 'qr' in gateway.title|lower %}Scan QR to pay
+                                {% elseif 'bank' in gateway.title|lower %}Standard bank transfer
+                                {% else %}External payment gateway{% endif %}
+                            </p>
+                        </div>
+                        {# Chevron — only visible when selected #}
+                        <svg class="w-4 h-4 flex-shrink-0 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                             :style="selectedGateway === '{{ gateway.id }}' ? 'color:var(--color-primary);opacity:1' : 'opacity:0'">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                    {% endif %}
+                {% endfor %}
+
+                {% if not has_real_gateways and (is_deposit_invoice or not balance_ok) %}
+                <p class="text-center py-2 text-xs text-slate-500 dark:text-slate-400">
+                    No payment methods available.
+                    <a href="{{ 'support'|url }}" class="font-medium hover:underline" style="color: var(--color-primary);">Contact Support →</a>
+                </p>
+                {% endif %}
+
+            </div>
+
+            {# ── Dynamic Pay CTA ── #}
+            <div class="px-4 pb-4 space-y-3" x-show="!payResult">
+                <button type="button" @click="payNow()"
+                        :disabled="!selectedGateway || paying"
+                        class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                        style="background: var(--color-primary); box-shadow: 0 4px 14px rgba(var(--color-primary-rgb,99,102,241), 0.30);">
+                    <template x-if="!paying">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </template>
+                    <template x-if="paying">
+                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                    </template>
+                    <span x-text="paying ? 'Processing…' : 'Pay {{ invoice.total|money(invoice.currency) }} Now'"></span>
+                </button>
+                {# Secure payment trust line #}
+                <p class="flex items-center justify-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    Secure &amp; encrypted payment
+                </p>
+            </div>
+
+        </div>
+
+        <script>
+        function invoicePay() {
+            const cfg = window.__invoicePayData || {};
+            return {
+                selectedGateway: cfg.defaultGateway ? String(cfg.defaultGateway) : null,
+                paying: false,
+                payResult: null,
+                gatewayUrls: cfg.gatewayUrls || {},
+
+                selectGateway(id) {
+                    this.selectedGateway = id;
+                },
+
+                payNow() {
+                    if (!this.selectedGateway || this.paying) return;
+                    if (this.selectedGateway === 'balance') {
+                        this.payWithBalance();
+                    } else if (this.gatewayUrls[this.selectedGateway]) {
+                        window.location.href = this.gatewayUrls[this.selectedGateway];
+                    }
+                },
+
+                payWithBalance() {
+                    if (this.paying) return;
+                    this.paying = true;
+                    API.client.post('invoice/pay_with_credits', { hash: '{{ invoice.hash }}' },
+                        (result) => {
+                            this.paying = false;
+                            if (result && result.type) {
+                                this.payResult = result;
+                                if (result.remaining) this.payResult.remaining_fmt = result.remaining;
+                                if (result.type === 'full') {
+                                    FOSSBilling.message('Invoice paid successfully!', 'success');
+                                    setTimeout(() => location.reload(), 1500);
+                                } else {
+                                    FOSSBilling.message('Partial payment applied. Remaining balance due.', 'info');
+                                    setTimeout(() => location.reload(), 2000);
+                                }
+                            }
+                        },
+                        (error) => {
+                            this.paying = false;
+                            const msg = (error && error.message) ? error.message : 'Payment failed. Please try again.';
+                            FOSSBilling.message(msg, 'error');
+                        }
+                    );
+                }
+            };
+        }
+        </script>
+
+        {# Support card #}
+        <div class="ref-invoice-detail-support bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm p-5">
+            <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                     style="background: rgba(var(--color-primary-rgb,99,102,241),0.08); color: var(--color-primary);">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">Need help?</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">Our billing experts are available 24/7 to assist with payment issues.</p>
+                    <a href="{{ 'support'|url }}" class="text-sm font-semibold hover:underline" style="color: var(--color-primary);">Chat with Support</a>
+                </div>
+            </div>
+        </div>
+
+    </div>{# end sticky #}
+    </div>{# end right column #}
+    {% endif %}
+
+    </div>{# end grid #}
+
+</div>
+{% endblock %}

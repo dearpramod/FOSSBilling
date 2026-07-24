@@ -1,0 +1,38 @@
+{% if pager is defined and pager.total_pages is defined and pager.total_pages > 1 %}
+<nav class="flex items-center justify-between mt-6" aria-label="Pagination">
+    <div class="text-sm text-gray-500">
+        Page {{ pager.current_page }} of {{ pager.total_pages }}
+        {% if pager.total is defined %}— {{ pager.total }} total{% endif %}
+    </div>
+    <div class="flex items-center gap-1">
+        {% if pager.current_page > 1 %}
+            <a href="?page={{ pager.current_page - 1 }}"
+               class="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 transition-all">
+                &larr; Prev
+            </a>
+        {% endif %}
+
+        {% set start = max(1, pager.current_page - 2) %}
+        {% set end = min(pager.total_pages, pager.current_page + 2) %}
+
+        {% for page in start..end %}
+            <a href="?page={{ page }}"
+               class="px-3 py-1.5 rounded-lg text-sm transition-all
+                      {% if page == pager.current_page %}
+                          bg-indigo-500 text-white font-medium
+                      {% else %}
+                          text-gray-400 hover:text-white hover:bg-white/5 border border-white/10
+                      {% endif %}">
+                {{ page }}
+            </a>
+        {% endfor %}
+
+        {% if pager.current_page < pager.total_pages %}
+            <a href="?page={{ pager.current_page + 1 }}"
+               class="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 transition-all">
+                Next &rarr;
+            </a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}

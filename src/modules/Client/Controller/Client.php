@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Box\Mod\Client\Controller;
 
+use FOSSBilling\InformationException;
 use FOSSBilling\Security\RandomizedTimeFloor;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -31,10 +32,10 @@ class Client implements \FOSSBilling\InjectionAwareInterface
     public function register(\Box_App &$app): void
     {
         $app->get('/client/reset-password-confirm/:hash', 'get_reset_password_confirm', ['hash' => '[a-z0-9]+'], static::class);
+        $app->get('/client/confirm-email/:hash', 'get_client_confirmation', ['hash' => '[a-z0-9]+'], static::class);
         $app->get('/client', 'get_client_index', [], static::class);
         $app->get('/client/logout', 'get_client_logout', [], static::class);
         $app->get('/client/:page', 'get_client_page', ['page' => '[a-z0-9-]+'], static::class);
-        $app->get('/client/confirm-email/:hash', 'get_client_confirmation', ['page' => '[a-z0-9-]+'], static::class);
     }
 
     public function get_client_index(\Box_App $app): string
@@ -52,17 +53,25 @@ class Client implements \FOSSBilling\InjectionAwareInterface
 
         $startedAt = microtime(true);
         $service = $this->di['mod_service']('client');
+        $confirmed = false;
 
         try {
             $service->approveClientEmailByHash($hash);
+            $confirmed = true;
+        } catch (InformationException) {
+            // Hash is invalid or expired — fall through to render the expired template
         } finally {
             RandomizedTimeFloor::apply($startedAt);
         }
 
-        $systemService = $this->di['mod_service']('System');
-        $systemService->setPendingMessage(__trans('Email address was confirmed'));
+        if ($confirmed) {
+            $systemService = $this->di['mod_service']('System');
+            $systemService->setPendingMessage(__trans('Email address was confirmed'));
 
-        return $app->redirect('/');
+            return $app->redirect('/');
+        }
+
+        return $app->render('mod_client_confirm_email', ['expired' => true]);
     }
 
     public function get_client_logout(\Box_App $app): Response
@@ -94,18 +103,22 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         ];
 
         $startedAt = microtime(true);
+        $valid = false;
 
         try {
             $result = $service->password_reset_valid($data);
+            $valid = $result !== false;
+        } catch (InformationException) {
+            // Hash is invalid or expired — fall through to render expired state
         } finally {
             RandomizedTimeFloor::apply($startedAt);
         }
 
-        if ($result !== false) {
-            return $app->render('mod_client_set_new_password');
+        if ($valid) {
+            return $app->render('mod_client_set_new_password', ['hash' => $hash]);
         }
 
-        return $app->redirect('/');
+        return $app->render('mod_client_set_new_password', ['expired' => true]);
     }
 
     private function checkPageRateLimit(\Box_App $app, string $policy): ?Response

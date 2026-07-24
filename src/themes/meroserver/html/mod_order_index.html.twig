@@ -1,0 +1,699 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Order Services{% endblock %}
+{% block page_header %}Order Services{% endblock %}
+
+{% block content %}
+{% set categories = guest.product_category_get_list({'per_page': 100}) %}
+{% set currency = guest.cart_get_currency %}
+{% set currency_fmt_js = currency.symbol|default(currency.code|default('')) ~ '__PRICE__' %}
+{% set hasDomainCategory = false %}
+{% for cat in categories.list %}{% if cat.type == 'domain' %}{% set hasDomainCategory = true %}{% endif %}{% endfor %}
+{%- set _ord_sorted_cats = categories.list -%}
+
+{#
+  Partner Pricing: fetch custom prices for the logged-in partner client.
+  Falls back to empty arrays for guests or non-partner clients.
+#}
+{% if client is defined and client and guest.extension_is_on({'mod': 'partnership'}) %}
+    {% set _partner_pricing = client.partnership_get_pricing({}) %}
+{% else %}
+    {% set _partner_pricing = {'product_prices': [], 'tld_prices': []} %}
+{% endif %}
+{# Build fast lookup maps used in card rendering below #}
+{% set _pp_map = {} %}{# key: "productId:period" or "productId:" for catch-all #}
+{% for pp in _partner_pricing.product_prices %}
+    {% set _pp_key = pp.product_id ~ ':' ~ (pp.period ?: '') %}
+    {% set _pp_map = _pp_map|merge({(_pp_key): pp.price}) %}
+{% endfor %}
+{% set _tld_map = {} %}{# key: tld string #}
+{% for tp in _partner_pricing.tld_prices %}
+    {% set _tld_map = _tld_map|merge({(tp.tld): tp}) %}
+{% endfor %}
+
+<div class="ord-page-head mb-6">
+    <nav class="flex items-center gap-2 text-xs text-slate-500 mb-2">
+        <a href="{{ '/'|url }}" class="hover:text-slate-800 transition-colors">Home</a>
+        <span>/</span>
+        <span class="text-slate-700 font-medium">Order Services</span>
+    </nav>
+    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-sans font-bold text-on-surface tracking-[-0.02em]">Order New Services</h1>
+    <p class="mt-1 text-sm sm:text-base text-slate-500">Scale your infrastructure with our enterprise-grade hosting solutions.</p>
+</div>
+
+<div class="ord-refined">
+{% set domain_tlds = hasDomainCategory ? guest.servicedomain_tlds({}) : [] %}
+<div class="grid lg:grid-cols-12 gap-6 lg:gap-8">
+
+{# ── Products column ── #}
+<div class="order-1 lg:col-span-8 min-w-0">
+
+{# Category tabs if multiple categories #}
+{% if categories.list|length > 1 %}
+<div class="ord-tabs-wrap relative mb-8">
+<nav role="tablist" aria-label="Product categories" class="flex items-center gap-1.5 p-1 bg-surface-container-low rounded-xl overflow-x-auto no-scrollbar whitespace-nowrap">
+    <a href="{{ '/order'|url }}" role="tab"
+       aria-selected="{{ not request.category ? 'true' : 'false' }}"
+       class="px-5 py-2 text-sm font-semibold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary
+              {% if not request.category %}bg-white text-[color:var(--color-primary)] shadow-sm{% else %}text-slate-500 hover:bg-white/50{% endif %}">
+        All Products
+    </a>
+    {% for category in _ord_sorted_cats %}{% if category.type != 'domain' %}
+        {# Convert category title to slug (e.g., "Web Hosting in Nepal" → "web-hosting-in-nepal") #}
+        {% set catSlug = category.title|lower|replace({' ': '-', '  ': '-', '   ': '-'})|trim('-') %}
+        {% set tabHref = ('/order/' ~ catSlug)|url %}
+        <a href="{{ tabHref }}" role="tab"
+           aria-selected="{{ request.category == category.id ~ '' ? 'true' : 'false' }}"
+           class="px-5 py-2 text-sm font-semibold rounded-lg transition-all capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary
+                  {% if request.category == category.id ~ '' %}bg-white text-[color:var(--color-primary)] shadow-sm{% else %}text-slate-500 hover:bg-white/50{% endif %}">
+            {{ category.title }}
+        </a>
+    {% endif %}{% endfor %}
+</nav>
+</div>{# end .ord-tabs-wrap #}
+{% endif %}
+
+<div class="space-y-10">
+
+    {% if categories.list %}
+        {% for category in _ord_sorted_cats %}
+            {# Skip domain categories — they have a dedicated page #}
+            {% if category.type != 'domain' %}
+            {# Filter by category if requested #}
+            {% if not request.category or request.category == category.id ~ '' %}
+                {% set cat_products = category.products|sort((a, b) => a.priority <=> b.priority) %}
+                {% if cat_products %}
+
+                    {# ── Collect enabled billing periods ── #}
+                    {% set all_period_order = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] %}
+                    {% set period_meta = {
+                        '1W': {'label': 'Weekly',   'months': 0.25},
+                        '1M': {'label': 'Monthly',  'months': 1},
+                        '3M': {'label': '3 Months', 'months': 3},
+                        '6M': {'label': '6 Months', 'months': 6},
+                        '1Y': {'label': '1 Year',   'months': 12},
+                        '2Y': {'label': '2 Years',  'months': 24},
+                        '3Y': {'label': '3 Years',  'months': 36}
+                    } %}
+                    {% set enabled_periods = [] %}
+                    {% for pk in all_period_order %}
+                        {% set pk_on = false %}
+                        {% for p in cat_products %}
+                            {# Only count periods from recurrent-type products; once/free products always
+                               have recurrent DB columns but they are not meaningful pricing. #}
+                            {% if p.pricing.type == 'recurrent' and p.pricing.recurrent[pk] is defined and p.pricing.recurrent[pk].enabled %}
+                                {% set pk_on = true %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if pk_on %}{% set enabled_periods = enabled_periods|merge([pk]) %}{% endif %}
+                    {% endfor %}
+                    {# Default period = first enabled period; fall back to 1M so Alpine has a valid value #}
+                    {% set default_period = enabled_periods|first|default('1M') %}
+
+                    {# ── Build pricing JSON for Alpine ── #}
+                    {% set all_pricings = [] %}
+                    {% set has_expandable_features = false %}
+                    {% for p in cat_products %}
+                        {% set all_pricings = all_pricings|merge([p.pricing]) %}
+                        {# Check if any product in category has >5 feature lines — mirror product-loop parsing #}
+                        {% set _desc = p.description|default('')|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim %}
+                        {% set _feats = _desc|split('|||')|filter(l => l|trim != '') %}
+                        {% if _feats|length <= 1 and p.description %}
+                            {% set _feats = p.description|striptags|trim|split('*')|filter(l => l|trim != '') %}
+                        {% endif %}
+                        {% if _feats|length > 5 %}{% set has_expandable_features = true %}{% endif %}
+                    {% endfor %}
+
+                    <div x-data="{
+                            period: {{ default_period|json_encode }},
+                            showMore: false,
+                            allPricings: {{ all_pricings|json_encode }},
+                            currencyFormat: {{ currency_fmt_js|json_encode }},
+                            currencyRate: {{ currency.conversion_rate|default(1) }},
+                            currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
+                            fmt(price) {
+                                const converted = parseFloat(price) * this.currencyRate;
+                                let num;
+                                switch (parseInt(this.currencyPriceFormat)) {
+                                    case 2: num = converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); break;
+                                    case 3: num = converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); break;
+                                    case 4: num = Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); break;
+                                    case 5: num = Math.round(converted).toString(); break;
+                                    default: num = converted.toFixed(2);
+                                }
+                                return this.currencyFormat.replace('__PRICE__', num);
+                            },
+                            fmtNum(price) {
+                                const converted = parseFloat(price) * this.currencyRate;
+                                switch (parseInt(this.currencyPriceFormat)) {
+                                    case 2: return converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                                    case 3: return converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                                    case 4: return Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                    case 5: return Math.round(converted).toString();
+                                    default: return converted.toFixed(2);
+                                }
+                            },
+                            getPrice(pricing, key) {
+                                if (!pricing) return null;
+                                if (pricing.type === 'free') return 0;
+                                if (pricing.type === 'once') {
+                                    const v = pricing.once ? parseFloat(pricing.once.price) : NaN;
+                                    return isNaN(v) ? null : v;
+                                }
+                                if (!pricing.recurrent) return null;
+                                const p = pricing.recurrent[key];
+                                if (!p || !p.enabled) return null;
+                                const v = parseFloat(p.price);
+                                return isNaN(v) ? null : v;
+                            },
+                            monthlyEquiv(price, key) {
+                                const m = { '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 }[key] || 1;
+                                return price / m;
+                            },
+                            maxSavings(periodKey) {
+                                const results = this.allPricings.map(pr => {
+                                    const mo  = this.getPrice(pr, '1M');
+                                    const tot = this.getPrice(pr, periodKey);
+                                    if (mo === null || tot === null || mo <= 0) return null;
+                                    const pct = Math.round((1 - this.monthlyEquiv(tot, periodKey) / mo) * 100);
+                                    return pct > 0 ? pct : null;
+                                }).filter(v => v !== null);
+                                return results.length ? Math.max(...results) : null;
+                            }
+                        }">
+
+                        {# ── Parse category description (same approach as /order/server hero) ── #}
+                        {% set _tagline = '' %}
+                        {% set _title = '' %}
+                        {% set _paragraphs = [] %}
+                        {% set _bullets = [] %}
+                        {% if request.category and category.description %}
+                            {% set _lines = category.description|split('\n') %}
+                            {% for _line in _lines %}
+                                {% set _line = _line|trim %}
+                                {% if _line starts with '> ' %}
+                                    {% set _raw_tag = _line[2:]|trim %}
+                                    {# Strip any leading markdown heading markers from the blockquote #}
+                                    {% if _raw_tag starts with '### ' %}
+                                        {% set _tagline = _raw_tag[4:]|trim %}
+                                    {% elseif _raw_tag starts with '## ' %}
+                                        {% set _tagline = _raw_tag[3:]|trim %}
+                                    {% elseif _raw_tag starts with '# ' %}
+                                        {% set _tagline = _raw_tag[2:]|trim %}
+                                    {% else %}
+                                        {% set _tagline = _raw_tag %}
+                                    {% endif %}
+                                {% elseif _line starts with '# ' and not _line starts with '## ' %}
+                                    {% set _title = _line[2:]|trim %}
+                                {% elseif _line starts with '## ' %}
+                                    {% if _title == '' %}
+                                        {% set _title = _line[3:]|trim %}
+                                    {% endif %}
+                                {% elseif _line starts with '* ' or _line starts with '- ' %}
+                                    {% set _bullets = _bullets|merge([_line[2:]|trim]) %}
+                                {% elseif _line %}
+                                    {% set _paragraphs = _paragraphs|merge([_line]) %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        {# Category header #}
+                        {% if request.category and category.description %}
+                        <div class="relative rounded-2xl overflow-hidden mb-8 p-6"
+                             style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.10) 0%, rgba(var(--color-secondary-rgb),0.06) 100%); border: 1px solid rgba(var(--color-primary-rgb),0.15);">
+                            <div class="absolute inset-0 pointer-events-none"
+                                 style="background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 32px 32px;"></div>
+                            <div class="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                                <div class="flex-1 min-w-0">
+                                    {% if _tagline %}
+                                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-3">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                                        <span>{{ _tagline }}</span>
+                                    </div>
+                                    {% endif %}
+                                    <h2 class="text-h2 font-sans font-semibold text-on-surface mb-2">{{ _title ?: category.title }}</h2>
+                                    {% for _para in _paragraphs %}
+                                    <p class="text-sm text-slate-600 max-w-xl leading-relaxed mb-1">{{ _para }}</p>
+                                    {% endfor %}
+                                </div>
+                                {% if _bullets %}
+                                <div class="flex flex-col gap-2 shrink-0">
+                                    {% for _bullet in _bullets %}
+                                    <div class="flex items-center gap-2 text-sm text-slate-700">
+                                        <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                        <span>{{ _bullet }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        {%- set _hdr_icon_map = {
+                            'hosting':      {'bg': 'bg-indigo-500/10',  'border': 'border-indigo-500/20',  'color': 'text-indigo-400',  'path': 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2'},
+                            'server':       {'bg': 'bg-amber-500/10',   'border': 'border-amber-500/20',   'color': 'text-amber-400',   'path': 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z'},
+                            'custom':       {'bg': 'bg-purple-500/10',  'border': 'border-purple-500/20',  'color': 'text-purple-400',  'path': 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'},
+                            'downloadable': {'bg': 'bg-emerald-500/10', 'border': 'border-emerald-500/20', 'color': 'text-emerald-400', 'path': 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'},
+                            'license':      {'bg': 'bg-blue-500/10',    'border': 'border-blue-500/20',    'color': 'text-blue-400',    'path': 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'},
+                            'membership':   {'bg': 'bg-rose-500/10',    'border': 'border-rose-500/20',    'color': 'text-rose-400',    'path': 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'}
+                        } -%}
+                        {%- set _hdr = _hdr_icon_map[category.type]|default({'bg': 'bg-indigo-500/10', 'border': 'border-indigo-500/20', 'color': 'text-indigo-400', 'path': 'M5 12h14M12 5l7 7-7 7'}) -%}
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-9 h-9 rounded-xl {{ _hdr.bg }} border {{ _hdr.border }} flex items-center justify-center flex-shrink-0">
+                                <svg class="w-4 h-4 {{ _hdr.color }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ _hdr.path }}"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-h3 font-sans font-semibold text-on-surface leading-tight">{{ category.title }}</h2>
+                                <p class="text-status text-slate-500">{{ cat_products|length }} plan{{ cat_products|length != 1 ? 's' : '' }} available</p>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {# ── Billing period switcher ── #}
+                        {% if enabled_periods|length > 1 %}
+                        <div class="flex justify-center mb-8">
+                            <div class="overflow-x-auto max-w-full pb-1">
+                                            <div class="ord-period-bar inline-flex items-center gap-1 p-1 rounded-full border border-slate-200 bg-slate-50">
+                                {% for pk in enabled_periods %}
+                                {% set pmeta = period_meta[pk] %}
+                                <button @click="period='{{ pk }}'"
+                                        :class="period==='{{ pk }}' ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-900'"
+                                        class="relative inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all whitespace-nowrap">
+                                    {{ pmeta.label }}
+                                    {% if pk != '1M' %}
+                                    <template x-if="maxSavings('{{ pk }}') !== null">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none"
+                                              :class="period==='{{ pk }}' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'"
+                                              x-text="'Save ' + maxSavings('{{ pk }}') + '%'">
+                                        </span>
+                                    </template>
+                                    {% endif %}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {# Products layout: horizontal scroll with fixed-width cards #}
+                        <div>
+                        <div class="overflow-x-auto pb-2">
+                        <div style="display:flex; flex-wrap:nowrap; gap: 1rem; width: max-content;">
+
+                            {% for i, product in cat_products %}
+                                {% set pricing_json = product.pricing|json_encode %}
+
+                                {# Resolve the correct order link per product type #}
+                                {% if product.type == 'domain' %}
+                                    {% set order_link = '/order/domain-registration'|url %}
+                                {% else %}
+                                    {% set order_link = ('/order/' ~ product.slug)|url %}
+                                {% endif %}
+
+                                {# Parse backend description while preserving author-defined order #}
+                                {% set desc_source = product.description|default('') %}
+                                {% set desc_plain = desc_source|striptags|replace({'\r\n': '\n', '\r': '\n'})|trim %}
+                                {% set desc_delimited = desc_source|replace({'<li>': '|||', '</li>': '|||', '<p>': '|||', '</p>': '|||', '<br>': '|||', '<br/>': '|||', '<br />': '|||', '\r\n': '|||', '\n': '|||'}) %}
+                                {% set desc_features = [] %}
+                                {% for item in desc_delimited|split('|||') %}
+                                    {% set feat = item|striptags|trim|replace({'* ': '', '- ': '', '*': '', '•': '', '&nbsp;': '', ' ': ''}) %}
+                                    {# Strip leading Material Icon / Symbols ligature names (e.g. check_circle, done, verified) #}
+                                {% for _icon in ['check_circle', 'check_fill', 'check_circle_outline', 'verified', 'done_all', 'done', 'star_rate', 'star', 'arrow_forward', 'arrow_right'] %}
+                                    {% if feat starts with _icon %}
+                                        {% set feat = feat[_icon|length:]|trim %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% set feat_compact = feat|replace({' ': '', '\n': '', '\r': '', '\t': ''}) %}
+                                    {% if feat_compact not in ['', '-', '--'] %}
+                                        {% for feat_part in feat|split(',') %}
+                                            {% set clean_part = feat_part|trim %}
+                                            {% if clean_part %}{% set desc_features = desc_features|merge([clean_part]) %}{% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                {% endfor %}
+
+                                {# Fallback to sane line items when backend lines are missing #}
+                                {% if desc_features|length == 0 %}
+                                    {% if product.type == 'hosting' %}
+                                        {% set desc_features = ['Free .com', '3 Hosted Domain', 'Unlimited NVMe Storage'] %}
+                                    {% elseif product.type == 'domain' %}
+                                        {% set desc_features = ['Free DNS Management', 'WHOIS Privacy Available', 'Easy Transfer In/Out'] %}
+                                    {% elseif product.type == 'downloadable' %}
+                                        {% set desc_features = ['Instant Download', 'License Key Included', 'Lifetime Updates'] %}
+                                    {% else %}
+                                        {% set desc_features = ['Instant Activation', 'Full Access', '24/7 Support'] %}
+                                    {% endif %}
+                                {% endif %}
+                                {% set has_desc_features = desc_features|length > 0 %}
+
+                                {# Prefer first non-bullet backend line for card summary #}
+                                {% set summary = '' %}
+                                {% for line in desc_plain|split('\n') %}
+                                    {% set line = line|trim %}
+                                    {% if summary == '' and line and not (line starts with '*') and not (line starts with '-') %}
+                                        {% set summary = line %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if summary == '' and desc_features|length > 0 %}
+                                    {% set summary = desc_features[0] %}
+                                {% endif %}
+
+                                  {% set icon_map = {
+                                      'hosting': 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2',
+                                      'server': 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z',
+                                      'custom': 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+                                      'downloadable': 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+                                      'license': 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+                                      'membership': 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'
+                                  } %}
+                                  {% set icon_path = icon_map[product.type]|default('M5 12h14M12 5l7 7-7 7') %}
+                                    {% set summary = summary ?: 'Reliable infrastructure for your project.' %}
+
+                                    <div class="product-card-wrap flex-none" style="width:268px;">
+                                  <div class="ord-product-card group relative rounded-xl border border-slate-200 bg-white p-4 sm:p-6 transition-all shadow-[0px_4px_12px_rgba(0,0,0,0.02)] hover:shadow-lg h-full flex flex-col
+                                      {% if i == 1 %}ring-2 ring-[rgba(var(--color-primary-rgb),0.10)]{% endif %}"
+                                     x-data="{ pricing: {{ pricing_json }} }">
+
+                                    {% if i == 1 %}
+                                        <div class="flex justify-between items-start mb-4">
+                                            <div class="ord-icon-primary w-10 h-10 rounded-xl bg-[color:var(--color-primary)] text-white flex items-center justify-center flex-shrink-0">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ icon_path }}"/>
+                                                </svg>
+                                            </div>
+                                            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
+                                                  style="background: rgba(var(--color-primary-rgb),0.10); color: var(--color-primary);">
+                                                ★ Popular
+                                            </span>
+                                        </div>
+                                    {% else %}
+                                        <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-slate-100 text-slate-500 group-hover:bg-[rgba(var(--color-primary-rgb),0.08)] group-hover:text-[color:var(--color-primary)] transition-colors">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ icon_path }}"/>
+                                            </svg>
+                                        </div>
+                                    {% endif %}
+
+                                    <h3 class="text-base font-bold text-slate-900 mb-1 leading-tight">{{ product.title }}</h3>
+                                    {% if not has_desc_features and summary %}
+                                    <p class="text-sm text-slate-500 mb-4">{{ summary }}</p>
+                                    {% endif %}
+
+                                    {% if has_desc_features %}
+                                    <ul class="space-y-2 mb-5 flex-1">
+                                        {% for bullet in desc_features|slice(0, 5) %}
+                                        <li class="flex items-start gap-2 text-sm text-slate-600">
+                                            <svg class="w-4 h-4 text-[color:var(--color-primary)] flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5l-4.5-4.5 1.41-1.41L10 13.67l7.09-7.09 1.41 1.41L10 16.5z"/></svg>
+                                            <span class="min-w-0 leading-snug">{{ bullet|trim }}</span>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+
+                                    {# ── Partner price badge (shown only to partner clients) ── #}
+                                    {% if _partner_pricing.product_prices|length > 0 %}
+                                        {# Try exact period-specific rule first, then catch-all #}
+                                        {% set _pp_key_exact  = product.id ~ ':' ~ (product.pricing.recurrent is defined ? '' : '') %}
+                                        {# We'll resolve at render time using Alpine since period is dynamic;
+                                           embed all partner prices for this product as a JSON map #}
+                                        {% set _pp_for_product = {} %}
+                                        {% for _period_code in ['1W','1M','3M','6M','1Y','2Y','3Y'] %}
+                                            {% set _k = product.id ~ ':' ~ _period_code %}
+                                            {% if _pp_map[_k] is defined %}
+                                                {% set _pp_for_product = _pp_for_product|merge({(_period_code): _pp_map[_k]}) %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        {% set _pp_catchall_key = product.id ~ ':' %}
+                                        {% if _pp_for_product|length > 0 or _pp_map[_pp_catchall_key] is defined %}
+                                            <div class="mt-3 mb-1"
+                                                 x-data="{ partnerPrices: {{ _pp_for_product|json_encode }}, partnerCatchall: {{ _pp_map[_pp_catchall_key] is defined ? _pp_map[_pp_catchall_key] : 'null' }} }"
+                                                 x-show="partnerPrices[period] !== undefined || partnerCatchall !== null">
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                                    Partner Price:
+                                                    <span x-text="fmt(partnerPrices[period] !== undefined ? partnerPrices[period] : partnerCatchall)"></span>
+                                                </span>
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+
+                                    {# ── Card footer: price stacked above full-width button ── #}
+                                    <div class="mt-auto pt-4 border-t border-slate-100 space-y-3">
+                                        <div>
+                                            <span class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Starting At</span>
+                                            <template x-if="pricing.type === 'recurrent'">
+                                                <div class="flex items-baseline gap-0.5">
+                                                    <span class="text-xs font-semibold text-slate-400" x-text="currencyFormat.split('__PRICE__')[0].trim()"></span>
+                                                    <span class="text-2xl font-bold text-slate-900" x-text="fmtNum(period === '1M' ? getPrice(pricing, period) : monthlyEquiv(getPrice(pricing, period), period))"></span>
+                                                    <span class="text-xs text-slate-400" x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
+                                                    <span class="text-xs text-slate-400 ml-0.5">/mo</span>
+                                                </div>
+                                            </template>
+                                            {% if product.pricing.type == 'once' %}
+                                            <div class="flex items-baseline gap-1">
+                                                <span class="text-2xl font-bold text-slate-900" x-text="fmt({{ product.pricing.once.price }})"></span>
+                                            </div>
+                                            <span class="text-xs text-slate-400">One-time payment</span>
+                                            {% elseif product.pricing.type == 'free' %}
+                                            <span class="text-2xl font-bold text-emerald-600">Free</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
+                                            <a href="{{ order_link }}"
+                                               class="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg text-white text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98]"
+                                               style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                                                Order Now
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                                            </a>
+                                        </template>
+                                        <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) === null">
+                                            <span class="flex items-center justify-center w-full py-2.5 rounded-lg bg-slate-100 text-slate-400 text-sm font-semibold cursor-not-allowed">Not Available</span>
+                                        </template>
+                                    </div>
+                                  </div>
+                                  </div>
+                            {% endfor %}
+                          </div>
+                          </div>
+                          </div>
+
+                    </div>
+                {% endif %}
+            {% endif %}
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        {# No products #}
+        <div class="rounded-2xl border border-slate-200 py-24 text-center bg-white">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-5">
+                <svg class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+            </div>
+            <h3 class="text-base font-semibold text-slate-900 mb-2">No products available yet</h3>
+            <p class="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Our plans are being configured. Contact us for a custom server tailored to your needs.</p>
+            {%- set _support_link = settings.link_support|default('/support/contact') -%}
+            {%- set _support_href = (_support_link matches '/^https?:\\/\\//') ? '/support/contact'|url : _support_link|url -%}
+            <a href="{{ _support_href }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold"
+               style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                Contact Sales
+            </a>
+        </div>
+    {% endif %}
+
+</div>{# /space-y-10 #}
+
+</div>{# end products column #}
+
+{# Sidebar Content Column (Domain Search + trust) #}
+<aside class="order-2 lg:col-span-4">
+    <div class="ord-sidebar-sticky space-y-6 lg:sticky lg:top-20">
+    {% if hasDomainCategory %}
+    <div x-data="{
+        domainQ: '',
+        get registerHref() {
+            const raw = this.domainQ.trim();
+            const base = '{{ '/order/domain-registration'|url }}';
+            if (!raw) return base;
+            const dot = raw.lastIndexOf('.');
+            const sld = dot > 0 ? raw.slice(0, dot) : raw;
+            const tld = dot > 0 ? raw.slice(dot) : '';
+            return base + '?register_sld=' + encodeURIComponent(sld) + (tld ? '&register_tld=' + encodeURIComponent(tld) : '');
+        },
+        tldHref(tld) {
+            const base = '{{ '/order/domain-registration'|url }}';
+            const sld = this.domainQ.trim().replace(/\.[^.]*$/, '') || '';
+            return base + '?register_tld=' + encodeURIComponent(tld) + (sld ? '&register_sld=' + encodeURIComponent(sld) : '');
+        },
+        goSearch() {
+            if (this.domainQ.trim()) window.location.href = this.registerHref;
+        }
+    }" class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+        <div class="flex items-center gap-3 mb-4">
+            <svg class="w-5 h-5 text-[color:var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8"/></svg>
+            <h4 class="text-base font-bold text-slate-900">Find Your Domain</h4>
+        </div>
+        <div class="space-y-4">
+            <div class="relative">
+                <input x-model="domainQ"
+                       @keydown.enter="goSearch()"
+                       class="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[color:var(--color-primary)]/20 focus:border-[color:var(--color-primary)]"
+                       placeholder="example.com" type="text" autocomplete="off" />
+                <button type="button" @click="goSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 p-0 bg-transparent border-0 cursor-pointer">
+                    <svg class="w-4 h-4 text-slate-400 hover:text-[color:var(--color-primary)] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </button>
+            </div>
+
+            {% if domain_tlds|length > 0 %}
+            <div class="flex gap-3 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
+                {% for t in domain_tlds|slice(0, 12) %}
+                <a :href="tldHref('{{ t.tld }}')"
+                   class="flex-none w-24 p-3 bg-slate-50 border border-slate-100 rounded-xl text-center hover:border-[color:var(--color-primary)]/30 transition-colors">
+                    <span class="block font-bold text-slate-700 text-sm mb-0.5">{{ t.tld }}</span>
+                    <span class="block text-[11px] font-bold text-[color:var(--color-primary)]">{{ t.price_registration | money_convert }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="flex gap-2">
+                <a :href="registerHref" class="flex-1 text-center py-2 rounded-lg text-[11px] font-semibold text-white" style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">Register</a>
+                <a href="{{ '/order/domain-transfer'|url }}" class="flex-1 text-center py-2 rounded-lg text-[11px] font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50">Transfer</a>
+            </div>
+            <p class="text-[10px] text-slate-400 italic">Prices subject to change based on registrar fees.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="ord-moneyback-card bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-center">
+        {# Header: icon + title #}
+        <div class="flex items-center justify-center gap-2 mb-3">
+            <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            <span class="font-semibold text-on-surface text-sm">30-day money-back guarantee</span>
+        </div>
+        <p class="text-sm font-bold text-on-surface mb-4">Pay securely via eSewa, Khalti &amp; more.</p>
+        {# Payment logos — each in a uniform pill container for consistent sizing #}
+        <div class="grid grid-cols-2 gap-2 mb-4">
+            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+                <img src="https://cdn.yoho.cloud/assets/img/payment/esewa.webp" alt="eSewa" class="h-5 w-auto max-w-[64px] object-contain">
+            </div>
+            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+                <img src="https://cdn.yoho.cloud/assets/img/payment/khalti.png" alt="Khalti" class="h-5 w-auto max-w-[64px] object-contain">
+            </div>
+            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+                <img src="https://cdn.yoho.cloud/assets/img/payment/imepay.png" alt="IME Pay" class="h-5 w-auto max-w-[64px] object-contain">
+            </div>
+            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+                <img src="https://cdn.yoho.cloud/assets/img/payment/connectips.svg" alt="ConnectIPS" class="h-5 w-auto max-w-[64px] object-contain">
+            </div>
+        </div>
+        {# Trust line #}
+        <p class="text-center text-[11px] text-slate-400 font-medium whitespace-nowrap">No hidden charges &bull; Same price at renewal.</p>
+    </div>
+    </div>{# end sticky wrapper #}
+</aside>
+
+</div>{# end flex wrapper #}
+
+{%- set _help_link = settings.link_support|default('/support/contact') -%}
+{%- set _help_href = (_help_link matches '/^https?:\\/\\//') ? '/support/contact'|url : _help_link|url -%}
+<div class="mt-8 p-5 sm:p-8 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col md:flex-row items-center justify-between gap-5">
+    <div class="flex items-center gap-5">
+        <div class="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-md flex-shrink-0">
+            <svg class="w-7 h-7 text-[color:var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <div>
+            <h4 class="text-h2 font-sans font-semibold text-on-surface">Need help choosing?</h4>
+            <p class="text-body-md text-slate-500 mt-0.5">Our experts are available 24/7 to help you find the perfect plan for your project.</p>
+        </div>
+    </div>
+    <a href="{{ _help_href }}"
+       class="flex-shrink-0 inline-flex items-center gap-2 px-7 py-3.5 rounded-xl border font-bold text-sm transition-all hover:shadow-md whitespace-nowrap"
+       style="border-color: var(--color-primary); color: var(--color-primary); background: white;">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        Contact Support
+    </a>
+</div>
+
+</div>{# /ord-refined #}
+
+{% endblock %}
+
+{% block js %}
+<style>
+.ord-page-head {
+    padding: 0;
+}
+
+.ord-refined .ord-period-bar {
+    border-color: #cbd5e1 !important;
+    background: #f8fafc !important;
+}
+
+.ord-refined .ord-product-card {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.ord-refined .ord-product-card:hover {
+    border-color: rgba(var(--color-primary-rgb), 0.35) !important;
+}
+
+.ord-refined .ord-price-row {
+    border-color: #e2e8f0 !important;
+}
+
+.ord-refined .ord-cta-secondary {
+    background: #f8fafc !important;
+    color: #334155 !important;
+}
+
+.ord-refined .ord-cta-secondary:hover {
+    background: rgb(var(--brand-50)) !important;
+    color: #1e1b4b !important;
+}
+
+.ord-refined .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.ord-refined .no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+@media (max-width: 1023px) {
+    .ord-page-head {
+        padding: 0;
+    }
+    /* Hide sidebar below the products on mobile — not useful when buried 2000px down */
+    aside.order-2 {
+        display: none;
+    }
+}
+
+/* Category-tab scroll fade hint on the right */
+.ord-tabs-wrap::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--color-surface, #f1f5f9));
+    border-radius: 0 0.75rem 0.75rem 0;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,318 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+{% set active_menu = 'emails' %}
+
+{% block meta_title %}Email History{% endblock %}
+{% block page_header %}{% endblock %}
+{% block breadcrumb %}{% endblock %}
+
+{% set emails = client.email_get_list({"per_page":10, "page":request.page|default(1)}) %}
+{% set current_page = request.page|default(1) %}
+
+{% block content %}
+<div class="ref-email-page">
+    <header class="ref-email-hero">
+        <div>
+            <span class="ref-email-eyebrow">Communication center</span>
+            <h1>Email History</h1>
+            <p>Review account notices, invoice updates, and service messages sent to you.</p>
+        </div>
+        <div class="ref-email-count">
+            <strong>{{ emails.total|default(0) }}</strong>
+            <span>messages</span>
+        </div>
+    </header>
+
+    <section class="ref-email-panel" aria-label="Sent email history">
+        {% if emails.list is empty %}
+        <div class="ref-email-empty">
+            <div>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <h2>No emails yet</h2>
+            <p>Messages sent to your account will appear here.</p>
+        </div>
+        {% else %}
+        <div class="ref-email-table-wrap">
+            <table class="ref-email-table">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Date created</th>
+                        <th>Status</th>
+                        <th><span class="sr-only">View</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for email in emails.list %}
+                    <tr>
+                        <td data-label="Subject">
+                            <a href="{{ "email/#{email.id}"|url }}" class="ref-email-subject" data-email-open data-email-id="{{ email.id }}" data-email-subject="{{ email.subject|e('html_attr') }}" data-email-date="{{ email.created_at|format_datetime|e('html_attr') }}">{{ email.subject }}</a>
+                        </td>
+                        <td data-label="Date created">
+                            <time datetime="{{ email.created_at }}">{{ email.created_at|format_datetime }}</time>
+                        </td>
+                        <td data-label="Status">
+                            <span class="ref-email-status"><span></span>Sent</span>
+                        </td>
+                        <td>
+                            <a href="{{ "email/#{email.id}"|url }}" class="ref-email-open" data-email-open data-email-id="{{ email.id }}" data-email-subject="{{ email.subject|e('html_attr') }}" data-email-date="{{ email.created_at|format_datetime|e('html_attr') }}" aria-label="View {{ email.subject }}">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if emails.pages >= 2 %}
+        <footer class="ref-email-pagination">
+            <span>Page {{ current_page }} of {{ emails.pages }}</span>
+            <div>
+                {% if current_page > 1 %}
+                <a href="?page={{ current_page - 1 }}" aria-label="Previous page">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </a>
+                {% endif %}
+                {% if current_page < emails.pages %}
+                <a href="?page={{ current_page + 1 }}" aria-label="Next page">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
+                {% endif %}
+            </div>
+        </footer>
+        {% endif %}
+        {% endif %}
+    </section>
+
+    <div class="ref-email-modal" id="email-view-modal" aria-hidden="true">
+        <div class="ref-email-modal-backdrop" data-email-close></div>
+        <section class="ref-email-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="email-modal-subject">
+            <header class="ref-email-modal-header">
+                <div class="ref-email-modal-icon">
+                    <strong>{{ guest.system_company.name|slice(0, 1)|upper }}</strong>
+                </div>
+                <div class="ref-email-modal-heading">
+                    <h2 id="email-modal-subject">Message</h2>
+                    <div class="ref-email-modal-meta">
+                        <span><strong>{{ guest.system_company.name }}</strong> to you</span>
+                        <i></i>
+                        <time id="email-modal-date"></time>
+                        <span class="ref-email-status"><span></span>Sent</span>
+                    </div>
+                </div>
+                <button type="button" class="ref-email-modal-close" data-email-close aria-label="Close email">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </header>
+            <div class="ref-email-modal-body">
+                <iframe id="email-modal-frame" title="Email content" src="about:blank" sandbox="allow-same-origin allow-popups"></iframe>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+{{ parent() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const contents = {};
+    {% for email in emails.list %}
+    contents[{{ email.id|json_encode|raw }}] = '{{ email.content_html|e('js') }}';
+    {% endfor %}
+
+    const modal = document.getElementById('email-view-modal');
+    const frame = document.getElementById('email-modal-frame');
+    const subject = document.getElementById('email-modal-subject');
+    const date = document.getElementById('email-modal-date');
+    let lastTrigger = null;
+    const brandName = {{ guest.system_company.name|json_encode|raw }};
+    const brandLogo = {{ guest.system_company.logo_url|default('')|json_encode|raw }};
+
+    const beautifyPlainEmail = () => {
+        const doc = frame.contentDocument;
+        if (!doc || !doc.body || doc.body.dataset.meroEnhanced) return;
+
+        const isPlainEmail = !doc.querySelector('table') && !doc.querySelector('img');
+        if (!isPlainEmail) return;
+        doc.body.dataset.meroEnhanced = 'true';
+
+        const style = doc.createElement('style');
+        style.textContent = `
+            * { box-sizing: border-box; }
+            html { margin: 0; background: #f4f6fb; }
+            body {
+                width: 100% !important;
+                max-width: 640px !important;
+                margin: 0 auto !important;
+                padding: 0 42px 36px !important;
+                color: #293044 !important;
+                background: #ffffff !important;
+                font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+                font-size: 15px !important;
+                line-height: 1.7 !important;
+            }
+            .mero-mail-brand {
+                min-height: 92px;
+                margin: 0 -42px 34px;
+                padding: 0 42px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                border-bottom: 1px solid #e8ebf2;
+                background: linear-gradient(115deg, #111b42, #0b1330);
+            }
+            .mero-mail-brand img {
+                width: auto;
+                max-width: 150px;
+                height: 38px;
+                object-fit: contain;
+                filter: brightness(0) invert(1);
+            }
+            .mero-mail-brand strong {
+                color: #fff;
+                font-size: 18px;
+                letter-spacing: -.02em;
+            }
+            .mero-mail-brand span {
+                color: #aebcff;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: .12em;
+                text-transform: uppercase;
+            }
+            h1, h2, h3 {
+                color: #11172a !important;
+                font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+                letter-spacing: -.025em !important;
+            }
+            h1 {
+                margin: 0 0 22px !important;
+                font-size: 28px !important;
+                line-height: 1.2 !important;
+            }
+            p { margin: 0 0 14px !important; }
+            a { color: #5271ff !important; font-weight: 600; text-underline-offset: 3px; }
+            a.mero-mail-cta {
+                display: inline-block !important;
+                margin: 9px 0 21px !important;
+                padding: 12px 22px !important;
+                border-radius: 9px !important;
+                color: #fff !important;
+                background: #5271ff !important;
+                box-shadow: 0 8px 20px rgba(82,113,255,.24) !important;
+                text-decoration: none !important;
+            }
+            .mero-mail-note {
+                margin: 20px 0 !important;
+                padding: 14px 16px !important;
+                border: 1px solid #dfe4ff !important;
+                border-radius: 10px !important;
+                color: #4f5870 !important;
+                background: #f5f7ff !important;
+                font-size: 13px !important;
+            }
+            .mero-mail-footer {
+                margin: 30px -42px -36px;
+                padding: 28px 42px 24px;
+                border-top: 1px solid #e8ebf2;
+                color: #8a93a6;
+                background: #fafbfc;
+                font-size: 11px;
+                line-height: 1.6;
+            }
+            .mero-mail-footer strong { color: #20283b; }
+            .mero-mail-signature {
+                margin-top: 24px !important;
+                padding-top: 18px !important;
+                border-top: 1px solid #e8ebf2 !important;
+                color: #596277 !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
+            }
+            @media (max-width: 520px) {
+                body { padding-inline: 24px !important; }
+                .mero-mail-brand { margin-inline: -24px; padding-inline: 24px; }
+                .mero-mail-footer { margin-inline: -24px; padding-inline: 24px; }
+                h1 { font-size: 24px !important; }
+            }
+        `;
+        doc.head.appendChild(style);
+
+        const brand = doc.createElement('div');
+        brand.className = 'mero-mail-brand';
+        const identity = brandLogo
+            ? `<img src="${brandLogo.replace(/"/g, '&quot;')}" alt="${brandName.replace(/"/g, '&quot;')}">`
+            : `<strong>${brandName}</strong>`;
+        brand.innerHTML = `${identity}<span>Account notification</span>`;
+        doc.body.insertBefore(brand, doc.body.firstChild);
+
+        const links = Array.from(doc.querySelectorAll('a'));
+        const primaryLink = links.find((link) => /reset|confirm|verify|activate|pay|view invoice|sign in/i.test(link.textContent || ''));
+        if (primaryLink) primaryLink.classList.add('mero-mail-cta');
+
+        Array.from(doc.querySelectorAll('p')).forEach((paragraph) => {
+            if (/did not request|ignore this email|expire|security/i.test(paragraph.textContent || '')) {
+                paragraph.classList.add('mero-mail-note');
+            }
+            if (/StableHMS|FOSSBilling|Client Management,\s*Invoicing/i.test(paragraph.textContent || '')) {
+                paragraph.textContent = `Regards, ${brandName} team`;
+                paragraph.className = 'mero-mail-signature';
+            }
+        });
+
+        const footer = doc.createElement('div');
+        footer.className = 'mero-mail-footer';
+        footer.innerHTML = `<strong>${brandName}</strong><br>This is an automated account notification. For assistance, contact our support team through your client dashboard.`;
+        doc.body.appendChild(footer);
+
+        requestAnimationFrame(() => {
+            const contentHeight = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+            frame.style.height = `${Math.min(Math.max(contentHeight + 2, 460), window.innerHeight - 170)}px`;
+        });
+    };
+
+    frame.addEventListener('load', beautifyPlainEmail);
+
+    const closeModal = () => {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('ref-email-modal-open');
+        frame.srcdoc = '';
+        if (lastTrigger) lastTrigger.focus();
+    };
+
+    document.querySelectorAll('[data-email-open]').forEach((trigger) => {
+        trigger.addEventListener('click', (event) => {
+            const id = trigger.dataset.emailId;
+            if (!contents[id]) return;
+            event.preventDefault();
+            lastTrigger = trigger;
+            subject.textContent = trigger.dataset.emailSubject || 'Email message';
+            date.textContent = trigger.dataset.emailDate || '';
+            frame.style.height = '';
+            frame.srcdoc = contents[id];
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('ref-email-modal-open');
+            modal.querySelector('.ref-email-modal-close').focus();
+        });
+    });
+
+    modal.querySelectorAll('[data-email-close]').forEach((trigger) => {
+        trigger.addEventListener('click', closeModal);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    });
+});
+</script>
+{% endblock %}

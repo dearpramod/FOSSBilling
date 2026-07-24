@@ -1,0 +1,698 @@
+{% block content %}
+
+{# ── Logo ── #}
+<section id="s-logo">
+<h4>{{ 'Logo'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Custom logo and favicon URLs. Leave blank to use the default company branding from Configuration → Company.'|trans }}</p>
+    <div class="row g-3">
+      <div class="col-sm-6">
+        <label class="form-label" for="logo_url">{{ 'Logo URL'|trans }}</label>
+        <input type="text" class="form-control" name="logo_url" id="logo_url"
+               value="{{ settings.logo_url }}" placeholder="https://example.com/logo.svg">
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label" for="logo_favicon">{{ 'Favicon URL'|trans }}</label>
+        <input type="text" class="form-control" name="logo_favicon" id="logo_favicon"
+               value="{{ settings.logo_favicon }}" placeholder="https://example.com/favicon.ico">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Theme Colors ── #}
+<section id="s-colors">
+<h4>{{ 'Theme Colors'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Primary and secondary accent colors used throughout the theme. Click the swatch to change.'|trans }}</p>
+    <div class="row g-3">
+      <div class="col-sm-6">
+        <label class="form-label" for="primary_color">{{ 'Primary color'|trans }}</label>
+        <div class="input-group">
+          <input type="color" class="form-control form-control-color" name="primary_color" id="primary_color"
+                 value="{{ settings.primary_color|default('#6366f1') }}">
+          <span class="input-group-text text-muted small">{{ settings.primary_color|default('#6366f1') }}</span>
+        </div>
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label" for="secondary_color">{{ 'Secondary color'|trans }}</label>
+        <div class="input-group">
+          <input type="color" class="form-control form-control-color" name="secondary_color" id="secondary_color"
+                 value="{{ settings.secondary_color|default('#7c3aed') }}">
+          <span class="input-group-text text-muted small">{{ settings.secondary_color|default('#7c3aed') }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Sidebar Navigation ── #}
+<section id="s-sidebar">
+<h4>{{ 'Sidebar Navigation'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Choose which links are visible in the client sidebar. All items are shown by default.'|trans }}</p>
+    {% set sidebar_items = [
+      {key:'nav_dashboard',    label:'Show Home / Dashboard'},
+      {key:'nav_services',     label:'Show My Services'},
+      {key:'nav_order',        label:'Show Order Services'},
+      {key:'nav_support',      label:'Show Support'},
+      {key:'nav_invoices',     label:'Show Invoices'},
+      {key:'nav_balance',      label:'Show Credits & Balance'},
+      {key:'nav_profile',      label:'Show Profile'},
+      {key:'top_menu_signout', label:'Show Sign Out button (header)'}
+    ] %}
+    <div class="row g-2">
+      {% for item in sidebar_items %}
+      <div class="col-sm-6">
+        <div class="d-flex align-items-center border rounded px-3 py-2 h-100">
+          <div class="form-check form-switch mb-0 w-100">
+            <input type="hidden" name="{{ item.key }}" value="0">
+            <input class="form-check-input" type="checkbox"
+                   name="{{ item.key }}" value="1" id="sw_{{ item.key }}"
+                   {% if settings[item.key]|default('1') != '0' %} checked="checked"{% endif %}>
+            <label class="form-check-label" for="sw_{{ item.key }}">{{ item.label|trans }}</label>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Public Navigation Menu ── #}
+<section id="s-pubnav">
+<h4>{{ 'Public Navigation Menu'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Customise the label, URL and visibility of each link in the public header navigation.'|trans }}</p>
+
+    <h5>{{ 'Built-in Links'|trans }}</h5>
+    <div class="table-responsive mb-4">
+      <table class="table table-sm table-bordered align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>{{ 'Item'|trans }}</th>
+            <th>{{ 'Visibility'|trans }}</th>
+            <th>{{ 'Custom Label'|trans }}</th>
+            <th>{{ 'Custom URL'|trans }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set nav_items = [
+            {key:'nav_home',    label:'Home',    ph_label:'Home',    ph_url:'/'},
+            {key:'nav_contact', label:'Contact', ph_label:'Contact', ph_url:'/support/contact'},
+            {key:'nav_support', label:'Support', ph_label:'Support', ph_url:'/support'},
+            {key:'nav_news',    label:'News',    ph_label:'News',    ph_url:'/news'}
+          ] %}
+          {% for item in nav_items %}
+          <tr>
+            <td><strong>{{ item.label|trans }}</strong></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="{{ item.key }}_show"
+                       id="r_{{ item.key }}_1" value="1" autocomplete="off"
+                       {% if settings[item.key ~ '_show']|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_{{ item.key }}_1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="{{ item.key }}_show"
+                       id="r_{{ item.key }}_0" value="0" autocomplete="off"
+                       {% if settings[item.key ~ '_show'] == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_{{ item.key }}_0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="{{ item.key }}_label"
+                       value="{{ settings[item.key ~ '_label'] }}" placeholder="{{ item.ph_label }}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="{{ item.key }}_url"
+                       value="{{ settings[item.key ~ '_url'] }}" placeholder="{{ item.ph_url }}"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h5>{{ 'Custom Menu Items'|trans }}</h5>
+    {% for n in [1,2,3,4] %}
+    {% set cn_label = settings['nav_custom' ~ n ~ '_label'] %}
+    <details{% if cn_label %} open{% endif %} class="mb-2 border rounded">
+      <summary class="px-3 py-2 d-flex align-items-center gap-2">
+        <strong>{{ 'Custom Item'|trans }} {{ n }}</strong>
+        {% if cn_label %}
+          <span class="badge bg-primary">{{ cn_label }}</span>
+        {% else %}
+          <span class="badge bg-light text-muted border">{{ 'unused'|trans }}</span>
+        {% endif %}
+      </summary>
+      <div class="px-3 py-3">
+        <div class="row g-2 mb-3">
+          <div class="col-sm-4">
+            <label class="form-label form-label-sm">{{ 'Label'|trans }}</label>
+            <input type="text" class="form-control form-control-sm"
+                   name="nav_custom{{ n }}_label"
+                   value="{{ cn_label }}" placeholder="{{ 'Menu item label'|trans }}">
+          </div>
+          <div class="col-sm-8">
+            <label class="form-label form-label-sm">{{ 'Direct URL'|trans }} <span class="text-muted">({{ 'ignored when submenu enabled'|trans }})</span></label>
+            <input type="text" class="form-control form-control-sm"
+                   name="nav_custom{{ n }}_url"
+                   value="{{ settings['nav_custom' ~ n ~ '_url'] }}"
+                   placeholder="/your-page">
+          </div>
+        </div>
+        <div class="form-check form-switch mb-2">
+          <input type="hidden" name="nav_custom{{ n }}_has_sub" value="0">
+          <input class="form-check-input" type="checkbox"
+                 name="nav_custom{{ n }}_has_sub" id="sw_cns{{ n }}" value="1"
+                 {% if settings['nav_custom' ~ n ~ '_has_sub'] == '1' %} checked="checked"{% endif %}>
+          <label class="form-check-label" for="sw_cns{{ n }}">{{ 'Enable dropdown submenu'|trans }}</label>
+        </div>
+        <div class="border-start border-2 ps-3 mt-2">
+          <div class="row g-1 mb-1">
+            <div class="col-5"><small class="text-muted fw-semibold">{{ 'Sub-item label'|trans }}</small></div>
+            <div class="col-7"><small class="text-muted fw-semibold">{{ 'URL'|trans }}</small></div>
+          </div>
+          {% for s in [1,2,3,4] %}
+          <div class="row g-1 mb-1">
+            <div class="col-5">
+              <input type="text" class="form-control form-control-sm"
+                     name="nav_custom{{ n }}_sub{{ s }}_label"
+                     value="{{ settings['nav_custom' ~ n ~ '_sub' ~ s ~ '_label'] }}"
+                     placeholder="{{ 'Sub-item'|trans }} {{ s }}">
+            </div>
+            <div class="col-7">
+              <input type="text" class="form-control form-control-sm"
+                     name="nav_custom{{ n }}_sub{{ s }}_url"
+                     value="{{ settings['nav_custom' ~ n ~ '_sub' ~ s ~ '_url'] }}"
+                     placeholder="/path">
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</div>
+</section>
+
+{# ── Homepage ── #}
+<section id="s-homepage">
+<h4>{{ 'Homepage'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label">{{ 'Homepage mode'|trans }}</label>
+        <div>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="homepage_mode" id="r_hm_def" value="default" autocomplete="off"
+                   {% if settings.homepage_mode|default('default') == 'default' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-primary" for="r_hm_def">{{ 'Show default homepage'|trans }}</label>
+            <input type="radio" class="btn-check" name="homepage_mode" id="r_hm_store" value="store" autocomplete="off"
+                   {% if settings.homepage_mode == 'store' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-primary" for="r_hm_store">{{ 'Redirect to store'|trans }}</label>
+            <input type="radio" class="btn-check" name="homepage_mode" id="r_hm_custom" value="custom" autocomplete="off"
+                   {% if settings.homepage_mode == 'custom' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-primary" for="r_hm_custom">{{ 'Redirect to custom URL'|trans }}</label>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="homepage_custom_url">{{ 'Custom redirect URL'|trans }}</label>
+        <input type="text" class="form-control" name="homepage_custom_url" id="homepage_custom_url"
+               value="{{ settings.homepage_custom_url }}" placeholder="/order/webhosting">
+        <div class="form-text">{{ 'Only used when mode is set to Redirect to custom URL.'|trans }}</div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ 'Hide sidebar for guests?'|trans }}</label>
+        <div>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="hide_menu" id="r_hid_1" value="1" autocomplete="off"
+                   {% if settings.hide_menu|default('1') != '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-success" for="r_hid_1">{{ 'Yes'|trans }}</label>
+            <input type="radio" class="btn-check" name="hide_menu" id="r_hid_0" value="0" autocomplete="off"
+                   {% if settings.hide_menu == '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-secondary" for="r_hid_0">{{ 'No'|trans }}</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Login Page ── #}
+<section id="s-login">
+<h4>{{ 'Login Page'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-sm-4">
+        <label class="form-label">{{ 'Show Register / Create Account link'|trans }}</label>
+        <div>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="login_show_register" id="r_lreg_1" value="1" autocomplete="off"
+                   {% if settings.login_show_register|default('1') != '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-success" for="r_lreg_1">{{ 'Yes'|trans }}</label>
+            <input type="radio" class="btn-check" name="login_show_register" id="r_lreg_0" value="0" autocomplete="off"
+                   {% if settings.login_show_register == '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-secondary" for="r_lreg_0">{{ 'No'|trans }}</label>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label">{{ 'Show Forgot Password link'|trans }}</label>
+        <div>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="login_show_reset" id="r_lrst_1" value="1" autocomplete="off"
+                   {% if settings.login_show_reset|default('1') != '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-success" for="r_lrst_1">{{ 'Yes'|trans }}</label>
+            <input type="radio" class="btn-check" name="login_show_reset" id="r_lrst_0" value="0" autocomplete="off"
+                   {% if settings.login_show_reset == '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-outline-secondary" for="r_lrst_0">{{ 'No'|trans }}</label>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="login_logo_url">{{ 'Custom logo image URL (leave blank to use company logo)'|trans }}</label>
+        <input type="text" class="form-control" name="login_logo_url" id="login_logo_url"
+               value="{{ settings.login_logo_url }}" placeholder="https://example.com/logo.png">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Footer ── #}
+<section id="s-footer">
+<h4>{{ 'Footer'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <label class="form-label">{{ 'Show footer on public pages'|trans }}</label>
+    <div>
+      <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="footer_enabled" id="r_fe_1" value="1" autocomplete="off"
+               {% if settings.footer_enabled|default('1') != '0' %} checked="checked"{% endif %}>
+        <label class="btn btn-outline-success" for="r_fe_1">{{ 'Yes'|trans }}</label>
+        <input type="radio" class="btn-check" name="footer_enabled" id="r_fe_0" value="0" autocomplete="off"
+               {% if settings.footer_enabled == '0' %} checked="checked"{% endif %}>
+        <label class="btn btn-outline-secondary" for="r_fe_0">{{ 'No'|trans }}</label>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Site Links ── #}
+<section id="s-links">
+<h4>{{ 'Site Links'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'URLs used for Terms, Privacy, Cookie Policy & Support throughout the theme.'|trans }}</p>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="link_terms">{{ 'Terms of Service URL'|trans }}</label>
+        <input type="text" class="form-control" name="link_terms" id="link_terms"
+               value="{{ settings.link_terms }}" placeholder="/page/terms-and-conditions">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="tos">{{ 'ToS URL for signup checkbox'|trans }}</label>
+        <input type="text" class="form-control" name="tos" id="tos"
+               value="{{ settings.tos }}" placeholder="/page/terms-and-conditions">
+        <div class="form-text">{{ 'Leave blank to skip the agreement checkbox on signup.'|trans }}</div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="link_privacy">{{ 'Privacy Policy URL'|trans }}</label>
+        <input type="text" class="form-control" name="link_privacy" id="link_privacy"
+               value="{{ settings.link_privacy }}" placeholder="/page/privacy-policy">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="link_cookie">{{ 'Cookie Policy URL'|trans }}</label>
+        <input type="text" class="form-control" name="link_cookie" id="link_cookie"
+               value="{{ settings.link_cookie }}" placeholder="/page/cookie-policy">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="link_support">{{ 'Support / Contact URL'|trans }}</label>
+        <input type="text" class="form-control" name="link_support" id="link_support"
+               value="{{ settings.link_support }}" placeholder="/support/contact">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Footer Contact Info ── #}
+<section id="s-footercontact">
+<h4>{{ 'Footer Contact Info'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Displayed in the footer Contact column. Falls back to the company profile values if left blank.'|trans }}</p>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="footer_phone">{{ 'Phone number'|trans }}</label>
+        <input type="text" class="form-control" name="footer_phone" id="footer_phone"
+               value="{{ settings.footer_phone }}" placeholder="+977-9800000000">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="footer_email">{{ 'Email address'|trans }}</label>
+        <input type="email" class="form-control" name="footer_email" id="footer_email"
+               value="{{ settings.footer_email }}" placeholder="hello@example.com">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="footer_address">{{ 'Physical address'|trans }}</label>
+        <input type="text" class="form-control" name="footer_address" id="footer_address"
+               value="{{ settings.footer_address }}" placeholder="123 Main St, Kathmandu">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Service Management ── #}
+<section id="s-services">
+<h4>{{ 'Service Management'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Control which sections and actions are visible on hosted service detail pages.'|trans }}</p>
+    {% set svc_items = [
+      {key:'show_resource_usage',     label:'Show Resource Usage section',     desc:'Disk / bandwidth usage gauges'},
+      {key:'show_account_management', label:'Show Account Management section', desc:'cPanel / server account controls'},
+      {key:'acct_show_password',      label:'Show Change Password option',     desc:'Password change action'},
+      {key:'acct_show_domain',        label:'Show Change Domain option',       desc:'Primary domain change'},
+      {key:'acct_show_username',      label:'Show Change Username option',     desc:'Account username change'},
+      {key:'acct_show_cancel',        label:'Show Cancel Service button',      desc:'Self-service cancellation'}
+    ] %}
+    <div class="row g-2">
+      {% for t in svc_items %}
+      <div class="col-md-6">
+        <div class="d-flex align-items-center justify-content-between border rounded px-3 py-2 h-100">
+          <div>
+            <div class="small fw-semibold">{{ t.label|trans }}</div>
+            <div class="text-muted small">{{ t.desc|trans }}</div>
+          </div>
+          <div class="btn-group btn-group-sm ms-3 flex-shrink-0" role="group">
+            <input type="radio" class="btn-check" name="{{ t.key }}" id="r_{{ t.key }}_1" value="1" autocomplete="off"
+                   {% if settings[t.key]|default('1') != '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-sm btn-outline-success" for="r_{{ t.key }}_1">{{ 'On'|trans }}</label>
+            <input type="radio" class="btn-check" name="{{ t.key }}" id="r_{{ t.key }}_0" value="0" autocomplete="off"
+                   {% if settings[t.key] == '0' %} checked="checked"{% endif %}>
+            <label class="btn btn-sm btn-outline-secondary" for="r_{{ t.key }}_0">{{ 'Off'|trans }}</label>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Social Media ── #}
+<section id="s-social">
+<h4>{{ 'Social Media Links'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="social_facebook">{{ 'Facebook URL'|trans }}</label>
+        <input type="url" class="form-control" name="social_facebook" id="social_facebook"
+               value="{{ settings.social_facebook }}" placeholder="https://facebook.com/yourpage">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="social_twitter">{{ 'Twitter / X URL'|trans }}</label>
+        <input type="url" class="form-control" name="social_twitter" id="social_twitter"
+               value="{{ settings.social_twitter }}" placeholder="https://x.com/yourhandle">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="social_instagram">{{ 'Instagram URL'|trans }}</label>
+        <input type="url" class="form-control" name="social_instagram" id="social_instagram"
+               value="{{ settings.social_instagram }}" placeholder="https://instagram.com/yourhandle">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Meta Tags ── #}
+<section id="s-meta">
+<h4>{{ 'Meta Tags'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="meta_title_prefix">{{ 'Meta title prefix'|trans }} <span class="text-muted small">e.g. My Company |</span></label>
+        <input type="text" class="form-control" name="meta_title_prefix" id="meta_title_prefix"
+               value="{{ settings.meta_title_prefix }}" placeholder="My Company |">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="meta_title_suffix">{{ 'Meta title suffix'|trans }} <span class="text-muted small">e.g. | My Company</span></label>
+        <input type="text" class="form-control" name="meta_title_suffix" id="meta_title_suffix"
+               value="{{ settings.meta_title_suffix }}" placeholder="| My Company">
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="meta_description">{{ 'Default meta description'|trans }}</label>
+        <textarea class="form-control" name="meta_description" id="meta_description" rows="3">{{ settings.meta_description }}</textarea>
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="meta_keywords">{{ 'Meta keywords'|trans }} <span class="text-muted small">({{ 'comma-separated'|trans }})</span></label>
+        <input type="text" class="form-control" name="meta_keywords" id="meta_keywords"
+               value="{{ settings.meta_keywords }}" placeholder="hosting, domain, vps, cloud">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="meta_author">{{ 'Meta author'|trans }}</label>
+        <input type="text" class="form-control" name="meta_author" id="meta_author"
+               value="{{ settings.meta_author }}" placeholder="{{ 'Your Company Name'|trans }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="meta_robots">{{ 'Meta robots'|trans }}</label>
+        <select class="form-select" name="meta_robots" id="meta_robots">
+          <option value=""{% if not settings.meta_robots %} selected="selected"{% endif %}>{{ 'Default (index, follow)'|trans }}</option>
+          <option value="noindex, nofollow"{% if settings.meta_robots == 'noindex, nofollow' %} selected="selected"{% endif %}>noindex, nofollow</option>
+          <option value="noindex, follow"{% if settings.meta_robots == 'noindex, follow' %} selected="selected"{% endif %}>noindex, follow</option>
+          <option value="index, nofollow"{% if settings.meta_robots == 'index, nofollow' %} selected="selected"{% endif %}>index, nofollow</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Support & Contact ── #}
+<section id="s-contact">
+<h4>{{ 'Support & Contact'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="support_phone">{{ 'Phone / Hotline number'|trans }}</label>
+        <input type="text" class="form-control" name="support_phone" id="support_phone"
+               value="{{ settings.support_phone }}" placeholder="+977-XXXXXXXXXX">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="support_whatsapp">{{ 'WhatsApp number (with country code)'|trans }}</label>
+        <input type="text" class="form-control" name="support_whatsapp" id="support_whatsapp"
+               value="{{ settings.support_whatsapp }}" placeholder="977XXXXXXXXXX">
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="support_chat_url">{{ 'Live Chat URL (leave blank to hide)'|trans }}</label>
+        <input type="text" class="form-control" name="support_chat_url" id="support_chat_url"
+               value="{{ settings.support_chat_url }}" placeholder="https://tawk.to/...">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="support_chat_label">{{ 'Live Chat button label'|trans }}</label>
+        <input type="text" class="form-control" name="support_chat_label" id="support_chat_label"
+               value="{{ settings.support_chat_label }}" placeholder="{{ 'Start Live Chat'|trans }}">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Help Panel ── #}
+<section id="s-helppanel">
+<h4>{{ 'Help Panel — Links & Visibility'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Each item can be shown/hidden and its URL & label customised.'|trans }}</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>{{ 'Panel Item'|trans }}</th>
+            <th>{{ 'Visibility'|trans }}</th>
+            <th>{{ 'URL'|trans }}</th>
+            <th>{{ 'Label'|trans }}</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr>
+            <td><strong>{{ 'Create Support Ticket'|trans }}</strong></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_ticket" id="r_sst1" value="1" autocomplete="off"
+                       {% if settings.support_show_ticket|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_sst1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_ticket" id="r_sst0" value="0" autocomplete="off"
+                       {% if settings.support_show_ticket == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_sst0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="support_ticket_url" value="{{ settings.support_ticket_url }}" placeholder="/support"></td>
+            <td><input type="text" class="form-control form-control-sm" name="support_ticket_label" value="{{ settings.support_ticket_label }}" placeholder="{{ 'Create Support Ticket'|trans }}"></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Create Sales Ticket'|trans }}</strong></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_sales_ticket" id="r_ssst1" value="1" autocomplete="off"
+                       {% if settings.support_show_sales_ticket|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_ssst1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_sales_ticket" id="r_ssst0" value="0" autocomplete="off"
+                       {% if settings.support_show_sales_ticket == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_ssst0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="support_sales_ticket_url" value="{{ settings.support_sales_ticket_url }}" placeholder="/support"></td>
+            <td><input type="text" class="form-control form-control-sm" name="support_sales_ticket_label" value="{{ settings.support_sales_ticket_label }}" placeholder="{{ 'Create Sales Ticket'|trans }}"></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'View My Tickets'|trans }}</strong><br><small class="text-muted">{{ 'Logged-in only'|trans }}</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_view_tickets" id="r_ssvt1" value="1" autocomplete="off"
+                       {% if settings.support_show_view_tickets|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_ssvt1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_view_tickets" id="r_ssvt0" value="0" autocomplete="off"
+                       {% if settings.support_show_view_tickets == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_ssvt0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td colspan="2"><small class="text-muted">{{ 'Uses Support URL above'|trans }}</small></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'WhatsApp Support'|trans }}</strong><br><small class="text-muted">{{ 'Shown only if number set'|trans }}</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_whatsapp" id="r_sswp1" value="1" autocomplete="off"
+                       {% if settings.support_show_whatsapp|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_sswp1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_whatsapp" id="r_sswp0" value="0" autocomplete="off"
+                       {% if settings.support_show_whatsapp == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_sswp0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td colspan="2"><small class="text-muted">{{ 'Uses WhatsApp number from Support & Contact above'|trans }}</small></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Phone Support'|trans }}</strong><br><small class="text-muted">{{ 'Shown only if number set'|trans }}</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_phone" id="r_ssph1" value="1" autocomplete="off"
+                       {% if settings.support_show_phone|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_ssph1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_phone" id="r_ssph0" value="0" autocomplete="off"
+                       {% if settings.support_show_phone == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_ssph0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td colspan="2"><small class="text-muted">{{ 'Uses phone number from Support & Contact above'|trans }}</small></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Submit Feedback'|trans }}</strong></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_feedback" id="r_ssfb1" value="1" autocomplete="off"
+                       {% if settings.support_show_feedback|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_ssfb1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_feedback" id="r_ssfb0" value="0" autocomplete="off"
+                       {% if settings.support_show_feedback == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_ssfb0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="support_feedback_url" value="{{ settings.support_feedback_url }}" placeholder="/support/contact"></td>
+            <td><input type="text" class="form-control form-control-sm" name="support_feedback_label" value="{{ settings.support_feedback_label }}" placeholder="{{ 'Submit Feedback'|trans }}"></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Knowledge Base'|trans }}</strong></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_kb" id="r_sskb1" value="1" autocomplete="off"
+                       {% if settings.support_show_kb|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_sskb1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_kb" id="r_sskb0" value="0" autocomplete="off"
+                       {% if settings.support_show_kb == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_sskb0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="support_kb_url" value="{{ settings.support_kb_url }}" placeholder="/support/kb"></td>
+            <td><input type="text" class="form-control form-control-sm" name="support_kb_label" value="{{ settings.support_kb_label }}" placeholder="{{ 'Knowledge Base'|trans }}"></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Getting Started Guide'|trans }}</strong></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="support_show_getting_started" id="r_ssgs1" value="1" autocomplete="off"
+                       {% if settings.support_show_getting_started|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_ssgs1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="support_show_getting_started" id="r_ssgs0" value="0" autocomplete="off"
+                       {% if settings.support_show_getting_started == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_ssgs0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="support_getting_started_url" value="{{ settings.support_getting_started_url }}" placeholder="/support/getting-started"></td>
+            <td><input type="text" class="form-control form-control-sm" name="support_getting_started_label" value="{{ settings.support_getting_started_label }}" placeholder="{{ 'Getting Started Guide'|trans }}"></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Page Titles ── #}
+<section id="s-titles">
+<h4>{{ 'Page Titles'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <label class="form-label">{{ 'Show category name in browser tab title'|trans }}</label>
+    <div>
+      <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="category_title_in_tab" id="r_ctit1" value="1" autocomplete="off"
+               {% if settings.category_title_in_tab|default('1') != '0' %} checked="checked"{% endif %}>
+        <label class="btn btn-outline-success" for="r_ctit1">{{ 'Yes'|trans }}</label>
+        <input type="radio" class="btn-check" name="category_title_in_tab" id="r_ctit0" value="0" autocomplete="off"
+               {% if settings.category_title_in_tab == '0' %} checked="checked"{% endif %}>
+        <label class="btn btn-outline-secondary" for="r_ctit0">{{ 'No'|trans }}</label>
+      </div>
+    </div>
+    <div class="form-text mt-2">{{ 'Prepends the product category name to the tab title on store pages.'|trans }}</div>
+  </div>
+</div>
+</section>
+
+{# ── Custom Code ── #}
+<section id="s-code">
+<h4>{{ 'Custom Code'|trans }}</h4>
+<div class="card mb-0">
+  <div class="card-body">
+    <label class="form-label" for="inject_javascript">{{ 'Inject JavaScript (analytics, chat widgets, etc.)'|trans }}</label>
+    <textarea class="form-control font-monospace" name="inject_javascript" id="inject_javascript"
+              rows="7" placeholder="&lt;!-- Paste your script tags here --&gt;">{{ settings.inject_javascript }}</textarea>
+    <div class="form-text">{{ 'Injected before the closing </body> tag on all pages.'|trans }}</div>
+  </div>
+</div>
+</section>
+
+{% endblock %}

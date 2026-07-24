@@ -1,0 +1,604 @@
+{#
+  mod_servicecustom_manage.html.twig
+  Service manage partial for the "Custom" product type (service_type = custom).
+  Included by mod_order_manage.html.twig with:
+    - order   (client.order_get result)
+    - service (client.order_service result — id, client_id, plugin, created_at,
+               updated_at, plus all order-form config key/value pairs)
+#}
+
+{# ── Field label map from the product's order form ─────────────────────── #}
+{%- set _labelMap = {} -%}
+{%- set _formFieldNames = [] -%}
+{%- set _product = guest.product_get({'id': order.product_id}) -%}
+{%- if _product.form_id -%}
+    {%- set _formData = guest.formbuilder_get({'id': _product.form_id}) -%}
+    {%- if _formData.fields is defined -%}
+        {%- for _field in _formData.fields -%}
+            {%- if _field.name is defined and _field.label is defined -%}
+                {%- set _labelMap = _labelMap|merge({(_field.name): _field.label}) -%}
+                {%- set _formFieldNames = _formFieldNames|merge([_field.name]) -%}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endif -%}
+{%- endif -%}
+
+{# ── Config pairs — only real order-form fields, with non-empty values ─── #}
+{%- set _reserved = ['id', 'client_id', 'plugin', 'created_at', 'updated_at'] -%}
+{%- set _configPairs = {} -%}
+{%- for key, val in service -%}
+    {%- if key not in _reserved -%}
+        {# If we have a form definition, only include keys that are actual form fields #}
+        {%- if _formFieldNames|length > 0 -%}
+            {%- if key in _formFieldNames -%}
+                {%- set _configPairs = _configPairs|merge({(key): val}) -%}
+            {%- endif -%}
+        {%- else -%}
+            {# No form definition available — fall back to stripping known metadata keys #}
+            {%- set _metaKeys = ['form_id', 'product_id', 'type', 'title', 'multiple', 'period', 'quantity'] -%}
+            {%- if key not in _metaKeys -%}
+                {%- set _configPairs = _configPairs|merge({(key): val}) -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{# ── Status config ─────────────────────────────────────────────────────── #}
+{% if order.status == 'active' %}
+    {% set _sLabel = 'Active' %}
+    {% set _sDot   = '#22c55e' %}
+    {% set _sBg    = 'rgba(34,197,94,0.12)' %}
+    {% set _sBdr   = 'rgba(34,197,94,0.30)' %}
+    {% set _sTxt   = '#4ade80' %}
+{% elseif order.status == 'suspended' %}
+    {% set _sLabel = 'Suspended' %}
+    {% set _sDot   = '#ef4444' %}
+    {% set _sBg    = 'rgba(239,68,68,0.12)' %}
+    {% set _sBdr   = 'rgba(239,68,68,0.30)' %}
+    {% set _sTxt   = '#f87171' %}
+{% elseif order.status == 'canceled' %}
+    {% set _sLabel = 'Cancelled' %}
+    {% set _sDot   = '#64748b' %}
+    {% set _sBg    = 'rgba(100,116,139,0.12)' %}
+    {% set _sBdr   = 'rgba(100,116,139,0.30)' %}
+    {% set _sTxt   = '#94a3b8' %}
+{% elseif order.status == 'pending_setup' %}
+    {% set _sLabel = 'Pending Setup' %}
+    {% set _sDot   = 'rgb(var(--brand-400))' %}
+    {% set _sBg    = 'rgba(var(--color-primary-rgb),0.12)' %}
+    {% set _sBdr   = 'rgba(var(--color-primary-rgb),0.30)' %}
+    {% set _sTxt   = 'rgb(var(--brand-400))' %}
+{% elseif order.status == 'failed_setup' %}
+    {% set _sLabel = 'Setup Failed' %}
+    {% set _sDot   = '#f87171' %}
+    {% set _sBg    = 'rgba(239,68,68,0.12)' %}
+    {% set _sBdr   = 'rgba(239,68,68,0.30)' %}
+    {% set _sTxt   = '#f87171' %}
+{% elseif order.status == 'failed_renew' %}
+    {% set _sLabel = 'Renewal Failed' %}
+    {% set _sDot   = '#fb923c' %}
+    {% set _sBg    = 'rgba(251,146,60,0.12)' %}
+    {% set _sBdr   = 'rgba(251,146,60,0.30)' %}
+    {% set _sTxt   = '#fb923c' %}
+{% else %}
+    {% set _sLabel = order.status|replace({'_': ' '})|capitalize %}
+    {% set _sDot   = '#64748b' %}
+    {% set _sBg    = 'rgba(100,116,139,0.12)' %}
+    {% set _sBdr   = 'rgba(100,116,139,0.30)' %}
+    {% set _sTxt   = '#94a3b8' %}
+{% endif %}
+
+{# ── Days until expiry ─────────────────────────────────────────────────── #}
+{% set _daysLeft = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
+{% set upgradables = client.order_upgradables({'id': order.id}) %}
+
+<div class="space-y-5 mt-5" id="custom-service-panel" x-data="{ renewModal: false, cancelModal: false }">
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   HEADER — light-mode card
+═══════════════════════════════════════════════════════════════════════════ #}
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+
+    {# 3 px primary accent stripe #}
+    <div style="height:3px; background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary, var(--color-primary)) 100%);"></div>
+
+    <div class="flex flex-col sm:flex-row sm:items-center gap-4 px-6 py-5">
+
+        {# Icon #}
+        <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center"
+             style="background: rgba(var(--color-primary-rgb),0.08); border: 1px solid rgba(var(--color-primary-rgb),0.18);">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--color-primary);">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+        </div>
+
+        {# Title + meta #}
+        <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-2 mb-0.5">
+                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 truncate">{{ order.title }}</h2>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide flex-shrink-0"
+                      style="background:{{ _sBg }}; border:1px solid {{ _sBdr }}; color:{{ _sTxt }};">
+                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:{{ _sDot }};"></span>
+                    {{ _sLabel }}
+                </span>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <span>Order #{{ order.id }}</span>
+                {% if order.price %}
+                <span class="text-slate-300 dark:text-slate-600">&middot;</span>
+                <span class="font-semibold text-slate-600 dark:text-slate-300">{{ order.price|money(order.currency) }}{% if order.period %} / {{ order.period|period_title }}{% endif %}</span>
+                {% endif %}
+                {% if order.expires_at %}
+                <span class="text-slate-300 dark:text-slate-600">&middot;</span>
+                <span style="color: {% if _daysLeft is not null and _daysLeft <= 14 %}#d97706{% else %}inherit{% endif %}; font-weight:{% if _daysLeft is not null and _daysLeft <= 14 %}600{% else %}400{% endif %};">
+                    Expires {{ order.expires_at|date('M j, Y') }}{% if _daysLeft is not null and _daysLeft <= 7 %} &bull; <strong style="color:#dc2626;">{{ _daysLeft }}d left</strong>{% endif %}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Actions #}
+        <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+            {% if upgradables|length > 0 and order.status == 'active' %}
+            <a href="{{ ('order/upgrade/' ~ order.id)|url }}"
+               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold"
+               style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); color:#fff;
+                      box-shadow: 0 2px 10px rgba(var(--color-primary-rgb),.30);">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
+                </svg>
+                Upgrade
+            </a>
+            {% endif %}
+            <a href="{{ ('support')|url }}"
+               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                </svg>
+                Support
+            </a>
+        </div>
+    </div>
+
+    {# Unpaid invoice banner #}
+    {% if order.unpaid_invoice_id %}
+    {% set _unpaid_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-6 py-3 border-t border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20">
+        <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
+            <svg class="w-4 h-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            Outstanding invoice — your service may be suspended if unpaid.
+        </div>
+        <a href="{{ ('invoice/' ~ _unpaid_hash)|url }}"
+           class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+            </svg>
+            Pay Invoice
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   STATE NOTICES
+═══════════════════════════════════════════════════════════════════════════ #}
+{% if order.status == 'suspended' %}
+<div class="flex items-start gap-3.5 rounded-xl border border-red-500/20 px-5 py-4"
+     style="background: rgba(239,68,68,0.06);">
+    <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+    </svg>
+    <div>
+        <p class="text-sm font-semibold text-red-400 mb-0.5">Service Suspended</p>
+        <p class="text-xs text-red-400/70 leading-relaxed">
+            This service has been suspended. Settle any outstanding invoices or contact support to reactivate.
+        </p>
+        {% if order.unpaid_invoice_id %}
+        <a href="{{ ('invoice/' ~ _unpaid_hash)|url }}"
+           class="mt-2 inline-flex items-center gap-1 text-xs font-semibold" style="color: var(--color-primary);">
+            View Invoice &rarr;
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TWO-COLUMN: Quick Management  |  Technical Specifications
+═══════════════════════════════════════════════════════════════════════════ #}
+<div class="flex flex-col lg:flex-row gap-5">
+
+    {# ── Left: Quick Management card ────────────────────────────────────── #}
+    <div class="lg:w-64 flex-shrink-0 rounded-2xl overflow-hidden relative"
+         style="background: linear-gradient(145deg, rgba(var(--color-primary-rgb),0.85) 0%, rgba(var(--color-secondary-rgb, var(--color-primary-rgb)),0.70) 100%);
+                border: 1px solid rgba(var(--color-primary-rgb),0.40);">
+        <div class="pointer-events-none absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-20"
+             style="background: rgba(255,255,255,0.3);"></div>
+        <div class="pointer-events-none absolute -bottom-6 -left-6 w-24 h-24 rounded-full opacity-10"
+             style="background: rgba(255,255,255,0.5);"></div>
+
+        <div class="relative p-6">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                 style="background: rgba(255,255,255,0.2);">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                          d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                </svg>
+            </div>
+            <h3 class="text-base font-bold text-white mb-1.5">Quick Management</h3>
+            <p class="text-xs leading-relaxed mb-5" style="color: rgba(255,255,255,0.65);">
+                Manage your service or upgrade your plan.
+            </p>
+
+            <div class="space-y-2.5">
+                {% if upgradables|length > 0 and order.status == 'active' %}
+                <a href="{{ ('order/upgrade/' ~ order.id)|url }}"
+                   class="flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-sm font-semibold"
+                   style="background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); color: white;">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
+                        </svg>
+                        Upgrade Plan
+                    </span>
+                    <svg class="w-3.5 h-3.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                {% endif %}
+
+                {% if order.price > 0 and order.status == 'active' %}
+                <button type="button" @click="renewModal = true"
+                        class="flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-sm font-semibold"
+                        style="background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); color: white;">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Renew Service
+                    </span>
+                    <svg class="w-3.5 h-3.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+                {% endif %}
+
+                {% if order.status == 'active' %}
+                <button type="button" @click="cancelModal = true; $nextTick(function(){ var f=document.getElementById('cancel-request-form-service'); var a=document.getElementById('cancel-already-service'); if(f) f.classList.remove('hidden'); if(a) a.classList.add('hidden'); })"
+                        class="flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-sm font-semibold"
+                        style="background: rgba(239,68,68,0.28); border: 1px solid rgba(239,68,68,0.55); color: #fecaca;">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        Request Cancellation
+                    </span>
+                    <svg class="w-3.5 h-3.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Right: Plan Details + Configuration Options ─────────────────────── #}
+    <div class="flex-1 min-w-0 space-y-5">
+
+        {# ── Card 1: Plan Details (always shown) ───────────────────────── #}
+        <div class="rounded-2xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div class="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40">
+                <div class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+                     style="background: rgba(var(--color-primary-rgb),0.10);">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                         style="color: var(--color-primary);">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Plan Details</h3>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                <div class="spec-row flex items-center gap-4 px-5 py-3.5">
+                    <div class="w-44 flex-shrink-0">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Product</p>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ order.title }}</span>
+                    </div>
+                </div>
+                {% if order.price %}
+                <div class="spec-row flex items-center gap-4 px-5 py-3.5">
+                    <div class="w-44 flex-shrink-0">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Billing</p>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            {{ order.price|money(order.currency) }}{% if order.period %} / {{ order.period|period_title }}{% endif %}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+                {% if order.expires_at %}
+                <div class="spec-row flex items-center gap-4 px-5 py-3.5">
+                    <div class="w-44 flex-shrink-0">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Expires</p>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <span class="text-sm font-semibold"
+                              style="color: {% if _daysLeft is not null and _daysLeft <= 14 %}#d97706{% else %}inherit{% endif %};">
+                            {{ order.expires_at|date('M j, Y') }}
+                            {% if _daysLeft is not null and _daysLeft <= 14 %}
+                            <span class="ml-1 text-xs" style="color:#d97706;">({{ _daysLeft }}d left)</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── Card 2: Configuration Options (only when non-empty fields exist) ── #}
+        {%- set _hasValues = false -%}
+        {%- for key, val in _configPairs -%}
+            {%- if val is not null and val != '' and val != '[]' -%}
+                {%- set _hasValues = true -%}
+            {%- endif -%}
+        {%- endfor -%}
+        {% if _hasValues %}
+        <div class="rounded-2xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div class="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40">
+                <div class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+                     style="background: rgba(var(--color-primary-rgb),0.10);">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                         style="color: var(--color-primary);">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Configuration Options</h3>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                {% for key, val in _configPairs %}
+                {%- set _isEmpty   = (val is null or val == '' or val == '[]') -%}
+                {%- if not _isEmpty -%}
+                {%- set _isArr     = (val is iterable) -%}
+                {%- set _isJsonArr = (not _isArr and val starts with '[') -%}
+                {%- set _isUrl     = (not _isArr and not _isJsonArr
+                                      and (val starts with 'http://' or val starts with 'https://')) -%}
+                {%- if _isJsonArr -%}
+                    {%- set _chips = val|replace({'[': '', ']': '', '"': '', "'": ''})|split(',') -%}
+                {%- elseif _isArr -%}
+                    {%- set _chips = val -%}
+                {%- else -%}
+                    {%- set _chips = [] -%}
+                {%- endif -%}
+                <div class="spec-row flex items-center gap-4 px-5 py-3.5">
+                    <div class="w-44 flex-shrink-0">
+                        <p class="text-xs font-semibold uppercase tracking-wide truncate text-slate-400 dark:text-slate-500" title="{{ key }}">
+                            {{ _labelMap[key] is defined ? _labelMap[key] : key|replace({'_': ' '})|title }}
+                        </p>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        {% if _isUrl %}
+                        <a href="{{ val }}" target="_blank" rel="noopener noreferrer"
+                           class="text-sm font-medium break-all hover:underline underline-offset-2"
+                           style="color: var(--color-primary);">{{ val }}</a>
+                        {% elseif _isArr or _isJsonArr %}
+                        <div class="flex flex-wrap gap-1.5">
+                            {% for chip in _chips %}{% if chip|trim != '' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                                  style="background: rgba(var(--color-primary-rgb),0.10);
+                                         border: 1px solid rgba(var(--color-primary-rgb),0.20);
+                                         color: var(--color-primary);">{{ chip|trim }}</span>
+                            {% endif %}{% endfor %}
+                        </div>
+                        {% else %}
+                        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 break-all">{{ val }}</span>
+                        {% endif %}
+                    </div>
+                    {% if not _isArr and not _isJsonArr %}
+                    <button type="button"
+                            onclick="navigator.clipboard.writeText(this.dataset.val).then(function(){ globalThis.StablePanel.message('Copied!', 'success'); });"
+                            data-val="{{ val|e('html_attr') }}"
+                            class="copy-btn flex-shrink-0 p-1.5 rounded-lg"
+                            style="opacity:0; color: #94a3b8; transition: opacity 0.15s, background 0.15s;"
+                            title="Copy value">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </div>
+                {%- endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{# Row hover + copy-button reveal #}
+<style>
+    #custom-service-panel .spec-row { transition: background 0.15s; }
+    #custom-service-panel .spec-row:hover { background: #f8fafc; }
+    #custom-service-panel .spec-row:hover .copy-btn { opacity: 1 !important; }
+    #custom-service-panel .copy-btn:hover { background: #e2e8f0 !important; color: #475569 !important; }
+    [data-theme="dark"] #custom-service-panel .spec-row:hover { background: rgba(255,255,255,0.04); }
+    [data-theme="dark"] #custom-service-panel .copy-btn:hover { background: rgba(255,255,255,0.08) !important; color: #94a3b8 !important; }
+</style>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   RENEW SERVICE MODAL  (inside x-data scope so renewModal is reachable)
+═══════════════════════════════════════════════════════════════════════════ #}
+{% if order.price > 0 and order.status == 'active' %}
+<template x-teleport="#merovps-modal-portal">
+<div x-show="renewModal" x-cloak
+     @keydown.escape.window="renewModal = false"
+     class="renew-modal-overlay fixed inset-0 z-[60] flex items-center justify-center p-4"
+     style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+    <div @click.outside="renewModal = false"
+         class="renew-modal-card w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-700">
+            <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                     style="color: var(--color-primary);">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Renew Service
+            </h3>
+            <button type="button" @click="renewModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+            <div class="flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
+                <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                <div>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">Service</p>
+                    <p class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ order.title }}</p>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5" for="renew-period-select">Renewal Period</label>
+                <select id="renew-period-select"
+                        class="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                        style="--tw-ring-color: var(--color-primary);">
+                    <option value="1">1 Month</option>
+                    <option value="3">3 Months</option>
+                    <option value="6">6 Months</option>
+                    <option value="12">1 Year</option>
+                </select>
+            </div>
+
+            <div class="flex items-center justify-between px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                <span class="text-xs text-slate-500 dark:text-slate-400">Total Amount</span>
+                <span id="renew-total" class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ order.price|money(order.currency) }}</span>
+            </div>
+
+            <div id="renew-error" class="hidden px-4 py-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs"></div>
+
+            <button id="btn-confirm-renew"
+                    class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all focus:outline-none focus:ring-2"
+                    style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 2px 10px rgba(var(--color-primary-rgb),.25);">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Generate Renewal Invoice
+            </button>
+            <p class="text-xs text-slate-400 dark:text-slate-500 text-center">You will be redirected to the invoice to complete payment.</p>
+        </div>
+    </div>
+</div>
+</template>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   CANCELLATION REQUEST MODAL  (inside x-data scope so cancelModal is reachable)
+═══════════════════════════════════════════════════════════════════════════ #}
+{% if order.status == 'active' %}
+<template x-teleport="#merovps-modal-portal">
+<div x-show="cancelModal" x-cloak
+     @keydown.escape.window="cancelModal = false"
+     class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+     style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
+    <div @click.outside="cancelModal = false"
+         class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-700">
+            <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                </svg>
+                {{ 'Submit Cancellation Request'|trans }}
+            </h3>
+            <button type="button" @click="cancelModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div id="cancel-already-service" class="hidden px-6 py-8 text-center space-y-4">
+            <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <svg class="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">{{ 'Request Already Submitted'|trans }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {{ 'We already have a cancellation request on file for this service. Our team is reviewing it and will get back to you soon — no need to submit again.'|trans }}
+                </p>
+            </div>
+            <button type="button" onclick="document.getElementById('cancel-already-service').classList.add('hidden'); document.getElementById('cancel-request-form-service').classList.remove('hidden');"
+                    class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors underline underline-offset-2">
+                {{ 'Close'|trans }}
+            </button>
+        </div>
+
+        <form id="cancel-request-form-service" class="px-6 py-5 space-y-4">
+            <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
+            <input type="hidden" name="rel_type" value="order"/>
+            <input type="hidden" name="rel_id" value="{{ order.id }}"/>
+            <input type="hidden" name="rel_task" value="cancel"/>
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{{ 'Help Desk'|trans }}</label>
+                <select name="support_helpdesk_id"
+                        class="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all">
+                    {% for id, name in client.support_helpdesk_get_pairs %}
+                        <option value="{{ id }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{{ 'Subject'|trans }}</label>
+                <input type="text" name="subject" required
+                       class="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 text-sm placeholder-slate-300 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all"
+                       placeholder="{{ 'Cancellation request for'|trans }} {{ order.title }}"/>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{{ 'Reason'|trans }}</label>
+                <textarea name="content" rows="4" required
+                          class="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 text-sm placeholder-slate-300 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all resize-none"
+                          placeholder="{{ 'Please describe why you wish to cancel this service…'|trans }}"></textarea>
+            </div>
+            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                <p class="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                    <strong class="font-semibold">Please note:</strong> Cancellation requests are reviewed by our team and are not immediate. Your service will remain active until the request is processed.
+                </p>
+            </div>
+            <div id="cancel-error-service" class="hidden px-4 py-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs"></div>
+            <button type="submit" id="btn-submit-cancel-service"
+                    class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-red-400"
+                    style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
+                {{ 'Submit Request'|trans }}
+            </button>
+        </form>
+    </div>
+</div>
+</template>
+{% endif %}
+
+</div>{# /custom-service-panel #}
+

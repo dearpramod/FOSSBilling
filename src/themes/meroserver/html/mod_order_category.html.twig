@@ -1,0 +1,1749 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{# ── Fetch the matched category and its products ── #}
+{% set currency = guest.cart_get_currency %}
+{% set currency_fmt_js = currency.symbol|default(currency.code|default('')) ~ '__PRICE__' %}
+{% set categories_raw = guest.product_category_get_list({'per_page': 200}) %}
+
+{% set category = null %}
+{% for cat in categories_raw.list %}
+    {% if cat.id == category_id %}
+        {% set category = cat %}
+    {% endif %}
+{% endfor %}
+
+{# ── Determine accent colour from category type ── #}
+{% set _type = category ? category.type : null %}
+{% if _type == 'hosting' %}
+    {% set accent = 'emerald' %}
+    {% set accent_hex = '16,185,129' %}
+{% elseif _type == 'server' %}
+    {% set accent = 'indigo' %}
+    {% set accent_hex = 'var(--color-primary-rgb)' %}
+{% elseif _type == 'domain' %}
+    {% set accent = 'amber' %}
+    {% set accent_hex = '245,158,11' %}
+{% elseif _type == 'custom' %}
+    {% set accent = 'violet' %}
+    {% set accent_hex = 'var(--color-primary-rgb)' %}
+{% else %}
+    {% set accent = 'blue' %}
+    {% set accent_hex = '59,130,246' %}
+{% endif %}
+
+{# ── Parse hero content from category description ── #}
+{# Format: > quoted → badge | # H1 → title | paragraph → p | * / - → bullet #}
+{% set _tagline = '' %}
+{% set _title = '' %}
+{% set _paragraphs = [] %}
+{% set _bullets = [] %}
+{% if category and category.description %}
+    {% set _lines = category.description|split('\n') %}
+    {% for _line in _lines %}
+        {% set _line = _line|trim %}
+        {% if _line starts with '> ' %}
+            {% set _tagline = _line[2:]|trim %}
+        {% elseif _line starts with '# ' %}
+            {% set _title = _line[2:]|trim %}
+        {% elseif _line starts with '## ' %}
+            {# skip #}
+        {% elseif _line starts with '* ' or _line starts with '- ' %}
+            {% set _bullets = _bullets|merge([_line[2:]|trim]) %}
+        {% elseif _line %}
+            {% set _paragraphs = _paragraphs|merge([_line]) %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+{% set _page_title = _title ?: (category ? category.title : 'Plans') %}
+{% set _subtitle = _tagline ?: (_paragraphs|first ?: '') %}
+{% set _is_server_category = _type == 'server' or ('vps' in (category_slug|lower)) or ('vps' in (_page_title|lower)) %}
+
+{% block meta_title %}{{ _page_title }}{% endblock %}
+{% block page_header %}{{ _page_title }}{% endblock %}
+
+{% block content %}
+
+{% if not category %}
+<div class="text-center py-24 text-tertiary">
+    <p class="text-sm">Category not found.</p>
+</div>
+{% else %}
+
+{# ── If a specific product is selected, show its order form ── #}
+{% if request.product %}
+{% set product = guest.product_get({'id': request.product}) %}
+{% if product %}
+{# Determine first_period for recurrent products #}
+{% if product.pricing.type == 'recurrent' and product.pricing.recurrent['1M'] is defined and product.pricing.recurrent['1M'].enabled %}
+    {% set first_period = '1M' %}
+{% elseif product.pricing.type == 'recurrent' and product.pricing.recurrent['3M'] is defined and product.pricing.recurrent['3M'].enabled %}
+    {% set first_period = '3M' %}
+{% elseif product.pricing.type == 'recurrent' and product.pricing.recurrent['6M'] is defined and product.pricing.recurrent['6M'].enabled %}
+    {% set first_period = '6M' %}
+{% elseif product.pricing.type == 'recurrent' and product.pricing.recurrent['1Y'] is defined and product.pricing.recurrent['1Y'].enabled %}
+    {% set first_period = '1Y' %}
+{% elseif product.pricing.type == 'recurrent' and product.pricing.recurrent['2Y'] is defined and product.pricing.recurrent['2Y'].enabled %}
+    {% set first_period = '2Y' %}
+{% else %}
+    {% set first_period = '' %}
+{% endif %}
+{# Shared orderProduct component — included BEFORE its x-data element so Alpine can find it #}
+{% include 'partial_order_product_component.html.twig' %}
+{# Parse product description into feature bullets #}
+{% set _prod_desc_raw = product.description|default('')
+    |replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})
+    |striptags
+    |replace({'&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"'})
+    |trim %}
+{% set _prod_bullets = _prod_desc_raw|split('|||')|filter(l => l|trim|replace({' ': ''})|trim != '') %}
+{% if _prod_bullets|length <= 1 and product.description %}
+    {% set _prod_bullets = [] %}
+    {% for _line in product.description
+        |replace({'&nbsp;': ' ', '&amp;': '&'})|striptags|trim|split('\n') %}
+        {% set _feat = _line|replace({'* ': '', '- ': ''})|trim %}
+        {% if _feat and _feat|length > 1 %}{% set _prod_bullets = _prod_bullets|merge([_feat]) %}{% endif %}
+    {% endfor %}
+{% endif %}
+
+{# Compute enabled billing periods #}
+{% set _opf_all_pk = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] %}
+{% set _opf_pk_labels = {'1W': 'Weekly', '1M': 'Monthly', '3M': 'Quarterly', '6M': '6 Months', '1Y': 'Annually', '2Y': '2 Years', '3Y': '3 Years'} %}
+{% set _opf_enabled = [] %}
+{% for pk in _opf_all_pk %}
+    {% if product.pricing.type == 'recurrent' and product.pricing.recurrent[pk] is defined and product.pricing.recurrent[pk].enabled %}
+        {% set _opf_enabled = _opf_enabled|merge([pk]) %}
+    {% endif %}
+{% endfor %}
+
+<div x-data="orderProduct({{ product.id }}, '{{ first_period }}')" class="order-professional">
+    <a href="{{ ('/order/' ~ category_slug)|url }}" class="inline-flex items-center gap-2 text-sm text-tertiary hover:text-primary transition-colors mb-6">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to {{ _page_title }} plans
+    </a>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        {# ── Left: Product info sidebar ── #}
+        <div class="lg:col-span-1">
+            <div class="rounded-2xl border border-outline-variant bg-white p-6 sticky top-6">
+                <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
+                     style="background:rgba(var(--color-primary-rgb),0.10); border:1px solid rgba(var(--color-primary-rgb),0.20);">
+                    <span class="material-symbols-outlined text-primary text-2xl">
+                        {% if product.type == 'hosting' %}dns{% elseif product.type == 'domain' %}language{% elseif product.type == 'server' %}computer{% else %}inventory_2{% endif %}
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                          style="background:rgba(var(--color-primary-rgb),0.10); color:var(--color-primary); border:1px solid rgba(var(--color-primary-rgb),0.20);">
+                        {% if product.pricing.type == 'recurrent' %}Subscription{% elseif product.pricing.type == 'once' %}One-time{% elseif product.pricing.type == 'free' %}Free{% else %}{{ product.pricing.type|title }}{% endif %}
+                    </span>
+                </div>
+                <h1 class="text-xl font-bold text-on-surface mb-5">{{ product.title }}</h1>
+
+                {% if _prod_bullets|length > 0 %}
+                <ul class="space-y-2.5 mb-5">
+                    {% for bullet in _prod_bullets|slice(0, 7) %}
+                    <li class="flex items-start gap-2.5 text-sm text-tertiary">
+                        <span class="material-symbols-outlined text-emerald-500 text-base mt-0.5 shrink-0" style="font-variation-settings:'wght' 600;">check</span>
+                        {{ bullet }}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {# Starting price #}
+                {% if product.pricing.type == 'recurrent' and _opf_enabled|length > 0 %}
+                {% set _first_pk = _opf_enabled|first %}
+                <div class="pt-4 border-t border-outline-variant/40">
+                    <p class="text-xs text-tertiary mb-1">Starting from</p>
+                    <p class="text-2xl font-bold" style="color:var(--color-primary);">
+                        {{ product.pricing.recurrent[_first_pk].price|money_convert }}
+                        <span class="text-sm font-normal text-tertiary">/{{ _opf_pk_labels[_first_pk]|lower }}</span>
+                    </p>
+                </div>
+                {% elseif product.pricing.type == 'once' %}
+                <div class="pt-4 border-t border-outline-variant/40">
+                    <p class="text-xs text-tertiary mb-1">One-time payment</p>
+                    <p class="text-2xl font-bold" style="color:var(--color-primary);">{{ product.pricing.once.price|money_convert }}</p>
+                </div>
+                {% elseif product.pricing.type == 'free' %}
+                <div class="pt-4 border-t border-outline-variant/40">
+                    <p class="text-2xl font-bold text-emerald-600">Free</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── Right: Configure & Order ── #}
+        <div class="lg:col-span-2 space-y-6">
+
+            {# Service-type order form (domain config for hosting, etc.) #}
+            {% set _order_form_tpl = 'mod_service' ~ product.type ~ '_order_form.html.twig' %}
+            {% if guest.system_template_exists({ 'file': _order_form_tpl }) %}
+                {% include _order_form_tpl %}
+            {% endif %}
+
+            {# ── Add-ons ── #}
+            {% if product.addons|length > 0 %}
+            <div class="pt-6 border-t border-outline-variant/40">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="material-symbols-outlined text-primary text-lg">add_circle</span>
+                    <p class="text-sm font-semibold text-on-surface">{{ 'Add-ons'|trans }}</p>
+                </div>
+                <div class="space-y-2">
+                    {% for addon in product.addons %}
+                    <label class="flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all"
+                           :class="addons['{{ addon.id }}']?.selected ? 'border-primary/40 bg-primary/5' : 'border-outline-variant hover:border-primary/30'">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox"
+                                   @change="toggleAddon('{{ addon.id }}', '{{ addon.pricing.type }}')"
+                                   :checked="addons['{{ addon.id }}']?.selected"
+                                   class="w-4 h-4 rounded accent-primary">
+                            <span class="text-sm font-medium text-on-surface">{{ addon.title }}</span>
+                        </div>
+                        <span class="text-sm font-semibold shrink-0 ml-4" style="color: var(--color-primary);">
+                            {% if addon.pricing.type == 'free' %}{{ 'Free'|trans }}
+                            {% elseif addon.pricing.type == 'once' %}{{ addon.pricing.once.price|money_convert }}
+                            {% elseif addon.pricing.type == 'recurrent' %}
+                            <span x-text="(() => { const p = addonPrices['{{ addon.id }}']; if (!p) return ''; const v = p[selectedPeriod] ?? Object.values(p)[0]; return v ?? ''; })()"></span>
+                            {% endif %}
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# ── Order summary + add to cart ── #}
+            <div class="pt-6 border-t border-outline-variant/40">
+                <div x-show="errorMsg" class="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 font-medium" x-text="errorMsg"></div>
+                <div class="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <p class="text-xs text-tertiary mb-1">{{ 'Total due today'|trans }}</p>
+                        <p class="text-3xl font-bold text-on-surface"
+                           {% if product.pricing.type == 'recurrent' %}x-text="calcTotal(selectedPeriod)"
+                           {% elseif product.pricing.type == 'once' %}x-text="calcTotal('once')"
+                           {% else %}x-text="calcTotal('free')"{% endif %}>
+                            &nbsp;
+                        </p>
+                    </div>
+                    {% if product.pricing.type == 'recurrent' %}
+                    <button type="button" @click="addToCart(selectedPeriod)" :disabled="loading || !selectedPeriod"
+                    {% elseif product.pricing.type == 'once' %}
+                    <button type="button" @click="addToCart('once')" :disabled="loading"
+                    {% else %}
+                    <button type="button" @click="addToCart('free')" :disabled="loading"
+                    {% endif %}
+                            class="ord-cta-primary inline-flex items-center gap-2 px-8 py-4 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            style="background: var(--color-primary); color: #ffffff; box-shadow: 0 4px 14px rgba(var(--color-primary-rgb),0.3);">
+                        <span x-show="!loading" class="flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            {{ 'Add to Cart'|trans }}
+                        </span>
+                        <span x-show="loading" class="flex items-center gap-2">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                            {{ 'Adding...'|trans }}
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+        </div>{# end right column #}
+    </div>{# end grid #}
+</div>
+        {% endif %}
+{% else %}
+
+{# ═══════════════════════════════════════════════
+   CATEGORY PLANS PAGE — Stitch refined design
+   ═══════════════════════════════════════════════ #}
+<div class="ord-cat-page">
+
+    {% if not _is_server_category %}
+    {# ── Gradient Hero Banner — Stitch "Updated Pricing & Minimal Layout" design ── #}
+    <section class="ord-cat-header relative rounded-3xl overflow-hidden mb-8">
+        {# Gradient overlay #}
+        <div class="absolute inset-0 bg-gradient-to-r from-indigo-950 via-slate-900 to-primary opacity-95 z-10"></div>
+        {# Subtle mesh background #}
+        <div class="absolute inset-0 z-0 bg-gradient-to-br from-slate-900 to-slate-800"></div>
+        {# Decorative radial glow #}
+        <div class="absolute top-0 right-0 w-2/3 h-full opacity-20 pointer-events-none z-[5]">
+            <svg class="h-full w-full" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+                <defs><radialGradient id="glow" cx="70%" cy="40%" r="60%"><stop offset="0%" stop-color="var(--color-primary)" stop-opacity="1"/><stop offset="100%" stop-color="transparent" stop-opacity="0"/></radialGradient></defs>
+                <rect width="400" height="300" fill="url(#glow)"/>
+            </svg>
+        </div>
+        <div class="relative z-20 py-12 px-8 md:px-10">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 lg:gap-10">
+                <div class="max-w-xl">
+                    {# Badge: from > line in description, or default #}
+                    <span class="inline-block px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-white text-[11px] font-bold uppercase tracking-widest mb-6">
+                        {{ _tagline ?: 'CLOUD HOSTING PLANS' }}
+                    </span>
+                    <h1 class="font-h1 text-white text-[40px] md:text-[44px] leading-tight font-black mb-5">{{ _page_title }}</h1>
+                    {# Description: first paragraph from category description #}
+                    {% if _paragraphs|first %}
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _paragraphs|first }}</p>
+                    {% elseif _subtitle and _subtitle != _tagline %}
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _subtitle }}</p>
+                    {% else %}
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">Experience unmatched reliability and speed with enterprise-grade infrastructure built for any scale.</p>
+                    {% endif %}
+                    <div class="flex flex-wrap gap-4">
+                        <a href="#ord-plans" class="ord-cat-hero-primary px-7 py-3.5 rounded-xl bg-white text-primary font-bold shadow-xl hover:scale-105 transition-transform text-sm" style="color: var(--color-primary) !important;">Get Started Now</a>
+                        <a href="{{ '/order'|url }}" class="px-7 py-3.5 rounded-xl border border-white/30 text-white font-bold hover:bg-white/10 transition-colors text-sm">All Services</a>
+                    </div>
+                </div>
+
+                <div class="ord-cat-hero-points w-full lg:w-[360px] shrink-0">
+                    <div class="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-sm p-5">
+                        <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4">Core Benefits</h3>
+                        <div class="space-y-3">
+                            {% if _bullets|length > 0 %}
+                                {% for _point in _bullets|slice(0, 4) %}
+                                {% set _point_clean = _point|replace({'Cpanel': 'cPanel', 'CpanelControl': 'cPanel Control', 'DatacenterChoice': 'Datacenter Choice', '30daysBackup': '30 Days Backup', 'UnlimitedEmail,Database,FTP': 'Unlimited Email, Database, FTP', '256bit SSLCertificates': '256-bit SSL Certificates'}) %}
+                                <div class="ord-cat-hero-point flex items-start gap-2.5 text-sm text-white/90 leading-relaxed">
+                                    <span class="material-symbols-outlined text-emerald-300 text-lg leading-none mt-0.5">check_circle</span>
+                                    <span>{{ _point_clean }}</span>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                {% set _hero_defaults = [
+                                    'High-performance NVMe infrastructure with global edge optimization',
+                                    'Enterprise-grade security with proactive threat mitigation',
+                                    '99.99% uptime architecture built for consistent reliability',
+                                    '24/7 expert support with rapid response SLAs'
+                                ] %}
+                                {% for _point in _hero_defaults %}
+                                <div class="ord-cat-hero-point flex items-start gap-2.5 text-sm text-white/90 leading-relaxed">
+                                    <span class="material-symbols-outlined text-emerald-300 text-lg leading-none mt-0.5">check_circle</span>
+                                    <span>{{ _point }}</span>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    {% set cat_products = category.products %}
+
+    {% if cat_products %}
+
+        {% if _type == 'hosting' %}
+
+        {% set all_period_order = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] %}
+        {% set period_meta = {
+            '1W': {'label': 'Weekly',   'months': 0.25},
+            '1M': {'label': 'Monthly',  'months': 1},
+            '3M': {'label': '3 Months', 'months': 3},
+            '6M': {'label': '6 Months', 'months': 6},
+            '1Y': {'label': '1 Year',   'months': 12},
+            '2Y': {'label': '2 Years',  'months': 24},
+            '3Y': {'label': '3 Years',  'months': 36}
+        } %}
+        {% set enabled_periods = [] %}
+        {% for pk in all_period_order %}
+            {% set pk_on = false %}
+            {% for p in cat_products %}
+                {# Only count periods from recurrent-type products; once/free always have recurrent DB
+                   columns but they carry no meaningful pricing for the switcher. #}
+                {% if p.pricing.type == 'recurrent' and p.pricing.recurrent[pk] is defined and p.pricing.recurrent[pk].enabled %}
+                    {% set pk_on = true %}
+                {% endif %}
+            {% endfor %}
+            {% if pk_on %}{% set enabled_periods = enabled_periods|merge([pk]) %}{% endif %}
+        {% endfor %}
+
+        {% set all_pricings = [] %}
+        {% for p in cat_products %}{% set all_pricings = all_pricings|merge([p.pricing]) %}{% endfor %}
+        {# Default = first actually-enabled period, never a hardcoded fallback #}
+        {% set default_period = enabled_periods|first|default('1M') %}
+
+        <div x-data="{
+            period: '{{ default_period }}',
+            showAllFeaturesGlobal: false,
+            allPricings: {{ all_pricings|json_encode }},
+            currencyFormat: {{ currency_fmt_js|json_encode }},
+            currencyRate: {{ currency.conversion_rate|default(1) }},
+            currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
+            fmt(price) {
+                const converted = parseFloat(price) * this.currencyRate;
+                if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
+                let num;
+                switch (parseInt(this.currencyPriceFormat)) {
+                    case 2: num = converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); break;
+                    case 3: num = converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); break;
+                    case 4: num = Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); break;
+                    case 5: num = Math.round(converted).toString(); break;
+                    default: num = converted.toFixed(2);
+                }
+                return this.currencyFormat.replace('__PRICE__', num);
+            },
+            fmtNum(price) {
+                const converted = parseFloat(price) * this.currencyRate;
+                if (isNaN(converted)) return '0.00';
+                switch (parseInt(this.currencyPriceFormat)) {
+                    case 2: return converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                    case 3: return converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                    case 4: return Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    case 5: return Math.round(converted).toString();
+                    default: return converted.toFixed(2);
+                }
+            },
+            getPrice(pricing, key) {
+                if (!pricing) return null;
+                if (pricing.type === 'free') return 0;
+                if (pricing.type === 'once') {
+                    if (!pricing.once) return null;
+                    const op = parseFloat(pricing.once.price);
+                    return isNaN(op) ? null : op;
+                }
+                if (!pricing.recurrent) return null;
+                const p = pricing.recurrent[key];
+                if (!(p && p.enabled)) return null;
+                const price = parseFloat(p.price);
+                return isNaN(price) ? null : price;
+            },
+            monthlyEquiv(price, key) {
+                const m = { '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 }[key] || 1;
+                return price / m;
+            },
+            maxSavings(periodKey) {
+                const results = this.allPricings.map(pr => {
+                    const mo  = this.getPrice(pr, '1M');
+                    const tot = this.getPrice(pr, periodKey);
+                    if (mo === null || tot === null || mo <= 0) return null;
+                    const pct = Math.round((1 - this.monthlyEquiv(tot, periodKey) / mo) * 100);
+                    return pct > 0 ? pct : null;
+                }).filter(v => v !== null);
+                return results.length ? Math.max(...results) : null;
+            }
+        }">
+
+        {# ── Pricing section heading ── #}
+        <div class="text-center mb-10" id="ord-plans">
+            <h2 class="font-h2 text-h2 text-on-background mb-4">Choose Your Growth Path</h2>
+            <p class="text-tertiary text-sm max-w-xl mx-auto">Transparent pricing with no hidden fees. Select the plan that fits your needs and scale instantly as you grow.</p>
+        </div>
+
+            {# ── Subscription selector (reference-style dropdown) ── #}
+            {% if enabled_periods|length > 1 %}
+            <div class="max-w-[360px] mx-auto mb-8">
+                <label class="block text-sm font-medium text-on-surface mb-2">Length of subscription</label>
+                <div class="relative">
+                    <select x-model="period" class="ord-period-select w-full h-11 rounded-xl border border-outline-variant bg-white px-4 pr-10 text-sm text-on-surface appearance-none">
+                        {% for pk in enabled_periods %}
+                        {% set pmeta = period_meta[pk] %}
+                        <option value="{{ pk }}">{{ pmeta.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
+                </div>
+            </div>
+            {% endif %}
+
+            {# ── Reference-style slider: 3 cards visible on desktop ── #}
+            <div x-data="{
+                    scrollEl: null,
+                    canPrev: false,
+                    canNext: true,
+                    init() {
+                        this.scrollEl = this.$refs.scroller;
+                        this.updateArrows();
+                        this.scrollEl.addEventListener('scroll', () => this.updateArrows(), { passive: true });
+                    },
+                    updateArrows() {
+                        this.canPrev = this.scrollEl.scrollLeft > 4;
+                        this.canNext = this.scrollEl.scrollLeft + this.scrollEl.clientWidth < this.scrollEl.scrollWidth - 4;
+                    },
+                    scrollBy(dir) {
+                        const card = this.scrollEl.querySelector('[data-pricing-card]');
+                        const step = card ? card.offsetWidth + 24 : 352;
+                        this.scrollEl.scrollBy({ left: dir * step, behavior: 'smooth' });
+                    }
+                }" class="relative max-w-[1120px] mx-auto px-4 pb-16">
+
+                <button @click="scrollBy(-1)" x-show="canPrev"
+                        class="ord-cat-scroll-btn absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                        style="display:none"
+                        aria-label="Previous plans">
+                    <span class="material-symbols-outlined text-lg">chevron_left</span>
+                </button>
+
+                <button @click="scrollBy(1)" x-show="canNext"
+                        class="ord-cat-scroll-btn absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                        aria-label="Next plans">
+                    <span class="material-symbols-outlined text-lg">chevron_right</span>
+                </button>
+
+                <div x-ref="scroller" class="flex items-start gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2">
+                {% for i, p in cat_products %}
+                {% set pricing_json = p.pricing|json_encode %}
+                {% set desc_features = p.description|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim|split('|||')|filter(l => l|trim != '') %}
+                {% if desc_features|length <= 1 and p.description %}
+                    {% set desc_features = [] %}
+                    {% for item in p.description|striptags|trim|split('*') %}{% set feat = item|trim %}{% if feat %}{% set desc_features = desc_features|merge([feat]) %}{% endif %}{% endfor %}
+                {% endif %}
+                {% set normalized_features = [] %}
+                {% for _f in desc_features %}
+                    {% set _clean = _f|trim %}
+                    {% set _clean = _clean|replace({'Cpanel': 'cPanel', 'CpanelControl': 'cPanel Control', 'DatacenterChoice': 'Datacenter Choice', '30daysBackup': '30 Days Backup', 'UnlimitedEmail,Database,FTP': 'Unlimited Email, Database, FTP', '256bit SSLCertificates': '256-bit SSL Certificates'}) %}
+                    {% if _clean %}{% set normalized_features = normalized_features|merge([_clean]) %}{% endif %}
+                {% endfor %}
+                {% set initial_feature_count = 6 %}
+                {% set shown_features = normalized_features|slice(0, initial_feature_count) %}
+                {# Backend-driven free domain flags from product config #}
+                {% set product_free_domain = p.config.free_domain ?? false %}
+                {% set product_free_tlds = p.config.free_tlds ?? [] %}
+                {% set product_free_periods = p.config.free_domain_periods ?? ['1Y'] %}
+                {% set product_has_free_com = false %}
+                {% if product_free_domain %}
+                    {% if product_free_tlds|length == 0 %}
+                        {# Empty free_tlds means all active registerable TLDs are free (backend fallback) #}
+                        {% set product_has_free_com = true %}
+                    {% else %}
+                        {% for _tld in product_free_tlds %}
+                            {% set _norm_tld = _tld|lower|trim %}
+                            {% if _norm_tld == '.com' or _norm_tld == 'com' %}
+                                {% set product_has_free_com = true %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endif %}
+
+                 {% set _plan_subtitles = [
+                    'Everything you need to get started',
+                    'More tools and power for growth',
+                    '20X more power for your websites with Cloud hosting',
+                    'Maximum resources for advanced projects'
+                 ] %}
+
+                 <div data-pricing-card
+                     class="ord-product-card relative bg-white rounded-3xl flex flex-col pricing-card-shadow transition-all duration-200 border border-slate-200 overflow-hidden snap-start flex-shrink-0 w-full sm:!w-[340px] lg:!w-[349px] {% if i == 1 %}ord-plan-popular{% endif %}"
+                     x-data="{ pricing: {{ pricing_json }}, hasFreeCom: {{ product_has_free_com ? 'true' : 'false' }}, freeDomainPeriods: {{ product_free_periods|json_encode }} }">
+
+                    {% if i == 1 %}
+                    <div class="ord-plan-popular-ribbon absolute top-0 left-0 right-0 h-12 bg-primary text-white text-center text-[11px] font-black uppercase tracking-widest flex items-center justify-center z-20">
+                        MOST POPULAR
+                    </div>
+                    {% endif %}
+
+                    <div class="p-7 pb-4 {% if i == 1 %}pt-16 ord-plan-popular-body{% endif %}">
+                        <h3 class="font-h2 text-h2 text-on-surface mb-1">{{ p.title }}</h3>
+                        <p class="text-slate-500 text-sm mb-6">{{ _plan_subtitles[i]|default('High-performance hosting with reliable uptime') }}</p>
+
+                        <template x-if="pricing.type === 'recurrent'">
+                            <div class="mt-4">
+                                <template x-if="getPrice(pricing, period) !== null">
+                                    <div>
+                                        <template x-if="getPrice(pricing, '1M') !== null && getPrice(pricing, '1M') > 0 && monthlyEquiv(getPrice(pricing, period), period) < getPrice(pricing, '1M')">
+                                            <div class="flex items-center justify-between gap-2 mb-3">
+                                                <span class="text-slate-400 text-sm line-through" x-text="fmt(getPrice(pricing, '1M'))"></span>
+                                                <span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[12px] font-bold"
+                                                      x-text="Math.round((1 - monthlyEquiv(getPrice(pricing, period), period) / getPrice(pricing, '1M')) * 100) + '% OFF'"></span>
+                                            </div>
+                                        </template>
+                                        <div class="flex items-baseline gap-1 mb-6">
+                                            <span class="text-slate-500 text-sm mr-1" x-text="currencyFormat.split('__PRICE__')[0].trim()"></span>
+                                            <span class="text-[36px] font-bold text-on-surface tracking-tight tabular-nums"
+                                                  x-text="fmtNum(getPrice(pricing, '1M') !== null ? (period === '1M' ? getPrice(pricing, period) : monthlyEquiv(getPrice(pricing, period), period)) : getPrice(pricing, period))"></span>
+                                            <span class="text-slate-500 font-medium text-sm" x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
+                                            <span class="text-slate-500 font-medium text-sm"
+                                                  x-text="getPrice(pricing, '1M') !== null ? '/mo' : ({ '1W': '/wk', '1M': '/mo', '3M': '/3mo', '6M': '/6mo', '1Y': '/yr', '2Y': '/2yr', '3Y': '/3yr' }[period] || '')"></span>
+                                        </div>
+                                        <template x-if="hasFreeCom && freeDomainPeriods.includes(period)">
+                                            <p class="text-sm font-medium text-emerald-600 mb-6">Free .com included with this plan</p>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="getPrice(pricing, period) === null">
+                                    <p class="text-sm text-slate-400 italic py-3 mb-4">Not available for this period</p>
+                                </template>
+                            </div>
+                        </template>
+
+                        {% if p.pricing.type == 'once' %}
+                        <div class="flex items-baseline mt-4 mb-6">
+                            <span class="text-5xl font-black text-slate-900 tracking-tight">{{ p.pricing.once.price|money_without_currency }}</span>
+                            <span class="text-slate-500 text-sm ml-1">one-time</span>
+                        </div>
+                        {% elseif p.pricing.type == 'free' %}
+                        <div class="mt-4 mb-6">
+                            <span class="text-5xl font-black text-slate-900 tracking-tight">Free</span>
+                        </div>
+                        {% endif %}
+
+                        <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
+                            <a href="{{ ('/order/' ~ p.slug)|url }}"
+                               class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if i == 1 %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
+                                Choose plan
+                            </a>
+                        </template>
+                        <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) === null">
+                            <span class="block w-full text-center py-3.5 rounded-xl text-sm font-bold border border-slate-200 text-slate-400 cursor-not-allowed mb-4">Not Available</span>
+                        </template>
+
+                        <p class="text-xs text-slate-500 leading-relaxed mb-6"
+                           x-show="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
+                            Get <span x-text="({ '1M': '1 month', '3M': '3 months', '6M': '6 months', '1Y': '1 year', '2Y': '2 years', '3Y': '3 years' })[period] || period"></span>
+                            for <strong x-text="fmt(getPrice(pricing, period))"></strong>.
+                            <span x-show="getPrice(pricing, '1M') !== null">
+                                Renews at <strong x-text="fmt(getPrice(pricing, '1M'))"></strong>/mo.
+                            </span>
+                        </p>
+                    </div>
+
+                    {% if normalized_features|length > 0 %}
+                    <div class="ord-price-row px-7 pb-8 border-t border-slate-200 pt-6 mt-auto">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">What's Included</p>
+
+                        <div class="space-y-3.5">
+                            {% for feat in shown_features %}
+                            <div class="flex items-center text-[13px] text-slate-700">
+                                <span class="material-symbols-outlined text-[#1a8a47] text-lg mr-2 flex-shrink-0" style="font-variation-settings:'wght' 600;">check</span>
+                                {{ feat }}
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        {% if normalized_features|length > initial_feature_count %}
+                            <div class="overflow-hidden"
+                                style="max-height: 0px; transition: max-height 0.35s ease-in-out;"
+                                x-effect="$el.style.maxHeight = showAllFeaturesGlobal ? $el.scrollHeight + 'px' : '0px'">
+                            <div class="space-y-3.5 pt-3.5">
+                                {% for feat in normalized_features|slice(initial_feature_count) %}
+                                <div class="flex items-center text-[13px] text-slate-700">
+                                    <span class="material-symbols-outlined text-[#1a8a47] text-lg mr-2 flex-shrink-0" style="font-variation-settings:'wght' 600;">check</span>
+                                    {{ feat }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <button type="button"
+                                @click="showAllFeaturesGlobal = !showAllFeaturesGlobal"
+                                class="mt-4 flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                            <span x-text="showAllFeaturesGlobal ? 'See less' : 'See more'">See more</span>
+                                <span class="material-symbols-outlined text-base"
+                                    style="font-variation-settings:'wght' 600; display: inline-block; transition: transform 0.35s ease-in-out;"
+                                    x-effect="$el.style.transform = showAllFeaturesGlobal ? 'rotate(180deg)' : 'rotate(0deg)'">expand_more</span>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                </div>
+            </div>{# end pricing cards slider #}
+
+        </div>{# end x-data #}
+
+        {# ── "Why Choose Us / Engineered for Excellence" section ── #}
+        <div class="mt-8 max-w-[1100px] mx-auto px-4 mb-12 ord-why-shell">
+            <div class="bg-surface-container-low rounded-3xl p-10 ord-why-surface">
+                <div class="text-center mb-10">
+                    <span class="text-[11px] font-bold text-primary uppercase tracking-widest mb-2 block">WHY CHOOSE US</span>
+                    <h2 class="text-xl font-bold text-on-surface">Engineered for Excellence</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {% set _why_titles = ['Unmatched Performance', 'Rock-Solid Security', '24/7 Expert Support'] %}
+                    {% set _why_icons = ['speed', 'security', 'support_agent'] %}
+                    {% set _why_defaults = [
+                        'LiteSpeed caching and NVMe drives ensure your site loads up to 20× faster than standard hosting.',
+                        'Real-time malware scanning, DDoS protection, and automated daily backups keep your data safe.',
+                        'Certified engineers available around the clock via live chat and ticket support.'
+                    ] %}
+                    {% for _wi in 0..2 %}
+                    <div class="ord-why-card text-center p-5 rounded-2xl border border-transparent transition-colors duration-200">
+                        <div class="ord-why-icon-box w-14 h-14 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
+                            <span class="material-symbols-outlined text-primary text-2xl">{{ _why_icons[_wi] }}</span>
+                        </div>
+                        <h3 class="font-semibold text-on-surface text-sm mb-2">{{ _why_titles[_wi] }}</h3>
+                        <p class="text-xs text-tertiary leading-relaxed">{{ _bullets[_wi]|default(_why_defaults[_wi]) }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {% elseif _is_server_category %}
+
+        {# ── VPS / Server page (Stitch-inspired specialized layout) ── #}
+        {% set _server_products = cat_products %}
+        {% set _vps_period_order = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] %}
+        {% set _vps_period_meta = {
+            '1W': {'label': 'Weekly', 'months': 0.25},
+            '1M': {'label': 'Monthly', 'months': 1},
+            '3M': {'label': '3 Months', 'months': 3},
+            '6M': {'label': '6 Months', 'months': 6},
+            '1Y': {'label': '1 Year', 'months': 12},
+            '2Y': {'label': '2 Years', 'months': 24},
+            '3Y': {'label': '3 Years', 'months': 36}
+        } %}
+        {% set _vps_enabled_periods = [] %}
+        {% for _period_key in _vps_period_order %}
+            {% set _period_enabled = false %}
+            {% for _sp in _server_products %}
+                {% if _sp.pricing and _sp.pricing.type == 'recurrent' and _sp.pricing.recurrent[_period_key] is defined and _sp.pricing.recurrent[_period_key].enabled %}
+                    {% set _period_enabled = true %}
+                {% endif %}
+            {% endfor %}
+            {% if _period_enabled %}
+                {% set _vps_enabled_periods = _vps_enabled_periods|merge([_period_key]) %}
+            {% endif %}
+        {% endfor %}
+        {% set _vps_default_period = '1M' in _vps_enabled_periods ? '1M' : (_vps_enabled_periods|first|default('1M')) %}
+
+        <section class="ord-cat-header ord-vps-hero relative rounded-3xl overflow-hidden mb-8">
+            <div class="absolute inset-0 bg-gradient-to-r from-indigo-950 via-slate-900 to-primary opacity-95 z-10"></div>
+            <div class="absolute inset-0 z-0 bg-gradient-to-br from-slate-900 to-slate-800"></div>
+            <div class="absolute top-0 right-0 w-2/3 h-full opacity-20 pointer-events-none z-[5]">
+                <svg class="h-full w-full" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+                    <defs><radialGradient id="vpsGlow" cx="70%" cy="40%" r="60%"><stop offset="0%" stop-color="var(--color-primary)" stop-opacity="1"/><stop offset="100%" stop-color="transparent" stop-opacity="0"/></radialGradient></defs>
+                    <rect width="400" height="300" fill="url(#vpsGlow)"/>
+                </svg>
+            </div>
+            <div class="ord-vps-hero-grid relative z-10">
+                <div class="ord-vps-hero-copy py-12 px-8 md:px-10">
+                    <span class="inline-block px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-white text-[11px] font-bold uppercase tracking-widest mb-6">
+                        <span class="material-symbols-outlined text-sm">bolt</span>
+                        Next-Gen Infrastructure
+                    </span>
+                    <h2 class="font-h1 text-white text-[40px] md:text-[44px] leading-tight font-black mb-5">{{ _page_title }}</h2>
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _paragraphs|first ?: 'Scalable NVMe-powered VPS infrastructure with dedicated resources, instant provisioning, and full root access for demanding workloads.' }}</p>
+                    <div class="flex flex-wrap gap-4">
+                        <a href="#ord-vps-plans" class="ord-cat-hero-primary px-7 py-3.5 rounded-xl bg-white text-primary font-bold shadow-xl hover:scale-105 transition-transform text-sm inline-flex items-center gap-2" style="color: var(--color-primary) !important;">Deploy Instance <span class="material-symbols-outlined text-[16px]" style="font-variation-settings:'wght' 600;">arrow_downward</span></a>
+                        <a href="{{ '/order'|url }}" class="px-7 py-3.5 rounded-xl border border-white/30 text-white font-bold hover:bg-white/10 transition-colors text-sm">All Services</a>
+                    </div>
+                </div>
+                <div class="ord-vps-hero-side px-8 md:px-10 pb-10 md:pb-0 md:pt-12">
+                    <div class="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-sm p-5 shadow-2xl">
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-300"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-300"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-300"></span>
+                            <span class="ml-auto text-[11px] text-indigo-100/80 font-mono">root@vps-01:~#</span>
+                        </div>
+                        <div class="font-mono text-[11px] text-indigo-100/90 space-y-1.5">
+                            <p class="text-indigo-200">admin@merovps:~$ <span class="text-white">vps-cli create --tier=business</span></p>
+                            <p>Provisioning instance...</p>
+                            <div class="w-full h-1.5 rounded-full bg-white/20 overflow-hidden mb-2">
+                                <div class="h-full w-2/3 bg-indigo-200"></div>
+                            </div>
+                            <p class="text-emerald-300">[OK] NVMe storage ready</p>
+                            <p class="text-emerald-300">[OK] Dedicated resources allocated</p>
+                            <p class="text-emerald-300">[OK] IPv4 / IPv6 assigned</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ord-vps-plans" class="mb-8">
+            <div x-data="{
+                    period: '{{ _vps_default_period }}',
+                    currencyFormat: {{ currency_fmt_js|json_encode }},
+                    currencyRate: {{ currency.conversion_rate|default(1) }},
+                    currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
+                    fmt(price) {
+                        const converted = parseFloat(price) * this.currencyRate;
+                        if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
+                        let num;
+                        switch (parseInt(this.currencyPriceFormat)) {
+                            case 2: num = converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); break;
+                            case 3: num = converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); break;
+                            case 4: num = Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); break;
+                            case 5: num = Math.round(converted).toString(); break;
+                            default: num = converted.toFixed(2);
+                        }
+                        return this.currencyFormat.replace('__PRICE__', num);
+                    },
+                    fmtNum(price) {
+                        const converted = parseFloat(price) * this.currencyRate;
+                        if (isNaN(converted)) return '0.00';
+                        switch (parseInt(this.currencyPriceFormat)) {
+                            case 2: return converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                            case 3: return converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                            case 4: return Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                            case 5: return Math.round(converted).toString();
+                            default: return converted.toFixed(2);
+                        }
+                    },
+                    getPrice(pricing, key) {
+                        if (!pricing || pricing.type !== 'recurrent' || !pricing.recurrent) return null;
+                        const p = pricing.recurrent[key];
+                        if (!(p && p.enabled)) return null;
+                        const price = parseFloat(p.price);
+                        return isNaN(price) ? null : price;
+                    },
+                    periodMonths(key) {
+                        return ({ '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 }[key] || 1);
+                    },
+                    periodLabel(key) {
+                        return ({ '1W': 'Weekly', '1M': 'Monthly', '3M': '3 Months', '6M': '6 Months', '1Y': '1 Year', '2Y': '2 Years', '3Y': '3 Years' }[key] || key);
+                    },
+                    monthlyEquiv(pricing, key) {
+                        const total = this.getPrice(pricing, key);
+                        if (total === null || isNaN(total)) return null;
+                        return total / this.periodMonths(key);
+                    }
+                }">
+            <div class="text-center mb-8">
+                <div class="flex items-center justify-center gap-3 mb-3">
+                    <span class="block h-px w-10 bg-primary/40 rounded-full"></span>
+                    <span class="text-primary text-[11px] font-bold uppercase tracking-widest">VPS Plans</span>
+                    <span class="block h-px w-10 bg-primary/40 rounded-full"></span>
+                </div>
+                <h3 class="font-h2 text-h2 text-on-background mb-2">Precision-Engineered VPS Tiers</h3>
+                <p class="text-tertiary text-sm max-w-2xl mx-auto">Transparent pricing for mission-critical applications. Scale resources on demand.</p>
+            </div>
+
+            {% if _vps_enabled_periods|length > 1 %}
+            <div class="ord-vps-period-shell max-w-[420px] mx-auto mb-7 px-4">
+                <label class="ord-vps-period-label block text-sm font-semibold text-on-surface mb-2">Subscription period</label>
+                <div class="relative">
+                    <select x-model="period" class="ord-period-select ord-vps-period-select w-full h-11 rounded-xl border border-outline-variant bg-white px-4 pr-10 text-sm text-on-surface appearance-none">
+                        {% for pk in _vps_enabled_periods %}
+                        <option value="{{ pk }}">{{ _vps_period_meta[pk].label }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
+                </div>
+            </div>
+            {% endif %}
+
+            <div x-data="{
+                    scrollEl: null,
+                    canPrev: false,
+                    canNext: true,
+                    init() {
+                        this.scrollEl = this.$refs.scroller;
+                        this.updateArrows();
+                        this.scrollEl.addEventListener('scroll', () => this.updateArrows(), { passive: true });
+                    },
+                    updateArrows() {
+                        this.canPrev = this.scrollEl.scrollLeft > 4;
+                        this.canNext = this.scrollEl.scrollLeft + this.scrollEl.clientWidth < this.scrollEl.scrollWidth - 4;
+                    },
+                    scrollBy(dir) {
+                        const card = this.scrollEl.querySelector('[data-vps-pricing-card]');
+                        const step = card ? card.offsetWidth + 24 : 352;
+                        this.scrollEl.scrollBy({ left: dir * step, behavior: 'smooth' });
+                    }
+                }" class="relative max-w-[1120px] mx-auto px-4">
+
+                <button @click="scrollBy(-1)" x-show="canPrev"
+                        class="ord-cat-scroll-btn absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                        style="display:none"
+                        aria-label="Previous plans">
+                    <span class="material-symbols-outlined text-lg">chevron_left</span>
+                </button>
+
+                <button @click="scrollBy(1)" x-show="canNext"
+                        class="ord-cat-scroll-btn absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                        aria-label="Next plans">
+                    <span class="material-symbols-outlined text-lg">chevron_right</span>
+                </button>
+
+                <div x-ref="scroller" class="flex items-stretch gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2">
+                {% for i, p in _server_products %}
+                {% set desc_features = p.description|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim|split('|||')|filter(l => l|trim != '') %}
+                {% if desc_features|length <= 1 and p.description %}
+                    {% set desc_features = [] %}
+                    {% for item in p.description|striptags|trim|split('*') %}{% set feat = item|trim %}{% if feat %}{% set desc_features = desc_features|merge([feat]) %}{% endif %}{% endfor %}
+                {% endif %}
+                {% set cleaned_features = [] %}
+                {% for raw_feature in desc_features %}
+                    {% set normalized_feature = raw_feature|replace({'✔️': '|||', '✅': '|||', '✓': '|||', '•': '|||', '&nbsp;': ' '}) %}
+                    {% for feature_part in normalized_feature|split('|||') %}
+                        {% set feature_text = feature_part|trim|trim(',') %}
+                        {% if feature_text and feature_text|lower != 'check' and feature_text not in cleaned_features %}
+                            {% set cleaned_features = cleaned_features|merge([feature_text]) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                {% set _is_popular = (i == 1) %}
+                {% set _server_subtitles = ['Everything you need to get started', 'More tools and power for growth', 'Maximum resources for advanced projects'] %}
+                {% set _product_desc_plain = p.description|striptags|trim|replace({'\r\n': ' ', '\n': ' ', '\r': ' ', '✔️': ' ', '✅': ' ', '✓': ' ', '•': ' ', '*': ' '})|replace({'  ': ' '})|replace({'  ': ' '}) %}
+                {% set _card_subtitle = _product_desc_plain ? (_product_desc_plain|length > 88 ? _product_desc_plain|slice(0, 88) ~ '...' : _product_desc_plain) : _server_subtitles[i]|default('High-performance VPS with reliable uptime') %}
+
+                <div data-vps-pricing-card class="ord-product-card relative bg-white rounded-3xl flex flex-col pricing-card-shadow transition-all duration-200 border border-slate-200 overflow-hidden snap-start flex-shrink-0 w-full sm:!w-[340px] lg:!w-[349px] {% if _is_popular %}ord-plan-popular ring-2 ring-primary/20 ring-offset-0{% endif %}" x-data="{ pricing: {{ p.pricing|json_encode }} }">
+                    {% if _is_popular %}
+                    <div class="ord-plan-popular-ribbon absolute top-0 left-0 right-0 h-12 bg-primary text-white text-center text-[11px] font-black uppercase tracking-widest flex items-center justify-center z-20">
+                        MOST POPULAR
+                    </div>
+                    {% endif %}
+
+                    <div class="p-7 pb-4 {% if _is_popular %}pt-16 ord-plan-popular-body{% endif %}">
+                        {% if _is_popular %}
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-2">FOR GROWING TEAMS</span>
+                        {% endif %}
+                        <h4 class="font-h2 text-h2 text-on-surface mb-4">{{ p.title }}</h4>
+
+                        <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) !== null">
+                            <div class="mt-4 mb-5">
+                                <div class="flex items-baseline gap-1 mb-1">
+                                    <span class="text-slate-500 text-sm mr-1" x-text="currencyFormat.split('__PRICE__')[0].trim()"></span>
+                                    <span class="text-[36px] font-bold text-on-surface tracking-tight tabular-nums"
+                                          x-text="fmtNum(monthlyEquiv(pricing, period))"></span>
+                                    <span class="text-slate-500 font-medium text-sm" x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
+                                    <span class="text-slate-500 font-medium text-sm">/mo</span>
+                                </div>
+                                <p class="text-xs text-slate-500 leading-relaxed mb-1">
+                                    Get <span x-text="({ '1W': '1 week', '1M': '1 month', '3M': '3 months', '6M': '6 months', '1Y': '1 year', '2Y': '2 years', '3Y': '3 years' }[period] || period)"></span>
+                                    for <strong x-text="fmt(getPrice(pricing, period))"></strong>
+                                    <span class="text-slate-400">(regular price <span x-text="fmt((getPrice(pricing, '1M') ?? monthlyEquiv(pricing, period)) * periodMonths(period))"></span>).</span>
+                                    Renews at <strong x-text="fmt(getPrice(pricing, '1M') ?? monthlyEquiv(pricing, period))"></strong>/mo.
+                                </p>
+                            </div>
+                        </template>
+
+                        <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) === null">
+                            <p class="text-sm text-slate-400 italic py-3 mb-4">Not available for this period</p>
+                        </template>
+
+                        {% if p.pricing.type == 'free' %}
+                            <div class="mt-4 mb-6"><span class="text-5xl font-black text-slate-900 tracking-tight">Free</span></div>
+                        {% elseif p.pricing.type == 'once' and p.pricing.once %}
+                            <div class="flex items-baseline mt-4 mb-6">
+                                <span class="text-5xl font-black text-slate-900 tracking-tight">{{ p.pricing.once.price|money_without_currency }}</span>
+                                <span class="text-slate-500 text-sm ml-1">one-time</span>
+                            </div>
+                        {% endif %}
+
+                        <p class="text-xs text-slate-500 mb-5">
+                            Billing Period:
+                            {% if p.pricing.type == 'free' %}
+                                Free Plan
+                            {% elseif p.pricing.type == 'once' %}
+                                One-time Payment
+                            {% else %}
+                                <span x-text="periodLabel(period)"></span>
+                            {% endif %}
+                        </p>
+
+                        <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
+                            <a href="{{ ('/order/' ~ p.slug)|url }}"
+                               class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if _is_popular %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
+                                {{ _is_popular ? 'Deploy Now' : 'Select Plan' }}
+                            </a>
+                        </template>
+                        <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) === null">
+                            <span class="block w-full text-center py-3.5 rounded-xl text-sm font-bold border border-slate-200 text-slate-400 cursor-not-allowed mb-4">Not Available</span>
+                        </template>
+                    </div>
+
+                    {% if cleaned_features|length > 0 %}
+                    <div class="ord-price-row px-7 pb-8 border-t border-slate-200 pt-6 mt-auto">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">What's Included</p>
+                        <div class="space-y-3.5">
+                        {% for feat in cleaned_features|slice(0, 6) %}
+                        <div class="flex items-center text-[13px] text-slate-700">
+                            <span class="material-symbols-outlined text-[#1a8a47] text-lg mr-2 flex-shrink-0" style="font-variation-settings:'wght' 600;">check</span>
+                            <span>{{ feat }}</span>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-[1120px] mx-auto px-4 pb-8">
+            {% set _server_feature_cards = [
+                {'icon': 'key', 'title': 'Full Root Access', 'text': 'Complete administrative control over your server environment via SSH and terminal.'},
+                {'icon': 'settings_input_component', 'title': 'OS Flexibility', 'text': 'Deploy Ubuntu, Debian, CentOS, or custom images for your stack.'},
+                {'icon': 'lan', 'title': 'Dedicated IP', 'text': 'Each instance includes dedicated networking for stable and secure connectivity.'},
+                {'icon': 'security', 'title': 'DDoS Protection', 'text': 'Always-on mitigation and infrastructure safeguards for uninterrupted uptime.'}
+            ] %}
+            {% for _f in _server_feature_cards %}
+            <div class="ord-vps-feature group p-5 bg-white border border-slate-200 rounded-xl transition-colors">
+                <div class="w-11 h-11 bg-indigo-50 rounded-lg flex items-center justify-center text-primary mb-3 transition-all">
+                    <span class="material-symbols-outlined">{{ _f.icon }}</span>
+                </div>
+                <h4 class="font-h3 text-[15px] mb-2 text-on-surface">{{ _f.title }}</h4>
+                <p class="text-xs text-tertiary leading-relaxed">{{ _f.text }}</p>
+            </div>
+            {% endfor %}
+        </section>
+
+        <section class="pb-10">
+            <div class="ord-vps-compare rounded-xl p-6 md:p-7 border border-outline-variant/40">
+                {% set _compare_products = [] %}
+                {% for p in _server_products %}
+                    {% set _is_active_plan = true %}
+                    {% if p.status is defined %}
+                        {% set _is_active_plan = p.status|lower in ['enabled', 'active'] %}
+                    {% endif %}
+                    {% if _is_active_plan %}
+                        {% set _compare_products = _compare_products|merge([p]) %}
+                    {% endif %}
+                {% endfor %}
+                {% if _compare_products|length == 0 %}
+                    {% set _compare_products = _server_products %}
+                {% endif %}
+
+                <div class="ord-vps-compare-head flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <span class="ord-vps-compare-kicker inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-primary mb-2">
+                            <span class="material-symbols-outlined text-[14px]">table_chart</span>
+                            Plan Comparison
+                        </span>
+                        <h4 class="ord-vps-compare-title font-h3 text-on-surface mb-1">Need More Detailed Specs?</h4>
+                        <p class="ord-vps-compare-subtext text-sm text-tertiary">Compare CPU, storage, backups, and network profile across your selected VPS plans.</p>
+                        <div class="ord-vps-compare-meta flex flex-wrap gap-2 mt-3">
+                            <span class="ord-vps-compare-meta-pill">{{ _compare_products|length }} Active Plans</span>
+                            <span class="ord-vps-compare-meta-pill">Sticky Feature Column</span>
+                            <span class="ord-vps-compare-meta-pill">Horizontal Scroll Enabled</span>
+                        </div>
+                    </div>
+                    <a href="{{ '/support/kb'|url }}" class="ord-vps-compare-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-bold transition-all">
+                        <span class="material-symbols-outlined text-base">compare_arrows</span>
+                        Compare Technical Specs
+                    </a>
+                </div>
+
+                <p class="ord-vps-compare-scroll-note text-xs text-slate-500 mb-3">Scroll horizontally to compare all active plans.</p>
+                <div class="overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white shadow-sm ord-vps-compare-table-wrap">
+                    <table class="ord-vps-compare-table w-full text-left text-sm" style="min-width: {{ 280 + (_compare_products|length * 230) }}px;">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="ord-vps-compare-sticky ord-vps-compare-feature-head px-5 py-3 font-bold text-on-surface w-[220px] min-w-[220px]">Feature</th>
+                                {% for p in _compare_products %}
+                                <th class="ord-vps-compare-plan-head px-5 py-3 font-bold text-on-surface align-top min-w-[210px]{% if loop.first and _compare_products|length > 1 %} border-l-2 border-primary/20{% endif %}">
+                                    <div class="ord-vps-compare-plan-title font-semibold text-on-surface">{{ p.title }}</div>
+                                    {% if loop.index == 2 %}<span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-full bg-primary/10 text-primary">Popular</span>{% endif %}
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr>
+                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium">Starting Price</td>
+                                {% for p in _compare_products %}
+                                <td class="ord-vps-compare-price-cell px-5 py-3 min-w-[210px]">
+                                    {% if p.price_starting_from is defined and p.price_starting_from > 0 %}
+                                        <span class="ord-vps-compare-price-amount">{{ p.price_starting_from|money_without_currency }}</span>
+                                        <span class="ord-vps-compare-price-unit">{{ currency.code }}/mo</span>
+                                    {% elseif p.pricing.type == 'free' %}
+                                        <span class="ord-vps-compare-badge ord-vps-compare-badge-free">Free</span>
+                                    {% else %}
+                                        <span class="ord-vps-compare-empty">-</span>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            <tr>
+                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium">Billing Type</td>
+                                {% for p in _compare_products %}
+                                <td class="ord-vps-compare-billing-cell px-5 py-3 min-w-[210px] whitespace-nowrap">
+                                    <span class="ord-vps-compare-badge ord-vps-compare-badge-neutral">{{ p.pricing.type == 'once' ? 'One-time' : p.pricing.type|capitalize }}</span>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            <tr>
+                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium align-top">Description</td>
+                                {% for p in _compare_products %}
+                                {% set _table_desc_raw = p.description|default('')|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||', '✔️': '|||', '✅': '|||', '✓': '|||', '•': '|||', '*': '|||'})|striptags|trim %}
+                                {% set _table_desc_parts = [] %}
+                                {% for _part in _table_desc_raw|split('|||') %}
+                                    {% set _line = _part|replace({'\r\n': ' ', '\n': ' ', '\r': ' '})|trim|trim(',') %}
+                                    {% if _line and _line|lower != 'check' %}
+                                        {% set _table_desc_parts = _table_desc_parts|merge([_line]) %}
+                                    {% endif %}
+                                {% endfor %}
+                                <td class="ord-vps-compare-desc px-5 py-3 text-slate-700 leading-relaxed align-top min-w-[210px]">
+                                    {% if _table_desc_parts|length > 0 %}
+                                        <ul class="ord-vps-compare-desc-list">
+                                            {% for _line in _table_desc_parts|slice(0, 8) %}
+                                                <li>{{ _line }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <span class="ord-vps-compare-empty">No description available yet.</span>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            <tr>
+                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium">Provisioning</td>
+                                {% for p in _compare_products %}
+                                <td class="ord-vps-compare-value px-5 py-3 min-w-[210px]"><span class="ord-vps-compare-badge ord-vps-compare-badge-success">Instant</span></td>
+                                {% endfor %}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        {% elseif _type == 'domain' %}
+
+        {# ── Period detection ── #}
+        {% set _domain_products = cat_products %}
+        {% set _dom_period_order = ['1Y', '2Y', '3Y', '4Y', '5Y', '6Y', '7Y', '8Y', '9Y', '10Y'] %}
+        {% set _dom_period_meta = {
+            '1Y': {'label': '1 Year'},
+            '2Y': {'label': '2 Years'},
+            '3Y': {'label': '3 Years'},
+            '4Y': {'label': '4 Years'},
+            '5Y': {'label': '5 Years'},
+            '6Y': {'label': '6 Years'},
+            '7Y': {'label': '7 Years'},
+            '8Y': {'label': '8 Years'},
+            '9Y': {'label': '9 Years'},
+            '10Y': {'label': '10 Years'}
+        } %}
+        {% set _dom_enabled_periods = [] %}
+        {% for pk in _dom_period_order %}
+            {% set pk_on = false %}
+            {% for p in _domain_products %}
+                {% if p.pricing and p.pricing.type == 'recurrent' and p.pricing.recurrent[pk] is defined and p.pricing.recurrent[pk].enabled %}
+                    {% set pk_on = true %}
+                {% endif %}
+            {% endfor %}
+            {% if pk_on %}{% set _dom_enabled_periods = _dom_enabled_periods|merge([pk]) %}{% endif %}
+        {% endfor %}
+        {% if _dom_enabled_periods|length == 0 %}
+            {% set _dom_enabled_periods = ['1Y'] %}
+        {% endif %}
+        {% set _dom_default_period = '1Y' in _dom_enabled_periods ? '1Y' : (_dom_enabled_periods|first|default('1Y')) %}
+        {% set _dom_featured = _domain_products|slice(0, 3) %}
+
+        {# ══ HERO ══ #}
+        <div class="relative">
+            <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(circle at top right, rgba(var(--color-primary-rgb),0.05), transparent), radial-gradient(circle at bottom left, rgba(168,85,247,0.05), transparent);"></div>
+            <div class="relative max-w-5xl mx-auto text-center mb-16 pt-8 px-4">
+
+                <div class="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold mb-6">
+                    <span class="material-symbols-outlined text-[14px]">verified_user</span>
+                    Trusted by 10,000+ Users
+                </div>
+
+                <div class="mb-6 flex justify-center">
+                    <div class="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                        <button type="button" class="px-4 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-md text-sm font-medium shadow-sm">Register</button>
+                        <button type="button" class="px-4 py-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm font-medium transition-colors">Transfer</button>
+                    </div>
+                </div>
+
+                <h2 class="text-4xl md:text-5xl font-bold mb-6 tracking-tight text-slate-900 dark:text-white">
+                    Find your perfect <span class="text-primary italic">domain name</span>
+                </h2>
+                <p class="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto mb-10 text-lg">
+                    Search hundreds of extensions and register in minutes — all managed from one powerful dashboard.
+                </p>
+
+                <div class="relative max-w-3xl mx-auto">
+                    <div class="flex items-center p-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl shadow-primary/5 border border-slate-200 dark:border-slate-700">
+                        <svg class="w-5 h-5 text-slate-400 ml-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
+                        <input type="text" class="flex-1 border-none focus:ring-0 bg-transparent text-lg px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400" placeholder="Search for a domain (e.g. example.com)" />
+                        <a href="#dom-all-extensions" class="bg-primary text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center gap-2">Search</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ══ FEATURE CARDS ══ #}
+        <div class="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 mb-16 px-4">
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined">lock</span>
+                </div>
+                <span class="text-sm font-medium">WHOIS Protection</span>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined">settings_input_component</span>
+                </div>
+                <span class="text-sm font-medium">DNS Management</span>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined">monitor</span>
+                </div>
+                <span class="text-sm font-medium">Control Panel</span>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined">autorenew</span>
+                </div>
+                <span class="text-sm font-medium">Auto-Renewal</span>
+            </div>
+        </div>
+
+        {# ══ ALPINE PRICING CONTEXT + POPULAR + TABLE ══ #}
+        <div x-data="{
+                period: '{{ _dom_default_period }}',
+                currencyFormat: {{ currency_fmt_js|json_encode }},
+                currencyRate: {{ currency.conversion_rate|default(1) }},
+                currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
+                fmt(price) {
+                    const converted = parseFloat(price) * this.currencyRate;
+                    if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
+                    let num;
+                    switch (parseInt(this.currencyPriceFormat)) {
+                        case 2: num = converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); break;
+                        case 3: num = converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); break;
+                        case 4: num = Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); break;
+                        case 5: num = Math.round(converted).toString(); break;
+                        default: num = converted.toFixed(2);
+                    }
+                    return this.currencyFormat.replace('__PRICE__', num);
+                },
+                fmtNum(price) {
+                    const converted = parseFloat(price) * this.currencyRate;
+                    if (isNaN(converted)) return '0.00';
+                    switch (parseInt(this.currencyPriceFormat)) {
+                        case 2: return converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                        case 3: return converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                        case 4: return Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                        case 5: return Math.round(converted).toString();
+                        default: return converted.toFixed(2);
+                    }
+                },
+                getPrice(pricing, key) {
+                    if (!pricing) return null;
+                    if (pricing.type === 'free') return 0;
+                    if (pricing.type === 'once' && pricing.once) {
+                        const op = parseFloat(pricing.once.price);
+                        return isNaN(op) ? null : op;
+                    }
+                    if (pricing.type === 'recurrent' && pricing.recurrent) {
+                        if (pricing.recurrent[key] && pricing.recurrent[key].enabled) {
+                            const p = parseFloat(pricing.recurrent[key].price);
+                            return isNaN(p) ? null : p;
+                        }
+                        if (pricing.recurrent['1Y'] && pricing.recurrent['1Y'].enabled) {
+                            const p1y = parseFloat(pricing.recurrent['1Y'].price);
+                            return isNaN(p1y) ? null : p1y;
+                        }
+                    }
+                    return null;
+                },
+                getRenewalPrice(pricing, key) {
+                    if (!pricing) return null;
+                    if (pricing.renewal && typeof pricing.renewal === 'object') {
+                        if (pricing.renewal[key] !== undefined) return parseFloat(pricing.renewal[key]);
+                        if (pricing.renewal.price !== undefined) return parseFloat(pricing.renewal.price);
+                    }
+                    const yearly = this.getPrice(pricing, '1Y');
+                    return yearly !== null ? yearly : this.getPrice(pricing, key);
+                },
+                getTransferPrice(pricing, key) {
+                    if (!pricing) return null;
+                    if (pricing.transfer && typeof pricing.transfer === 'object') {
+                        if (pricing.transfer[key] !== undefined) return parseFloat(pricing.transfer[key]);
+                        if (pricing.transfer.price !== undefined) return parseFloat(pricing.transfer.price);
+                    }
+                    if (pricing.transfer && !isNaN(parseFloat(pricing.transfer))) return parseFloat(pricing.transfer);
+                    return this.getPrice(pricing, key);
+                },
+                isPromo(pricing, key) {
+                    const yearly = this.getPrice(pricing, '1Y');
+                    const selected = this.getPrice(pricing, key);
+                    return yearly !== null && selected !== null && selected < yearly;
+                },
+                periodLabel(key) {
+                    return ({ '1Y': '1 Year', '2Y': '2 Years', '3Y': '3 Years', '4Y': '4 Years', '5Y': '5 Years', '6Y': '6 Years', '7Y': '7 Years', '8Y': '8 Years', '9Y': '9 Years', '10Y': '10 Years' }[key] || key);
+                }
+            }">
+
+            {# ── Popular Extensions ── #}
+            {% if _dom_featured|length > 0 %}
+            <section class="max-w-5xl mx-auto px-4 mb-16">
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">stars</span> Popular Extensions
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {% for i, p in _dom_featured %}
+                    {% set _dom_desc = p.description|striptags|trim|replace({'\r\n': ' ', '\n': ' ', '\r': ' '})|replace({'  ': ' '}) %}
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow {% if i == 0 %}border-t-4 border-t-primary{% endif %}"
+                         x-data="{ pricing: {{ p.pricing|json_encode }} }">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-3xl font-bold text-slate-900 dark:text-white">{{ p.title }}</span>
+                            {% if i == 0 %}<span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-bold rounded uppercase">Top Seller</span>{% endif %}
+                        </div>
+                        <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">{{ _dom_desc ? (_dom_desc|length > 88 ? _dom_desc|slice(0, 88) ~ '...' : _dom_desc) : 'Reliable domain extension for your project and brand presence.' }}</p>
+
+                        <template x-if="getPrice(pricing, period) !== null && getPrice(pricing, period) > 0">
+                            <div class="flex items-end gap-1 mb-6">
+                                <span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="fmtNum(getPrice(pricing, period))"></span>
+                                <span class="text-slate-400 dark:text-slate-500 text-sm pb-1" x-text="'/' + periodLabel(period)"></span>
+                            </div>
+                        </template>
+                        <template x-if="getPrice(pricing, period) === 0">
+                            <div class="text-2xl font-bold text-emerald-600 mb-6">Free</div>
+                        </template>
+
+                        <a href="{{ ('/order/' ~ p.slug)|url }}"
+                           class="w-full py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-primary hover:text-white transition-all rounded-lg font-semibold text-primary dark:text-primary inline-flex items-center justify-center gap-2">
+                            Register <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            {# ── All Extensions table ── #}
+            <section id="dom-all-extensions" class="max-w-5xl mx-auto px-4 pb-10">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-bold flex items-center gap-2">
+                        All Extensions
+                        <span class="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs px-2 py-0.5 rounded-full">{{ _domain_products|length }}+</span>
+                    </h3>
+                    {% if _dom_enabled_periods|length > 1 %}
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Billing:</span>
+                        <select x-model="period" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-3 pr-8 h-10 focus:ring-primary text-slate-900 dark:text-white">
+                            {% for pk in _dom_enabled_periods %}
+                            <option value="{{ pk }}">{{ _dom_period_meta[pk].label|default(pk) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Extension</th>
+                                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Registration (1st yr)</th>
+                                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Renewal</th>
+                                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Transfer</th>
+                                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            {% for p in _domain_products %}
+                            {% set _dom_cell = p.title|replace({' ': ''})|lower %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors" x-data="{ pricing: {{ p.pricing|json_encode }} }">
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-300 flex-shrink-0">{{ _dom_cell }}</span>
+                                        <span class="font-semibold text-slate-900 dark:text-white">{{ p.title }}</span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <template x-if="getPrice(pricing, period) !== null">
+                                        <div>
+                                            <div class="font-bold text-primary" x-text="fmt(getPrice(pricing, period))"></div>
+                                            <div class="text-[10px] text-slate-400 uppercase tracking-wide" x-show="isPromo(pricing, period)">PROMO PRICE</div>
+                                        </div>
+                                    </template>
+                                    <template x-if="getPrice(pricing, period) === null">
+                                        <span class="text-slate-400">—</span>
+                                    </template>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <template x-if="getRenewalPrice(pricing, period) !== null">
+                                        <span class="font-medium text-slate-700 dark:text-slate-300" x-text="fmt(getRenewalPrice(pricing, period))"></span>
+                                    </template>
+                                    <template x-if="getRenewalPrice(pricing, period) === null">
+                                        <span class="text-slate-400">—</span>
+                                    </template>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <template x-if="getTransferPrice(pricing, period) !== null">
+                                        <span class="font-medium text-slate-700 dark:text-slate-300" x-text="fmt(getTransferPrice(pricing, period))"></span>
+                                    </template>
+                                    <template x-if="getTransferPrice(pricing, period) === null">
+                                        <span class="text-slate-400">—</span>
+                                    </template>
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    <a href="{{ ('/order/' ~ p.slug)|url }}"
+                                       class="px-4 py-1.5 border border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-semibold transition-all inline-flex items-center justify-center">Register</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+
+        {% elseif _type == 'custom' %}
+        {# ══════════════════════════════════════════════════════
+           CUSTOM SERVICES category — full-featured card layout
+           ══════════════════════════════════════════════════════ #}
+
+        {# ── Discover which periods are actually available ── #}
+        {% set _cust_period_order = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] %}
+        {% set _cust_period_meta = {
+            '1W': {'label': 'Weekly',   'months': 0.25},
+            '1M': {'label': 'Monthly',  'months': 1},
+            '3M': {'label': '3 Months', 'months': 3},
+            '6M': {'label': '6 Months', 'months': 6},
+            '1Y': {'label': '1 Year',   'months': 12},
+            '2Y': {'label': '2 Years',  'months': 24},
+            '3Y': {'label': '3 Years',  'months': 36}
+        } %}
+        {% set _cust_enabled_periods = [] %}
+        {% for pk in _cust_period_order %}
+            {% set pk_on = false %}
+            {% for p in cat_products %}
+                {# Only count periods from recurrent-type products; once/free products always have
+                   recurrent DB columns but they carry no meaningful pricing for the switcher. #}
+                {% if p.pricing.type == 'recurrent' and p.pricing.recurrent[pk] is defined and p.pricing.recurrent[pk].enabled %}
+                    {% set pk_on = true %}
+                {% endif %}
+            {% endfor %}
+            {% if pk_on %}{% set _cust_enabled_periods = _cust_enabled_periods|merge([pk]) %}{% endif %}
+        {% endfor %}
+        {# Default = first actually-enabled period; no forced injection of 1M #}
+        {% set _cust_default_period = _cust_enabled_periods|first|default('1M') %}
+        {% set _cust_all_pricings = [] %}
+        {% for p in cat_products %}{% set _cust_all_pricings = _cust_all_pricings|merge([p.pricing]) %}{% endfor %}
+        {# Detect if ANY product in this category has recurrent pricing #}
+        {% set _cust_has_recurrent = false %}
+        {% for p in cat_products %}{% if p.pricing.type == 'recurrent' %}{% set _cust_has_recurrent = true %}{% endif %}{% endfor %}
+
+        <div x-data="{
+            period: '{{ _cust_default_period }}',
+            showAllFeaturesGlobal: false,
+            currencyFormat: {{ currency_fmt_js|json_encode }},
+            currencyRate: {{ currency.conversion_rate|default(1) }},
+            currencyPriceFormat: {{ currency.price_format|default(2)|json_encode }},
+            fmt(price) {
+                const converted = parseFloat(price) * this.currencyRate;
+                if (isNaN(converted)) return this.currencyFormat.replace('__PRICE__', '0.00');
+                let num;
+                switch (parseInt(this.currencyPriceFormat)) {
+                    case 2: num = converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); break;
+                    case 3: num = converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); break;
+                    case 4: num = Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); break;
+                    case 5: num = Math.round(converted).toString(); break;
+                    default: num = converted.toFixed(2);
+                }
+                return this.currencyFormat.replace('__PRICE__', num);
+            },
+            fmtNum(price) {
+                const converted = parseFloat(price) * this.currencyRate;
+                if (isNaN(converted)) return '0.00';
+                switch (parseInt(this.currencyPriceFormat)) {
+                    case 2: return converted.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                    case 3: return converted.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                    case 4: return Math.round(converted).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    case 5: return Math.round(converted).toString();
+                    default: return converted.toFixed(2);
+                }
+            },
+            getPrice(pricing, key) {
+                if (!pricing) return null;
+                if (pricing.type === 'free') return 0;
+                if (pricing.type === 'once') {
+                    if (!pricing.once) return null;
+                    const op = parseFloat(pricing.once.price);
+                    return isNaN(op) ? null : op;
+                }
+                if (!pricing.recurrent) return null;
+                const p = pricing.recurrent[key];
+                if (!(p && p.enabled)) return null;
+                const price = parseFloat(p.price);
+                return isNaN(price) ? null : price;
+            },
+            monthlyEquiv(price, key) {
+                const m = { '1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36 }[key] || 1;
+                return price / m;
+            },
+            periodLabel(key) {
+                return ({ '1W': 'Weekly', '1M': 'Monthly', '3M': '3 Months', '6M': '6 Months', '1Y': '1 Year', '2Y': '2 Years', '3Y': '3 Years' }[key] || key);
+            }
+        }">
+
+            {# ── Section heading ── #}
+            <div class="text-center mb-10" id="ord-plans">
+                <div class="flex items-center justify-center gap-3 mb-3">
+                    <span class="block h-px w-10 bg-primary/40 rounded-full"></span>
+                    <span class="text-primary text-[11px] font-bold uppercase tracking-widest">{{ _tagline ?: 'Custom Services' }}</span>
+                    <span class="block h-px w-10 bg-primary/40 rounded-full"></span>
+                </div>
+                <h2 class="font-h2 text-h2 text-on-background mb-3">Pick the Right Plan for You</h2>
+                <p class="text-tertiary text-sm max-w-xl mx-auto">Flexible service options built around your needs. Transparent pricing, no hidden fees.</p>
+            </div>
+
+            {# ── Subscription period selector — only for recurrent products ── #}
+            {% if _cust_has_recurrent and _cust_enabled_periods|length > 1 %}
+            <div class="max-w-[360px] mx-auto mb-8">
+                <label class="block text-sm font-medium text-on-surface mb-2">Subscription length</label>
+                <div class="relative">
+                    <select x-model="period" class="ord-period-select w-full h-11 rounded-xl border border-outline-variant bg-white px-4 pr-10 text-sm text-on-surface appearance-none">
+                        {% for pk in _cust_enabled_periods %}
+                        <option value="{{ pk }}">{{ _cust_period_meta[pk].label }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
+                </div>
+            </div>
+            {% endif %}
+
+            {# ── Card slider ── #}
+            <div x-data="{
+                scrollEl: null,
+                canPrev: false,
+                canNext: true,
+                init() {
+                    this.scrollEl = this.$refs.scroller;
+                    this.updateArrows();
+                    this.scrollEl.addEventListener('scroll', () => this.updateArrows(), { passive: true });
+                },
+                updateArrows() {
+                    this.canPrev = this.scrollEl.scrollLeft > 4;
+                    this.canNext = this.scrollEl.scrollLeft + this.scrollEl.clientWidth < this.scrollEl.scrollWidth - 4;
+                },
+                scrollBy(dir) {
+                    const card = this.scrollEl.querySelector('[data-custom-pricing-card]');
+                    const step = card ? card.offsetWidth + 24 : 352;
+                    this.scrollEl.scrollBy({ left: dir * step, behavior: 'smooth' });
+                }
+            }" class="relative max-w-[1120px] mx-auto px-4 pb-16">
+
+                <button @click="scrollBy(-1)" x-show="canPrev"
+                        class="ord-cat-scroll-btn absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                        style="display:none" aria-label="Previous plans">
+                    <span class="material-symbols-outlined text-lg">chevron_left</span>
+                </button>
+                <button @click="scrollBy(1)" x-show="canNext"
+                        class="ord-cat-scroll-btn absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                        aria-label="Next plans">
+                    <span class="material-symbols-outlined text-lg">chevron_right</span>
+                </button>
+
+                <div x-ref="scroller" class="flex items-start gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2">
+                {% for i, p in cat_products %}
+                {% set _cust_pricing_json = p.pricing|json_encode %}
+                {# ── Feature extraction (handles HTML, bullets, checkmarks) ── #}
+                {% set _cust_raw_feats = p.description|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim|split('|||')|filter(l => l|trim != '') %}
+                {% if _cust_raw_feats|length <= 1 and p.description %}
+                    {% set _cust_raw_feats = [] %}
+                    {% for item in p.description|striptags|trim|split('*') %}
+                        {% set feat = item|trim %}
+                        {% if feat %}{% set _cust_raw_feats = _cust_raw_feats|merge([feat]) %}{% endif %}
+                    {% endfor %}
+                {% endif %}
+                {% set _cust_features = [] %}
+                {% for _f in _cust_raw_feats %}
+                    {% set _fc = _f|replace({'✔️': '|||', '✅': '|||', '✓': '|||', '•': '|||', '&nbsp;': ' '})|trim %}
+                    {% for _fp in _fc|split('|||') %}
+                        {% set _ft = _fp|trim|trim(',') %}
+                        {# Strip leading Material Symbols ligature names (e.g. check_circle, verified) #}
+                        {% for _icon in ['check_circle', 'check_fill', 'check_circle_outline', 'verified', 'done_all', 'done', 'star_rate', 'star', 'arrow_forward', 'arrow_right'] %}
+                            {% if _ft starts with _icon %}{% set _ft = _ft[_icon|length:]|trim %}{% endif %}
+                        {% endfor %}
+                        {% if _ft and _ft|lower != 'check' and _ft not in _cust_features %}
+                            {% set _cust_features = _cust_features|merge([_ft]) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                {% set _cust_is_popular = (i == 1) %}
+
+                <div data-custom-pricing-card
+                     class="ord-product-card relative bg-white rounded-3xl flex flex-col pricing-card-shadow transition-all duration-200 border border-slate-200 overflow-hidden snap-start flex-shrink-0 w-full sm:!w-[340px] lg:!w-[349px] {% if _cust_is_popular %}ord-plan-popular ring-2 ring-primary/20 ring-offset-0{% endif %}"
+                     x-data="{ pricing: {{ _cust_pricing_json }} }">
+
+                    {% if _cust_is_popular %}
+                    <div class="ord-plan-popular-ribbon absolute top-0 left-0 right-0 h-12 bg-primary text-white text-center text-[11px] font-black uppercase tracking-widest flex items-center justify-center z-20">
+                        MOST POPULAR
+                    </div>
+                    {% endif %}
+
+                    <div class="p-7 pb-4 {% if _cust_is_popular %}pt-16 ord-plan-popular-body{% endif %}">
+                        <h3 class="font-h2 text-h2 text-on-surface mb-1">{{ p.title }}</h3>
+
+                        {# ── Recurrent pricing ── #}
+                        <template x-if="pricing.type === 'recurrent'">
+                            <div class="mt-4">
+                                <template x-if="getPrice(pricing, period) !== null">
+                                    <div>
+                                        <template x-if="getPrice(pricing, '1M') !== null && getPrice(pricing, '1M') > 0 && monthlyEquiv(getPrice(pricing, period), period) < getPrice(pricing, '1M')">
+                                            <div class="flex items-center justify-between gap-2 mb-3">
+                                                <span class="text-slate-400 text-sm line-through" x-text="fmt(getPrice(pricing, '1M'))"></span>
+                                                <span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[12px] font-bold"
+                                                      x-text="Math.round((1 - monthlyEquiv(getPrice(pricing, period), period) / getPrice(pricing, '1M')) * 100) + '% OFF'"></span>
+                                            </div>
+                                        </template>
+                                        <div class="flex items-baseline gap-1 mb-2">
+                                            <span class="text-slate-500 text-sm mr-1" x-text="currencyFormat.split('__PRICE__')[0].trim()"></span>
+                                            <span class="text-[36px] font-bold text-on-surface tracking-tight tabular-nums"
+                                                  x-text="fmtNum(getPrice(pricing, '1M') !== null ? (period === '1M' ? getPrice(pricing, period) : monthlyEquiv(getPrice(pricing, period), period)) : getPrice(pricing, period))"></span>
+                                            <span class="text-slate-500 font-medium text-sm" x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
+                                            <span class="text-slate-500 font-medium text-sm"
+                                                  x-text="getPrice(pricing, '1M') !== null ? '/mo' : ({ '1W': '/wk', '1M': '/mo', '3M': '/3mo', '6M': '/6mo', '1Y': '/yr', '2Y': '/2yr', '3Y': '/3yr' }[period] || '')"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="getPrice(pricing, period) === null">
+                                    <p class="text-sm text-slate-400 italic py-3">Not available for this period</p>
+                                </template>
+                            </div>
+                        </template>
+
+                        {# ── One-time / free pricing ── #}
+                        {% if p.pricing.type == 'once' %}
+                        <div class="flex items-baseline gap-1 mt-4 mb-2">
+                            <span class="text-slate-500 text-sm mr-1" x-text="currencyFormat.split('__PRICE__')[0].trim()"></span>
+                            <span class="text-5xl font-black text-on-surface tracking-tight tabular-nums" x-text="fmtNum(getPrice(pricing, period))"></span>
+                            <span class="text-slate-500 text-sm" x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
+                            <span class="text-slate-500 text-sm">one-time</span>
+                        </div>
+                        {% elseif p.pricing.type == 'free' %}
+                        <div class="mt-4 mb-2">
+                            <span class="text-5xl font-black text-on-surface tracking-tight">Free</span>
+                        </div>
+                        {% endif %}
+
+                        {# ── Billing descriptor ── #}
+                        <p class="text-xs text-slate-500 leading-relaxed mb-5">
+                            {% if p.pricing.type == 'free' %}
+                                Free plan &mdash; no charge ever.
+                            {% elseif p.pricing.type == 'once' %}
+                                One-time payment &mdash; no subscription required.
+                            {% else %}
+                                <span x-show="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
+                                    Billed <strong x-text="fmt(getPrice(pricing, period))"></strong>
+                                    <span x-text="periodLabel(period)"></span>.
+                                    <span x-show="getPrice(pricing, '1M') !== null">
+                                        Renews at <strong x-text="fmt(getPrice(pricing, '1M'))"></strong>/mo.
+                                    </span>
+                                </span>
+                            {% endif %}
+                        </p>
+
+                        {# ── CTA ── #}
+                        <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
+                            <a href="{{ ('/order/' ~ p.slug)|url }}"
+                               class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if _cust_is_popular %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
+                                {{ _cust_is_popular ? 'Get Started' : 'Choose Plan' }}
+                            </a>
+                        </template>
+                        <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) === null">
+                            <span class="block w-full text-center py-3.5 rounded-xl text-sm font-bold border border-slate-200 text-slate-400 cursor-not-allowed mb-4">Not Available</span>
+                        </template>
+                    </div>
+
+                    {# ── Features list ── #}
+                    {% if _cust_features|length > 0 %}
+                    <div class="ord-price-row px-7 pb-8 border-t border-slate-200 pt-6 mt-auto">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">What's Included</p>
+                        <div class="space-y-3.5">
+                        {% for feat in _cust_features|slice(0, 6) %}
+                        <div class="flex items-center text-[13px] text-slate-700">
+                            <span class="material-symbols-outlined text-[#1a8a47] text-lg mr-2 flex-shrink-0" style="font-variation-settings:'wght' 600;">check</span>
+                            <span>{{ feat }}</span>
+                        </div>
+                        {% endfor %}
+                        </div>
+
+                        {% if _cust_features|length > 6 %}
+                        <div class="overflow-hidden"
+                             style="max-height: 0px; transition: max-height 0.35s ease-in-out;"
+                             x-effect="$el.style.maxHeight = showAllFeaturesGlobal ? $el.scrollHeight + 'px' : '0px'">
+                            <div class="space-y-3.5 pt-3.5">
+                            {% for feat in _cust_features|slice(6) %}
+                            <div class="flex items-center text-[13px] text-slate-700">
+                                <span class="material-symbols-outlined text-[#1a8a47] text-lg mr-2 flex-shrink-0" style="font-variation-settings:'wght' 600;">check</span>
+                                <span>{{ feat }}</span>
+                            </div>
+                            {% endfor %}
+                            </div>
+                        </div>
+                        <button type="button"
+                                @click="showAllFeaturesGlobal = !showAllFeaturesGlobal"
+                                class="mt-4 flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                            <span x-text="showAllFeaturesGlobal ? 'See less' : 'See more'">See more</span>
+                            <span class="material-symbols-outlined text-base"
+                                  style="font-variation-settings:'wght' 600; display: inline-block; transition: transform 0.35s ease-in-out;"
+                                  x-effect="$el.style.transform = showAllFeaturesGlobal ? 'rotate(180deg)' : 'rotate(0deg)'">expand_more</span>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                </div>
+            </div>{# end card slider #}
+
+        </div>{# end x-data pricing #}
+
+        {# ── Service highlights ── #}
+        <div class="mt-8 max-w-[1100px] mx-auto px-4 mb-12 ord-why-shell">
+            <div class="bg-surface-container-low rounded-3xl p-10 ord-why-surface">
+                <div class="text-center mb-10">
+                    <span class="text-[11px] font-bold text-primary uppercase tracking-widest mb-2 block">WHY CHOOSE US</span>
+                    <h2 class="text-xl font-bold text-on-surface">Tailored Services, Real Results</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {% set _cust_highlights = [
+                        {'icon': 'support_agent', 'title': 'Dedicated Support',     'text': 'Every plan includes direct access to our expert team for setup, configuration, and ongoing assistance.'},
+                        {'icon': 'tune',           'title': 'Fully Customisable',    'text': 'Services are scoped to your exact requirements — no rigid templates, just what you actually need.'},
+                        {'icon': 'verified',       'title': 'Trusted & Reliable',    'text': 'Backed by proven infrastructure and a commitment to quality delivery and service continuity.'}
+                    ] %}
+                    {% for _h in _cust_highlights %}
+                    <div class="flex flex-col items-center text-center gap-3">
+                        <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-primary text-2xl">{{ _h.icon }}</span>
+                        </div>
+                        <h3 class="font-bold text-on-surface text-base">{{ _h.title }}</h3>
+                        <p class="text-sm text-tertiary leading-relaxed">{{ _h.text }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {% else %}{# not hosting/server/custom — generic product grid fallback #}
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-[1100px] mx-auto px-4 pb-10">
+            {% for p in cat_products %}
+            {% set desc_short = p.description|striptags|trim|slice(0, 160) %}
+            <a href="{{ ('/order/' ~ p.slug)|url }}"
+               class="group flex flex-col rounded-2xl border border-outline-variant bg-surface-container-low hover:border-primary/40 hover:shadow-md transition-all duration-200 p-6 no-underline">
+                <h3 class="text-base font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">{{ p.title }}</h3>
+                {% if p.pricing.type == 'free' %}
+                    <p class="text-sm font-semibold text-emerald-600 mb-3">Free</p>
+                {% elseif p.pricing.type == 'once' and p.pricing.once %}
+                    <p class="text-sm font-semibold text-on-surface mb-3">{{ p.pricing.once.price|money_without_currency }} {{ currency.code }}</p>
+                {% elseif p.price_starting_from is defined and p.price_starting_from > 0 %}
+                    <p class="text-sm font-semibold text-on-surface mb-3">From {{ p.price_starting_from|money_without_currency }} {{ currency.code }}/mo</p>
+                {% endif %}
+                {% if desc_short %}
+                <p class="text-xs text-tertiary leading-relaxed flex-1">{{ desc_short }}{% if p.description|striptags|trim|length > 160 %}&hellip;{% endif %}</p>
+                {% endif %}
+                <span class="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                    Get Started
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+
+        {% endif %}{# end _type == 'hosting' #}
+
+    {% else %}
+        <div class="text-center py-20 text-tertiary">
+            <span class="material-symbols-outlined text-5xl opacity-30 mb-4 block">inbox</span>
+            <p class="text-sm">No plans available in this category yet. Check back soon.</p>
+        </div>
+    {% endif %}
+
+</div>{# end ord-cat-page #}
+
+{% endif %}{# end request.product #}
+
+{% endif %}{# end category check #}
+
+{% endblock %}

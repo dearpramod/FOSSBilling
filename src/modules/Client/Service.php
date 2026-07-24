@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Box\Mod\Client;
 
+use Box\Mod\Client\Entity\Client;
+use Box\Mod\Client\Repository\ClientRepository;
 use FOSSBilling\i18n;
 use FOSSBilling\InformationException;
 use FOSSBilling\InjectionAwareInterface;
@@ -22,6 +24,7 @@ use Symfony\Component\Intl\Locales;
 class Service implements InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
+    private ?ClientRepository $clientRepository = null;
 
     public function getModulePermissions(): array
     {
@@ -104,13 +107,33 @@ class Service implements InjectionAwareInterface
         return $this->di;
     }
 
+    public function getClientRepository(): ClientRepository
+    {
+        if ($this->clientRepository === null) {
+            if ($this->di === null) {
+                throw new \FOSSBilling\Exception('The dependency injection container has not been set.');
+            }
+
+            $this->clientRepository = $this->di['em']->getRepository(Client::class);
+        }
+
+        return $this->clientRepository;
+    }
+
     public function approveClientEmailByHash($hash): bool
     {
         $db = $this->di['db'];
-        $result = $db->getRow('SELECT id, client_id FROM extension_meta WHERE extension = "mod_client" AND meta_key = "confirm_email" AND meta_value = :hash', [':hash' => $hash]);
+        $result = $db->getRow('SELECT id, client_id, created_at FROM extension_meta WHERE extension = "mod_client" AND meta_key = "confirm_email" AND meta_value = :hash', [':hash' => $hash]);
         if (!$result) {
-            throw new InformationException('Invalid email confirmation link');
+            throw new InformationException('Invalid or already-used email confirmation link');
         }
+
+        // Links expire after 48 hours
+        if (strtotime($result['created_at']) < time() - (48 * 3600)) {
+            $db->exec('DELETE FROM extension_meta WHERE id = :id', ['id' => $result['id']]);
+            throw new InformationException('This email confirmation link has expired');
+        }
+
         $db->exec('UPDATE client SET email_approved = 1 WHERE id = :id', ['id' => $result['client_id']]);
         $db->exec('DELETE FROM extension_meta WHERE id = :id', ['id' => $result['id']]);
 
@@ -466,6 +489,10 @@ class Service implements InjectionAwareInterface
             'timezone' => $model->timezone,
         ];
 
+        if ($isAdmin || ($identity instanceof \Model_Client && (int) $identity->id === (int) $model->id)) {
+            $details['billing_email'] = $model->billing_email;
+        }
+
         if ($deep) {
             $details['balance'] = $this->getClientBalance($model);
         }
@@ -594,6 +621,8 @@ class Service implements InjectionAwareInterface
 
         $client->auth_type = $data['auth_type'] ?? null;
         $client->email = strtolower(trim((string) ($data['email'] ?? null)));
+        $billingEmail = trim((string) ($data['billing_email'] ?? ''));
+        $client->billing_email = $billingEmail !== '' ? strtolower($billingEmail) : null;
         $client->first_name = ucwords((string) ($data['first_name'] ?? null));
         $client->pass = $this->di['password']->hashIt($password);
 
