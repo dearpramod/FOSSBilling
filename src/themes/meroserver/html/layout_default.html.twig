@@ -1173,11 +1173,24 @@
 
 <script>
 (function () {
+    // Rejects external URLs — only allows same-origin or root-relative paths.
+    function safeRedirect(url) {
+        if (!url) return;
+        try {
+            var parsed = new URL(url, window.location.origin);
+            if (parsed.origin !== window.location.origin) return;
+            window.location.href = parsed.href;
+        } catch (_) {
+            // Relative path (no host) — always safe
+            if (url.charAt(0) === '/') window.location.href = url;
+        }
+    }
+
     // ── api-link handler ───────────────────────────────────────────────────────
     // Mirrors the bb.apiLink() behaviour from the Huraga theme bundle.
     // Intercepts clicks on <a class="api-link">, calls the API, then:
     //   data-api-jsonp="fnName"  → calls window.fnName(result)  (e.g. cPanel SSO)
-    //   data-api-redirect="url" → navigates to url
+    //   data-api-redirect="url" → navigates to url (same-origin or relative only)
     //   data-api-reload (any)   → reloads the page
     //   default                 → shows a success notification
     function initApiLinks() {
@@ -1196,7 +1209,7 @@
                         if (jsonpFn && typeof window[jsonpFn] === 'function') {
                             window[jsonpFn](result);
                         } else if (redirect) {
-                            window.location.href = redirect;
+                            safeRedirect(redirect);
                         } else if ('apiReload' in el.dataset) {
                             window.location.reload();
                         } else {

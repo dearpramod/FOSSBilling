@@ -182,7 +182,7 @@
         {% endif %}
 
         {# Transaction history — processed only, matching admin panel columns #}
-        {% set transactions = client.invoice_transaction_get_list({ 'invoice_hash': invoice.hash, 'per_page': 50 }) %}
+        {% set transactions = client.invoice_transaction_get_list({ 'invoice_hash': invoice.hash, 'per_page': 15 }) %}
         {% if transactions.list|length > 0 %}
         <div class="bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">

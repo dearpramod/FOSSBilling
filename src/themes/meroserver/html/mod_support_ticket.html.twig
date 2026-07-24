@@ -403,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmBtn.textContent = 'Closing\u2026';
             API.client.post(
                 'support/ticket_close',
-                { id: {{ ticket.id }}, CSRFToken: '{{ CSRFToken }}' },
+                { id: {{ ticket.id }}, CSRFToken: (document.querySelector('meta[name="csrf-token"]')||{}).content||'' },
                 function ()    { window.location.reload(); },
                 function (res) {
                     closeModal();
