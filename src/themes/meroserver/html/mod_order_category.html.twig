@@ -179,9 +179,11 @@
         {# ── Right: Configure & Order ── #}
         <div class="lg:col-span-2 space-y-6">
 
-            {# Service-type order form (domain config for hosting, etc.) #}
+            {# Service-type order form — type must be an explicit known value to prevent
+               path injection via a tampered DB product.type field. #}
+            {% set _allowed_service_types = ['hosting', 'domain', 'downloadable', 'license', 'custom', 'server', 'apikey'] %}
             {% set _order_form_tpl = 'mod_service' ~ product.type ~ '_order_form.html.twig' %}
-            {% if guest.system_template_exists({ 'file': _order_form_tpl }) %}
+            {% if product.type in _allowed_service_types and guest.system_template_exists({ 'file': _order_form_tpl }) %}
                 {% include _order_form_tpl %}
             {% endif %}
 

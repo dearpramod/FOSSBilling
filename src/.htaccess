@@ -59,4 +59,13 @@ Options -Indexes +SymLinksIfOwnerMatch
     RewriteRule ^(.*)$ index.php [QSA,L]
 
 </IfModule>
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    # CSP: unsafe-inline retained for Alpine.js inline scripts and injected GTM snippets.
+    # Tighten to nonce-based if those are ever refactored.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://js.hcaptcha.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src 'self' https:; form-action 'self' https:; base-uri 'self';"
+</IfModule>
 # END FOSSBilling

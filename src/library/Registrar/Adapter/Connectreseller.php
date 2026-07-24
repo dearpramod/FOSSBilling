@@ -1160,11 +1160,17 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
             throw new Registrar_Exception('Failed to :action: with the :type: registrar, check the error logs for further details', [':action:' => $endpoint, ':type:' => 'ConnectReseller']);
         }
 
-        // Log response — full body in debug_mode, truncated otherwise to limit PII in logs
+        // Log response — EPP/auth-code fields are always redacted even in debug_mode to
+        // prevent secrets leaking into log files.
+        $safeContent = preg_replace(
+            '/("(?:DomainSecretKey|AuthCode|authCode|SecretKey|secretKey|epp_code|eppCode)"\s*:\s*)"[^"]*"/i',
+            '$1"[REDACTED]"',
+            $content
+        ) ?? $content;
         if (!empty($this->config['debug_mode'])) {
-            $this->getLog()->info('ConnectReseller API RESULT [' . $endpoint . ']: ' . $content);
+            $this->getLog()->info('ConnectReseller API RESULT [' . $endpoint . ']: ' . $safeContent);
         } else {
-            $preview = strlen($content) > 500 ? substr($content, 0, 500) . '...[truncated — enable debug_mode for full response]' : $content;
+            $preview = strlen($safeContent) > 500 ? substr($safeContent, 0, 500) . '...[truncated — enable debug_mode for full response]' : $safeContent;
             $this->getLog()->info('ConnectReseller API RESULT [' . $endpoint . ']: ' . $preview);
         }
 

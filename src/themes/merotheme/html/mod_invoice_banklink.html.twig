@@ -52,16 +52,23 @@
                     <p class="text-sm text-gray-400">{{ 'Connecting to payment gateway...'|trans }}</p>
                 </div>
 
-                <div id="gateway-html" class="payment-gateway-embed">
-                    {{ payment.result|raw }}
-                </div>
+                <iframe
+                    id="gateway-html"
+                    class="payment-gateway-embed w-full border-0 block"
+                    style="min-height: 420px;"
+                    sandbox="allow-forms allow-scripts allow-popups allow-top-navigation-by-user-activation"
+                    srcdoc="{{ payment.result|e }}"
+                    title="{{ 'Payment gateway'|trans }}"
+                ></iframe>
 
                 <script>
-                    // Hide loader once gateway content is rendered
-                    document.addEventListener('DOMContentLoaded', function() {
+                    (function() {
+                        var frame = document.getElementById('gateway-html');
                         var loader = document.getElementById('payment-loader');
-                        if (loader) loader.style.display = 'none';
-                    });
+                        if (frame && loader) {
+                            frame.addEventListener('load', function() { loader.style.display = 'none'; });
+                        }
+                    })();
                 </script>
             {% endif %}
 
