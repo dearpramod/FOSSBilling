@@ -1167,7 +1167,7 @@
                 </div>
             </section>
             {% endif %}
-            <div class="flex-1 w-full pb-6 px-4 py-4 sm:px-8 sm:py-5 lg:px-16 {{ isOrderFlowRoute ? 'order-boot-stage' : '' }}">
+            <div class="flex-1 w-full pb-6 px-4 {{ isDashboardRoute ? 'pt-0' : 'py-4 sm:py-5' }} sm:px-8 lg:px-16 {{ isOrderFlowRoute ? 'order-boot-stage' : '' }}">
                 {% if isOrderFlowRoute %}
                 <div id="order-page-skeleton"
                      class="order-page-skeleton"

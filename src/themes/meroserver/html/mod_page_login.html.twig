@@ -175,7 +175,7 @@
             <script>
             function loginFormData() {
                 const _apiUrl     = '{{ 'api/guest/client/login'|url|e('js') }}';
-                const _redirectUrl = '{{ (redirect_uri|default('/'))|url|e('js') }}';
+                const _redirectUrl = '{{ (redirect_uri|default('dashboard'))|url|e('js') }}';
                 {% if guest.extension_is_on({'mod': 'antispam'}) %}
                     {% set _rc2 = guest.antispam_recaptcha %}
                     {% if _rc2.enabled and _rc2.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc2.publickey %}
