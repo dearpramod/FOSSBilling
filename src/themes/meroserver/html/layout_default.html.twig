@@ -56,15 +56,16 @@
         <style>[x-cloak],[x-show]{display:block!important}</style>
         <div style="position:fixed;top:0;left:0;right:0;padding:0.75rem 1rem;background:#f59e0b;color:#1c1917;font-size:0.875rem;z-index:9999;text-align:center;">{{ 'JavaScript is required for the full client portal experience. Please enable JavaScript.'|trans }}</div>
     </noscript>
+    {% set _bv = guest.system_version|replace({'.': ''})|default('1') %}
     <!-- Vendor CSS (flag-icons, tom-select) -->
-    <link rel="stylesheet" href="{{ 'build/css/vendor.css' | asset_url }}">
+    <link rel="stylesheet" href="{{ 'build/css/vendor.css' | asset_url }}?v={{ _bv }}">
     <!-- Theme CSS: Tailwind utilities + theme.css + custom.css (all bundled, minified in production) -->
-    <link rel="stylesheet" href="{{ 'build/css/meroserver.css' | asset_url }}">
+    <link rel="stylesheet" href="{{ 'build/css/meroserver.css' | asset_url }}?v={{ _bv }}">
 
-    <script defer src="{{ 'js/main.js' | public_asset_url }}"></script>
-    <script src="{{ 'js/api.js' | public_asset_url }}"></script>
+    <script defer src="{{ 'js/main.js' | public_asset_url }}?v={{ _bv }}"></script>
+    <script src="{{ 'js/api.js' | public_asset_url }}?v={{ _bv }}"></script>
     <!-- Merotheme bundle: Alpine.js + @alpinejs/collapse (defer: Alpine.start() runs after DOM parsed) -->
-    <script defer src="{{ 'build/js/meroserver.js' | asset_url }}"></script>
+    <script defer src="{{ 'build/js/meroserver.js' | asset_url }}?v={{ _bv }}"></script>
 
     <!-- Panel utility shims (bb, FBPanel) -->
     <script>
