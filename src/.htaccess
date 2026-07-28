@@ -2,6 +2,13 @@
 # Read documentation https://docs.fossbilling.org/ for more information.
 Options -Indexes +SymLinksIfOwnerMatch
 
+# Block installer backup and sensitive directories
+<IfModule mod_authz_core.c>
+    <DirectoryMatch "^.*(install\.bk|install\.bak)(\/.*)?$">
+        Require all denied
+    </DirectoryMatch>
+</IfModule>
+
 # Route Apache-level 4xx/5xx through FOSSBilling so the themed error page is shown.
 ErrorDocument 400 /index.php?_errcode=400
 ErrorDocument 403 /index.php?_errcode=403

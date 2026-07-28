@@ -4,12 +4,9 @@
 .opencode
 /cache
 /src/config.php
-<<<<<<< HEAD
 /src/config.*.php
 /src/config-*.php
-=======
 /src/config.old.php
->>>>>>> 0.8.4
 /src/data/log/*
 /src/data/cache/*
 /src/data/update-finalization.json
@@ -37,3 +34,10 @@ tests/E2E/Cypress/artifacts
 
 ### Release zips ###
 *.zip
+
+### Credentials — never commit ###
+client_secret_*.json
+*client_secret*.json
+
+### Installer backup — must not be in repo ###
+/src/install.bk/
