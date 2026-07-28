@@ -569,7 +569,7 @@ html[data-theme="light"] #sidebar .text-slate-500.hover\:bg-violet-50:hover {
 
 .ref-dashboard-hero {
     min-height: 148px;
-    padding: 32px 4rem 24px;
+    padding: 32px 4rem 68px;
     position: relative;
     overflow: hidden;
     background-color: var(--ref-ink);
@@ -675,6 +675,7 @@ html[data-theme="dark"] .ref-dashboard-hero h1 {
 
 .ref-dashboard {
     width: 100%;
+    margin-top: -69px;
     position: relative;
     z-index: 2;
 }
@@ -2648,7 +2649,7 @@ html[data-theme="dark"] .ref-news-card:hover {
 }
 
 @media (max-width: 900px) {
-    .ref-dashboard-hero { padding: 28px 2rem 24px; flex-direction: column; }
+    .ref-dashboard-hero { padding: 28px 2rem 82px; flex-direction: column; }
     .ref-dashboard-hero-actions { width: 100%; }
     .ref-product-row { padding-left: 1.25rem; grid-template-columns: 1fr auto; }
     .ref-product-actions { grid-column: 1 / -1; }
@@ -2656,7 +2657,7 @@ html[data-theme="dark"] .ref-news-card:hover {
 }
 
 @media (max-width: 640px) {
-    .ref-dashboard-hero { padding: 24px 1rem 24px; }
+    .ref-dashboard-hero { padding: 24px 1rem 86px; }
     .ref-dashboard-hero-actions { align-items: stretch; flex-direction: column; }
     .ref-service-summary { grid-template-columns: 1fr 1fr; }
     .ref-summary-item,
