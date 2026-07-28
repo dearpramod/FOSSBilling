@@ -64,8 +64,11 @@
         {% set tabHref = ('/order/' ~ catSlug)|url %}
         <a href="{{ tabHref }}" role="tab"
            aria-selected="{{ request.category == category.id ~ '' ? 'true' : 'false' }}"
-           class="px-5 py-2 text-sm font-semibold rounded-lg transition-all capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary
+           class="inline-flex items-center gap-1.5 px-5 py-2 text-sm font-semibold rounded-lg transition-all capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary
                   {% if request.category == category.id ~ '' %}bg-white text-[color:var(--color-primary)] shadow-sm{% else %}text-slate-500 hover:bg-white/50{% endif %}">
+            {% if category.icon_url %}
+            <img src="{{ category.icon_url }}" alt="" class="w-4 h-4 object-contain flex-shrink-0">
+            {% endif %}
             {{ category.title }}
         </a>
     {% endif %}{% endfor %}
@@ -233,7 +236,7 @@
                                     {% endif %}
                                     <h2 class="text-h2 font-sans font-semibold text-on-surface mb-2">{{ _title ?: category.title }}</h2>
                                     {% for _para in _paragraphs %}
-                                    <p class="text-sm text-slate-600 max-w-xl leading-relaxed mb-1">{{ _para }}</p>
+                                    <p class="text-sm text-slate-600 max-w-xl leading-relaxed mb-1">{{ _para|markdown|replace({'<p>': '', '</p>': ''})|trim|raw }}</p>
                                     {% endfor %}
                                 </div>
                                 {% if _bullets %}
@@ -260,9 +263,13 @@
                         {%- set _hdr = _hdr_icon_map[category.type]|default({'bg': 'bg-indigo-500/10', 'border': 'border-indigo-500/20', 'color': 'text-indigo-400', 'path': 'M5 12h14M12 5l7 7-7 7'}) -%}
                         <div class="flex items-center gap-3 mb-6">
                             <div class="w-9 h-9 rounded-xl {{ _hdr.bg }} border {{ _hdr.border }} flex items-center justify-center flex-shrink-0">
+                                {% if category.icon_url %}
+                                <img src="{{ category.icon_url }}" alt="" class="w-5 h-5 object-contain">
+                                {% else %}
                                 <svg class="w-4 h-4 {{ _hdr.color }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ _hdr.path }}"/>
                                 </svg>
+                                {% endif %}
                             </div>
                             <div>
                                 <h2 class="text-h3 font-sans font-semibold text-on-surface leading-tight">{{ category.title }}</h2>

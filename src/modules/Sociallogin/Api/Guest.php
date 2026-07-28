@@ -309,7 +309,7 @@ class Guest extends \FOSSBilling\Api\AbstractApi
 
         try {
             $clientService = $this->di['mod_service']('client');
-            $newClient = $clientService->guestCreateClient($clientData);
+            $newClient = $clientService->oauthCreateClient($clientData);
         } catch (\Exception $e) {
             throw new \FOSSBilling\InformationException('Could not create account: ' . $e->getMessage());
         }

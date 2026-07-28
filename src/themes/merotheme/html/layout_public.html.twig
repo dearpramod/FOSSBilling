@@ -1,3 +1,54 @@
+{%- set _sd = {
+    'logo_url': '', 'logo_favicon': '',
+    'primary_color': '#6366f1', 'secondary_color': '#7c3aed',
+    'nav_dashboard': '1', 'nav_services': '1', 'nav_order': '1',
+    'nav_support': '1', 'nav_invoices': '1', 'nav_balance': '1',
+    'nav_profile': '1', 'top_menu_signout': '1',
+    'nav_home_show': '1', 'nav_home_label': '', 'nav_home_url': '',
+    'nav_contact_show': '1', 'nav_contact_label': '', 'nav_contact_url': '',
+    'nav_support_show': '1', 'nav_support_label': '', 'nav_support_url': '',
+    'nav_news_show': '1', 'nav_news_label': '', 'nav_news_url': '',
+    'nav_custom1_label': '', 'nav_custom1_url': '', 'nav_custom1_has_sub': '0',
+    'nav_custom1_sub1_label': '', 'nav_custom1_sub1_url': '',
+    'nav_custom1_sub2_label': '', 'nav_custom1_sub2_url': '',
+    'nav_custom1_sub3_label': '', 'nav_custom1_sub3_url': '',
+    'nav_custom1_sub4_label': '', 'nav_custom1_sub4_url': '',
+    'nav_custom2_label': '', 'nav_custom2_url': '', 'nav_custom2_has_sub': '0',
+    'nav_custom2_sub1_label': '', 'nav_custom2_sub1_url': '',
+    'nav_custom2_sub2_label': '', 'nav_custom2_sub2_url': '',
+    'nav_custom2_sub3_label': '', 'nav_custom2_sub3_url': '',
+    'nav_custom2_sub4_label': '', 'nav_custom2_sub4_url': '',
+    'nav_custom3_label': '', 'nav_custom3_url': '', 'nav_custom3_has_sub': '0',
+    'nav_custom3_sub1_label': '', 'nav_custom3_sub1_url': '',
+    'nav_custom3_sub2_label': '', 'nav_custom3_sub2_url': '',
+    'nav_custom3_sub3_label': '', 'nav_custom3_sub3_url': '',
+    'nav_custom3_sub4_label': '', 'nav_custom3_sub4_url': '',
+    'nav_custom4_label': '', 'nav_custom4_url': '', 'nav_custom4_has_sub': '0',
+    'nav_custom4_sub1_label': '', 'nav_custom4_sub1_url': '',
+    'nav_custom4_sub2_label': '', 'nav_custom4_sub2_url': '',
+    'nav_custom4_sub3_label': '', 'nav_custom4_sub3_url': '',
+    'nav_custom4_sub4_label': '', 'nav_custom4_sub4_url': '',
+    'homepage_mode': 'default', 'homepage_custom_url': '', 'hide_menu': '1',
+    'login_show_register': '1', 'login_show_reset': '1', 'login_logo_url': '',
+    'footer_enabled': '1',
+    'link_terms': '', 'tos': '', 'link_privacy': '', 'link_cookie': '', 'link_support': '',
+    'footer_phone': '', 'footer_email': '', 'footer_address': '',
+    'show_resource_usage': '1', 'show_account_management': '1',
+    'acct_show_password': '1', 'acct_show_domain': '1',
+    'acct_show_username': '1', 'acct_show_cancel': '1',
+    'social_facebook': '', 'social_twitter': '', 'social_instagram': '',
+    'meta_title_prefix': '', 'meta_title_suffix': '', 'meta_description': '',
+    'meta_keywords': '', 'meta_author': '', 'meta_robots': '',
+    'support_phone': '', 'support_whatsapp': '', 'support_chat_url': '', 'support_chat_label': '',
+    'support_show_ticket': '1', 'support_ticket_url': '', 'support_ticket_label': '',
+    'support_show_sales_ticket': '1', 'support_sales_ticket_url': '', 'support_sales_ticket_label': '',
+    'support_show_view_tickets': '1', 'support_show_whatsapp': '1', 'support_show_phone': '1',
+    'support_show_feedback': '1', 'support_feedback_url': '', 'support_feedback_label': '',
+    'support_show_kb': '1', 'support_kb_url': '', 'support_kb_label': '',
+    'support_show_getting_started': '1', 'support_getting_started_url': '', 'support_getting_started_label': '',
+    'category_title_in_tab': '1', 'inject_javascript': ''
+} -%}
+{%- set settings = _sd|merge(settings) -%}
 {% set active_locale = guest.system_locale|default('en')|replace({'_': '-'}) %}
 <!DOCTYPE html>
 <html lang="{{ active_locale }}" class="h-full">
@@ -32,7 +83,7 @@
         <div style="position:fixed;top:0;left:0;right:0;padding:0.75rem 1rem;background:#f59e0b;color:#1c1917;font-size:0.875rem;z-index:9999;text-align:center;">{{ 'JavaScript is required for the full experience. Please enable JavaScript.'|trans }}</div>
     </noscript>
 
-    {{ 'js/fossbilling.js' | public_asset_url | script_tag }}
+    {{ 'js/main.js' | public_asset_url | script_tag }}
     {{ 'js/api.js' | public_asset_url | script_tag }}
     <!-- Merotheme bundle: Alpine.js + @alpinejs/collapse + TomSelect (npm-bundled, no CDN) -->
     {{ 'build/js/merotheme.js' | asset_url | script_tag }}

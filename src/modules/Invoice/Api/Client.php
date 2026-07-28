@@ -29,16 +29,97 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $data['client_id'] = $this->getIdentity()->id;
         $data['approved'] = true;
+        $data['summary'] = true;
 
         [$sql, $params] = $this->getService()->getSearchQuery($data);
         $pager = $this->getDi()['pager']->getPaginatedResultSet($sql, $params, PaginationOptions::fromArray($data));
 
         foreach ($pager['list'] as $key => $item) {
-            $invoice = $this->getDi()['db']->getExistingModelById('Invoice', $item['id'], 'Invoice not found');
-            $pager['list'][$key] = $this->getService()->toApiArray($invoice);
+            $pager['list'][$key] = $this->getService()->toApiSummaryArray($item);
         }
 
         return $pager;
+    }
+
+    /**
+     * Get invoice statistics for the authenticated client.
+     *
+     * Returns counts, outstanding total, paid total, and last paid invoice in 2 SQL queries.
+     * Use this instead of calling invoice_get_list multiple times for stat cards.
+     *
+     * @return array{total:int, unpaid_count:int, paid_count:int, outstanding_total:float, paid_total:float, currency:string, last_paid:array|null}
+     */
+    public function get_stats($data = [])
+    {
+        $clientId = $this->getIdentity()->id;
+        $db = $this->getDi()['db'];
+
+        $statsSql = "
+            SELECT
+                COALESCE(SUM(1), 0) AS total,
+                COALESCE(SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END), 0) AS unpaid_count,
+                COALESCE(SUM(CASE WHEN status = 'paid'   THEN 1 ELSE 0 END), 0) AS paid_count,
+                COALESCE(SUM(CASE WHEN status = 'unpaid' THEN invoice_total ELSE 0 END), 0) AS outstanding_total,
+                COALESCE(SUM(CASE WHEN status = 'paid'   THEN invoice_total ELSE 0 END), 0) AS paid_total,
+                MIN(CASE WHEN status = 'unpaid' THEN currency ELSE NULL END) AS currency
+            FROM (
+                SELECT
+                    i.id,
+                    i.status,
+                    i.currency,
+                    COALESCE(SUM(ii.price * ii.quantity), 0) +
+                        CASE WHEN COALESCE(i.taxrate, 0) > 0
+                             THEN ROUND(
+                                 COALESCE(SUM(CASE WHEN ii.taxed = 1 THEN ii.price * ii.quantity ELSE 0 END), 0)
+                                 * i.taxrate / 100, 2)
+                             ELSE 0
+                        END AS invoice_total
+                FROM invoice i
+                LEFT JOIN invoice_item ii ON ii.invoice_id = i.id
+                WHERE i.client_id = :client_id AND i.approved = 1
+                GROUP BY i.id, i.status, i.currency, i.taxrate
+            ) AS per_invoice";
+
+        $statsRow = $db->getRow($statsSql, ['client_id' => $clientId]);
+
+        $lastPaidSql = "
+            SELECT i.hash, i.currency, i.taxrate, i.paid_at, i.updated_at,
+                   COALESCE(SUM(ii.price * ii.quantity), 0) AS subtotal,
+                   COALESCE(SUM(CASE WHEN ii.taxed = 1 THEN ii.price * ii.quantity ELSE 0 END), 0) AS taxable_subtotal
+            FROM invoice i
+            LEFT JOIN invoice_item ii ON ii.invoice_id = i.id
+            WHERE i.client_id = :client_id AND i.approved = 1 AND i.status = 'paid'
+            GROUP BY i.id, i.hash, i.currency, i.taxrate, i.paid_at, i.updated_at
+            ORDER BY i.paid_at DESC, i.id DESC
+            LIMIT 1";
+
+        $lastPaidRow = $db->getRow($lastPaidSql, ['client_id' => $clientId]);
+
+        $lastPaid = null;
+        if ($lastPaidRow) {
+            $taxRate = (float) ($lastPaidRow['taxrate'] ?? 0);
+            $taxableSubtotal = (float) $lastPaidRow['taxable_subtotal'];
+            $tax = ($taxRate > 0 && $taxableSubtotal !== 0.0)
+                ? round($taxableSubtotal * $taxRate / 100, 2)
+                : 0.0;
+            $lastPaid = [
+                'hash'       => $lastPaidRow['hash'],
+                'total'      => round((float) $lastPaidRow['subtotal'] + $tax, 2),
+                'currency'   => $lastPaidRow['currency'],
+                'paid_at'    => $lastPaidRow['paid_at'],
+                'updated_at' => $lastPaidRow['updated_at'],
+            ];
+        }
+
+        return [
+            'total'             => (int) ($statsRow['total'] ?? 0),
+            'unpaid_count'      => (int) ($statsRow['unpaid_count'] ?? 0),
+            'paid_count'        => (int) ($statsRow['paid_count'] ?? 0),
+            'outstanding_total' => round((float) ($statsRow['outstanding_total'] ?? 0), 2),
+            'paid_total'        => round((float) ($statsRow['paid_total'] ?? 0), 2),
+            'currency'          => $statsRow['currency'] ?? '',
+            'last_paid'         => $lastPaid,
+        ];
     }
 
     /**
@@ -127,8 +208,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
         $pager = $this->getDi()['pager']->getPaginatedResultSet($sql, $params, PaginationOptions::fromArray($data));
 
         foreach ($pager['list'] as $key => $item) {
-            $transaction = $this->getDi()['db']->getExistingModelById('Transaction', $item['id'], 'Transaction not found');
-            $pager['list'][$key] = $transactionService->toApiArray($transaction);
+            $pager['list'][$key] = $transactionService->searchResultToApiArray($item);
         }
 
         return $pager;
@@ -138,6 +218,6 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $service = $this->getDi()['mod_service']('Invoice', 'Tax');
 
-        return $service->getTaxRateForClient($this->identity);
+        return $service->getTaxRateForClient($this->getIdentity());
     }
 }

@@ -28,6 +28,13 @@ class Service implements InjectionAwareInterface
         return $this->di;
     }
 
+    public function getModulePermissions(): array
+    {
+        return [
+            'manage_settings' => true,
+        ];
+    }
+
     /**
      * Returns the full OAuth callback URL for Google.
      */

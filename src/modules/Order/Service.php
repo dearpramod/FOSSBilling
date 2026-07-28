@@ -20,6 +20,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class Service implements InjectionAwareInterface
 {
+    public const META_CANCEL_AT_PERIOD_END = 'cancel_at_period_end';
+
     protected ?\Pimple\Container $di = null;
 
     public function setDi(\Pimple\Container $di): void
@@ -516,10 +518,6 @@ class Service implements InjectionAwareInterface
 
     public function getSearchQuery($data): array
     {
-        $query = 'SELECT co.* from client_order co
-                LEFT JOIN client c ON c.id = co.client_id
-                LEFT JOIN client_order_meta meta ON meta.client_order_id = co.id';
-
         $search = $data['search'] ?? false;
         $hide_addons = $data['hide_addons'] ?? null;
         $show_action_required = $data['show_action_required'] ?? null;
@@ -535,9 +533,19 @@ class Service implements InjectionAwareInterface
         $date_to = $data['date_to'] ?? null;
         $ids = (isset($data['ids']) && is_array($data['ids'])) ? $data['ids'] : null;
         $meta = (isset($data['meta']) && is_array($data['meta'])) ? $data['meta'] : null;
-
         $client_id = $data['client_id'] ?? null;
         $invoice_option = $data['invoice_option'] ?? null;
+
+        // Build minimal JOIN set — client JOIN only for name searches, meta JOIN only for meta filters.
+        // Unconditional JOINs inflate COUNT(*) when meta has multiple rows per order and force the
+        // DB to read two extra tables even for simple status-only client-side list queries.
+        $query = 'SELECT co.* from client_order co';
+        if ($search && !is_numeric($search)) {
+            $query .= ' LEFT JOIN client c ON c.id = co.client_id';
+        }
+        if ($meta) {
+            $query .= ' LEFT JOIN client_order_meta meta ON meta.client_order_id = co.id';
+        }
 
         $where = [];
         $bindings = [];
@@ -1249,16 +1257,66 @@ class Service implements InjectionAwareInterface
 
     public function cancelFromOrder(\Model_ClientOrder $order, $reason = null, $skipEvent = false): bool
     {
+        $this->assertOrderCanBeCanceled($order);
+        $this->beginCancellation($order, $skipEvent);
+
+        $subscriptionService = $this->di['mod_service']('Invoice', 'Subscription');
+        $subscriptionService->cancelForOrder($order);
+
+        return $this->completeCancellation($order, $reason, $skipEvent);
+    }
+
+    public function scheduleCancellationFromOrder(\Model_ClientOrder $order, $reason = null): bool
+    {
+        $this->assertOrderCanBeCanceled($order);
+
+        $subscriptionService = $this->di['mod_service']('Invoice', 'Subscription');
+        if (!$subscriptionService->canCancelAtPeriodEndForOrder($order)) {
+            throw new InformationException('No active gateway subscription that supports cancellation at period end is linked to this order.');
+        }
+
+        if ($subscriptionService->scheduleCancellationForOrder($order) === 0) {
+            throw new InformationException('No active gateway subscription is linked to this order.');
+        }
+        $this->updateOrderMeta($order, [self::META_CANCEL_AT_PERIOD_END => '1']);
+
+        $order->reason = $reason;
+        $order->updated_at = date('Y-m-d H:i:s');
+        $this->di['db']->store($order);
+        $this->saveStatusChange($order, 'Cancellation scheduled at the end of the current billing period');
+        $this->di['logger']->info('Scheduled cancellation for order #%s at the end of the current billing period', $order->id);
+
+        return true;
+    }
+
+    public function finalizeCancellationFromGateway(\Model_ClientOrder $order, $reason = null): bool
+    {
+        $this->assertOrderCanBeCanceled($order);
+        $this->beginCancellation($order, false);
+
+        return $this->completeCancellation($order, $reason, false);
+    }
+
+    private function assertOrderCanBeCanceled(\Model_ClientOrder $order): void
+    {
+        if (!in_array($order->status, [\Model_ClientOrder::STATUS_CANCELED, \Model_ClientOrder::STATUS_PENDING_SETUP, \Model_ClientOrder::STATUS_FAILED_SETUP], true)) {
+            return;
+        }
+
+        throw new \FOSSBilling\Exception('Cannot cancel ' . $order->status . ' order');
+    }
+
+    private function beginCancellation(\Model_ClientOrder $order, bool $skipEvent): void
+    {
         if (!$skipEvent) {
             $this->di['events_manager']->fire(['event' => 'onBeforeAdminOrderCancel', 'params' => ['id' => $order->id]]);
         }
 
-        if (in_array($order->status, [\Model_ClientOrder::STATUS_CANCELED, \Model_ClientOrder::STATUS_PENDING_SETUP, \Model_ClientOrder::STATUS_FAILED_SETUP])) {
-            throw new \FOSSBilling\Exception('Cannot cancel ' . $order->status . ' order');
-        }
-
         $this->_callOnService($order, \Model_ClientOrder::ACTION_CANCEL);
+    }
 
+    private function completeCancellation(\Model_ClientOrder $order, $reason, bool $skipEvent): bool
+    {
         $order->status = \Model_ClientOrder::STATUS_CANCELED;
         $order->reason = $reason;
         $order->canceled_at = date('Y-m-d H:i:s');
@@ -1266,6 +1324,10 @@ class Service implements InjectionAwareInterface
         $order->suspended_at = null;
         $order->updated_at = date('Y-m-d H:i:s');
         $this->di['db']->store($order);
+        $this->di['db']->exec(
+            'DELETE FROM client_order_meta WHERE client_order_id = :order_id AND name = :name',
+            [':order_id' => $order->id, ':name' => self::META_CANCEL_AT_PERIOD_END],
+        );
         $productService = $this->di['mod_service']('Product');
         $productService->releaseReservedPromoRedemptionsForOrder($order, 'order_canceled');
 
@@ -1380,7 +1442,7 @@ class Service implements InjectionAwareInterface
             ':status' => \Model_ClientOrder::STATUS_ACTIVE,
         ];
 
-        return $this->di['db']->find('ClientOrder', 'status = :status AND expires_at IS NOT NULL AND DATEDIFF(NOW(), expires_at) >= 1 ORDER BY id', $bindings);
+        return $this->di['db']->find('ClientOrder', 'status = :status AND expires_at IS NOT NULL AND expires_at <= NOW() ORDER BY id', $bindings);
     }
 
     public function batchSuspendExpired(): bool
@@ -1570,6 +1632,17 @@ class Service implements InjectionAwareInterface
         ];
 
         return $this->di['db']->findOne('ClientOrder', 'id = :id AND client_id = :client_id', $bindings);
+    }
+
+    public function assertOrderUsable(\Model_ClientOrder $order): void
+    {
+        if ($order->expires_at === null) {
+            return;
+        }
+
+        if (strtotime((string) $order->expires_at) <= time()) {
+            throw new InformationException('Subscription expired');
+        }
     }
 
     public function findByClientIdAndOrderId(int $clientId, int $orderId): ?\Model_ClientOrder

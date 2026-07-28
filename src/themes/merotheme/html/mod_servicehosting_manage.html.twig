@@ -1,4 +1,8 @@
-{% if order.status == 'active' %}
+{% if order.status == 'active' and not service %}
+<div class="rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-400">
+  Your hosting account is being provisioned. This may take a few minutes — please refresh the page shortly. Contact support if the issue persists.
+</div>
+{% elseif order.status == 'active' and service %}
 {% set server = service.server %}
 {% set hp = service.hosting_plan %}
 {% set daysUntilDue = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}

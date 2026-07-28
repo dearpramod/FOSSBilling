@@ -65,10 +65,7 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         }
 
         if ($confirmed) {
-            $systemService = $this->di['mod_service']('System');
-            $systemService->setPendingMessage(__trans('Email address was confirmed'));
-
-            return $app->redirect('/');
+            return $app->redirect('/client/email-verified');
         }
 
         return $app->render('mod_client_confirm_email', ['expired' => true]);

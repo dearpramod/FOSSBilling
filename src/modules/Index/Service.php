@@ -44,11 +44,14 @@ class Service implements InjectionAwareInterface
 
         return [
             'profile' => $this->getProfile($client),
+            'balance' => $this->di['mod_service']('Client', 'Balance')->getClientBalance($client),
             'tickets' => $this->getTicketsData($data),
             'invoices' => $this->getInvoicesData($data),
             'orders' => $this->getOrdersData($data),
             'recent_orders' => $this->getRecentOrders($data),
             'recent_tickets' => $this->getRecentTickets($data),
+            'recent_invoices' => $this->getRecentInvoices($data),
+            'recent_emails' => $this->getRecentEmails($data),
         ];
     }
 
@@ -56,7 +59,8 @@ class Service implements InjectionAwareInterface
     {
         $clientService = $this->di['mod_service']('client');
 
-        return $clientService->toApiArray($client, true);
+        // deep=false: balance is fetched separately by getDashboardData to avoid a duplicate query
+        return $clientService->toApiArray($client, false);
     }
 
     private function getTicketsData(array $data): array
@@ -138,52 +142,33 @@ class Service implements InjectionAwareInterface
 
     private function getOrdersData(array $data): array
     {
-        $sql = 'SELECT status, COUNT(*) as total
-                 FROM client_order
-                 WHERE client_id = :client_id
-                 AND group_master = 1
-                 GROUP BY status';
+        $days = (int) $this->di['mod_service']('system')->getParamValue('invoice_issue_days_before_expire', 14);
 
-        $results = $this->di['db']->getAll($sql, $data);
-
-        $counts = [
-            'total' => 0,
-            'active' => 0,
-            'expiring' => 0,
-        ];
-
-        foreach ($results as $row) {
-            // Sum total orders across all statuses
-            $counts['total'] += (int) $row['total'];
-
-            // Only track counts for expected statuses to avoid dynamic keys
-            if ($row['status'] === 'active') {
-                $counts['active'] = (int) $row['total'];
-            }
-        }
-
-        $systemService = $this->di['mod_service']('system');
-        $daysUntilExpiration = $systemService->getParamValue('invoice_issue_days_before_expire', 14);
-
-        $expiringSql = "SELECT COUNT(*) as total
-                        FROM client_order
-                        WHERE client_id = :client_id
-                        AND group_master = 1
-                        AND status = 'active'
+        $sql = "SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_count,
+                    SUM(CASE WHEN
+                        status = 'active'
                         AND invoice_option = 'issue-invoice'
                         AND period IS NOT NULL
                         AND expires_at IS NOT NULL
                         AND unpaid_invoice_id IS NULL
-                        AND DATEDIFF(expires_at, NOW()) <= :days";
+                        AND DATEDIFF(expires_at, NOW()) <= :days
+                    THEN 1 ELSE 0 END) AS expiring_count
+                FROM client_order
+                WHERE client_id = :client_id
+                AND group_master = 1";
 
-        $expiringResult = $this->di['db']->getCell($expiringSql, [
+        $row = $this->di['db']->getRow($sql, [
             'client_id' => $data['client_id'],
-            'days' => $daysUntilExpiration,
+            'days' => $days,
         ]);
 
-        $counts['expiring'] = (int) $expiringResult;
-
-        return $counts;
+        return [
+            'total' => (int) ($row['total'] ?? 0),
+            'active' => (int) ($row['active_count'] ?? 0),
+            'expiring' => (int) ($row['expiring_count'] ?? 0),
+        ];
     }
 
     private function getRecentOrders(array $data): array
@@ -206,5 +191,62 @@ class Service implements InjectionAwareInterface
         $orderService = $this->di['mod_service']('order');
 
         return $orderService->getBatchForApi($ids, $this->di['loggedin_client']);
+    }
+
+    private function getRecentInvoices(array $data): array
+    {
+        // Single query: fetch invoice header fields + computed total from line items via JOIN.
+        // Avoids N+1 (load per row) and the per-invoice invoice_item SELECT inside toApiArray.
+        $sql = 'SELECT
+                    i.id,
+                    i.hash,
+                    i.serie,
+                    i.nr,
+                    i.currency,
+                    i.taxrate,
+                    i.status,
+                    i.created_at,
+                    COALESCE(SUM(ii.price * ii.quantity), 0)                                              AS subtotal,
+                    COALESCE(SUM(CASE WHEN ii.taxed = 1 THEN ii.price * ii.quantity ELSE 0 END), 0)       AS taxable_subtotal
+                FROM invoice i
+                LEFT JOIN invoice_item ii ON ii.invoice_id = i.id
+                WHERE i.client_id = :client_id
+                AND i.approved = 1
+                GROUP BY i.id, i.hash, i.serie, i.nr, i.currency, i.taxrate, i.status, i.created_at
+                ORDER BY i.created_at DESC
+                LIMIT 5';
+
+        $rows = $this->di['db']->getAll($sql, $data);
+        $result = [];
+
+        foreach ($rows as $row) {
+            $taxRate = (float) ($row['taxrate'] ?? 0);
+            $taxableSubtotal = (float) $row['taxable_subtotal'];
+            $tax = ($taxRate > 0 && $taxableSubtotal !== 0.0) ? round($taxableSubtotal * $taxRate / 100, 2) : 0.0;
+
+            $result[] = [
+                'id'         => $row['id'],
+                'hash'       => $row['hash'],
+                'serie'      => $row['serie'],
+                'nr'         => $row['nr'],
+                'currency'   => $row['currency'],
+                'total'      => round((float) $row['subtotal'] + $tax, 2),
+                'status'     => $row['status'],
+                'created_at' => $row['created_at'],
+            ];
+        }
+
+        return $result;
+    }
+
+    private function getRecentEmails(array $data): array
+    {
+        $sql = 'SELECT id, subject, created_at
+                 FROM activity_client_email
+                 WHERE client_id = :client_id
+                 ORDER BY created_at DESC
+                 LIMIT 5';
+
+        return $this->di['db']->getAll($sql, $data);
     }
 }

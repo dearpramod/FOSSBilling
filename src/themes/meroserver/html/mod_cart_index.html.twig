@@ -1,6 +1,7 @@
 {% extends "layout_public.html.twig" %}
 
 {% block meta_title %}Your Cart{% endblock %}
+{% block body_class %}public-cart-page{% endblock %}
 
 {% set cart = guest.cart_get %}
 {% set currencies = guest.currency_get_pairs %}

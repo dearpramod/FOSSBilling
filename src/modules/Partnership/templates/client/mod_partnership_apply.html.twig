@@ -331,11 +331,11 @@
         });
         data['content'] = content;
 
-        API.client.post(
+        FOSSBilling.api.client.post(
             'support/ticket_create',
             data,
             function (res) {
-                bb.redirect("{{ 'support/ticket'|url }}" + '/' + res);
+                window.location.href = "{{ 'support/ticket'|url }}" + '/' + res;
             },
             function (res) {
                 submitBtn.disabled = false;

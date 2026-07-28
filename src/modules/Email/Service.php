@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Box\Mod\Email;
 
+use Box\Mod\Currency\Entity\Currency;
 use Box\Mod\Email\Entity\ActivityClientEmail;
 use Box\Mod\Email\Entity\EmailTemplate;
 use Box\Mod\Email\Entity\EmailTemplateGroup;
@@ -126,13 +127,121 @@ class Service implements \FOSSBilling\InjectionAwareInterface
 
     public function getVars(EmailTemplate $template): array
     {
-        if ($template->getVars() === null || $template->getVars() === '') {
-            return [];
+        $vars = [];
+        if ($template->getVars() !== null && $template->getVars() !== '') {
+            $json = $this->di['crypt']->decrypt($template->getVars(), Config::getProperty('info.salt'));
+            $decoded = is_string($json) ? json_decode($json, true) : null;
+            $vars = is_array($decoded) ? $decoded : [];
         }
 
-        $json = $this->di['crypt']->decrypt($template->getVars(), Config::getProperty('info.salt'));
+        // Invoice templates must remain previewable before an invoice email has
+        // populated the stored example variables.
+        if (str_starts_with($template->getActionCode(), 'mod_invoice_')) {
+            $invoice = is_array($vars['invoice'] ?? null) ? $vars['invoice'] : [];
+            $invoice['total'] ??= 0;
+            if (empty($invoice['currency'])) {
+                $currency = $this->di['mod_service']('currency')->getCurrencyRepository()->findDefault();
+                if ($currency instanceof Currency) {
+                    $invoice['currency'] = $currency->getCode();
+                }
+            }
+            $vars['invoice'] = $invoice;
+        }
 
-        return is_string($json) ? json_decode($json, true) : [];
+        $defaults = $this->getTemplateVarDefaults($template->getActionCode());
+        if ($defaults !== []) {
+            $vars = array_replace_recursive($defaults, $vars);
+        }
+
+        return $vars;
+    }
+
+    private function getTemplateVarDefaults(string $actionCode): array
+    {
+        $staff = [
+            'id' => 1,
+            'email' => 'staff@example.com',
+            'name' => 'Staff Member',
+            'signature' => '',
+        ];
+        $client = [
+            'id' => 1,
+            'email' => 'client@example.com',
+            'email_approved' => true,
+            'type' => 'individual',
+            'company' => '',
+            'company_vat' => '',
+            'company_number' => '',
+            'first_name' => 'Example',
+            'last_name' => 'Client',
+            'gender' => '',
+            'birthday' => '',
+            'phone_cc' => '',
+            'phone' => '',
+            'address_1' => '',
+            'address_2' => '',
+            'city' => '',
+            'state' => '',
+            'postcode' => '',
+            'country' => '',
+            'currency' => '',
+            'lang' => '',
+            'timezone' => '',
+        ];
+        $message = [
+            'id' => 1,
+            'content' => 'Example ticket message',
+            'attachment' => '',
+            'created_at' => '',
+            'updated_at' => '',
+            'author' => [
+                'name' => 'Example Client',
+                'role' => 'client',
+            ],
+        ];
+        $ticket = [
+            'id' => 1,
+            'subject' => 'Example support ticket',
+            'status' => 'open',
+            'created_at' => '',
+            'updated_at' => '',
+            'replies' => 0,
+            'first' => $message,
+            'helpdesk' => [
+                'id' => 1,
+                'name' => 'Support',
+                'can_reopen' => true,
+            ],
+            'author' => [
+                'id' => 1,
+                'name' => 'Example Client',
+                'first_name' => 'Example',
+                'last_name' => 'Client',
+                'email' => 'client@example.com',
+                'role' => 'client',
+            ],
+            'client' => [
+                'id' => 1,
+                'first_name' => 'Example',
+                'last_name' => 'Client',
+            ],
+            'messages' => [$message],
+        ];
+        $staffTicket = $ticket;
+        $staffTicket['priority'] = 100;
+        $staffTicket['client'] = $client;
+
+        return match ($actionCode) {
+            'mod_support_ticket_staff_open',
+            'mod_support_ticket_staff_close',
+            'mod_support_ticket_staff_reply' => ['c' => $client, 'ticket' => $ticket],
+            'mod_staff_ticket_open',
+            'mod_staff_ticket_reply',
+            'mod_staff_ticket_close' => ['staff' => $staff, 'ticket' => $staffTicket],
+            'mod_staff_password_reset_approve' => ['c' => $staff],
+            'mod_staff_client_signup' => ['c' => $client, 'staff' => $staff],
+            default => [],
+        };
     }
 
     public function sendTemplate($data)
@@ -237,7 +346,9 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             $to_name = $oneStaff['name'];
             $sent = $this->sendMail($to, $from, $subject, $content, $to_name, $from_name, $oneStaff['id'], null, $send_now, $throw_exceptions, $attachment);
         } elseif (isset($customer)) {
-            $to = $customer['email'];
+            // Supplying both keeps the email associated with the client while allowing a
+            // purpose-specific recipient, such as the client's billing address.
+            $to = $data['to'] ?? $customer['email'];
             $to_name = $customer['first_name'] . ' ' . $customer['last_name'];
             $sent = $this->sendMail($to, $from, $subject, $content, $to_name, $from_name, $customer['id'], null, $send_now, $throw_exceptions, $attachment);
         } else {
@@ -421,7 +532,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         if ($template instanceof EmailTemplate) {
             $default = $this->getDefaultTemplate($code, $data);
             if ($default !== null && !$this->isCustomTemplate($template)) {
-                $this->syncBuiltinTemplateMetadata($template, $default);
+                $this->syncBuiltinTemplate($template, $default);
             }
 
             return $template;
@@ -430,7 +541,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         return $this->createTemplateRecordFromData($code, $data);
     }
 
-    private function syncBuiltinTemplateMetadata(EmailTemplate $template, array $default): void
+    private function syncBuiltinTemplate(EmailTemplate $template, array $default): void
     {
         $updated = false;
 
@@ -444,8 +555,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             $updated = true;
         }
 
-        $isOverridden = $template->isOverridden();
-        if (!$isOverridden) {
+        if (!$template->isOverridden()) {
             if ($template->getSubject() !== $default['subject']) {
                 $template->setSubject($default['subject']);
                 $updated = true;
@@ -459,6 +569,14 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         if ($updated) {
             $this->di['em']->flush();
         }
+    }
+
+    private function resetBuiltinTemplate(EmailTemplate $template, array $default): void
+    {
+        $template->setSubject($default['subject'])
+            ->setContent($default['content'])
+            ->setIsOverridden(false)
+            ->clearError();
     }
 
     private function getEffectiveTemplateParts(EmailTemplate $template): array
@@ -485,6 +603,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
     private function _queue($to, $from, $subject, $content, $to_name = null, $from_name = null, $client_id = null, $admin_id = null, ?array $attachment = null): QueuedEmail
     {
         $em = $this->di['em'];
+        $content = $this->applySaasEmailLayout((string) $content, $from_name);
 
         $queue = new QueuedEmail();
         $queue->setRecipient((string) $to);
@@ -505,14 +624,149 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             $queue->setAttachmentMime((string) ($attachment['mime'] ?? 'application/octet-stream'));
         }
 
-        try {
-            $em->persist($queue);
-            $em->flush();
-        } catch (\Exception $e) {
-            error_log($e->getMessage());
-        }
+        $em->persist($queue);
+        $em->flush();
 
         return $queue;
+    }
+
+    /**
+     * Wrap legacy and custom transactional messages in one email-client-safe
+     * branded shell. Purpose-built templates can opt out with
+     * data-fb-email-shell="modern" on their root HTML or body element.
+     */
+    private function applySaasEmailLayout(string $content, ?string $brandName = null): string
+    {
+        $brand = trim((string) $brandName);
+        $brand = $brand !== '' ? $brand : 'MeroVPS';
+        $safeBrand = htmlspecialchars($brand, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $brandInitial = htmlspecialchars(strtoupper(substr($brand, 0, 1)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $logoUrl = $this->resolveEmailLogoUrl();
+        $logoMarkup = $logoUrl !== null
+            ? sprintf(
+                '<img src="%s" width="180" alt="%s" style="display:block;width:auto;max-width:180px;height:auto;max-height:52px;border:0;outline:none;text-decoration:none;">',
+                htmlspecialchars($logoUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $safeBrand
+            )
+            : '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>'
+                . '<td align="center" valign="middle" style="width:46px;height:46px;border-radius:13px;background:#111936;color:#fff;font-size:21px;font-weight:800;">' . $brandInitial . '</td>'
+                . '<td valign="middle" style="padding-left:12px;color:#111936;font-size:20px;font-weight:750;letter-spacing:-.4px;">' . $safeBrand . '</td>'
+                . '</tr></table>';
+
+        // Purpose-built templates use this placeholder because email Twig
+        // globals intentionally do not expose the active theme configuration.
+        $content = str_replace('<!--FB_EMAIL_LOGO-->', $logoMarkup, $content);
+
+        if ($content === '' || str_contains($content, 'data-fb-email-shell="modern"')) {
+            return $content;
+        }
+
+        $body = $content;
+        if (preg_match('~<body\b[^>]*>(.*)</body>~is', $content, $matches) === 1) {
+            $body = $matches[1];
+        }
+
+        // Template-level styles target the legacy document and are discarded
+        // when its body is placed inside the shared shell.
+        $body = preg_replace('~<style\b[^>]*>.*?</style>~is', '', $body) ?? $body;
+
+        return <<<HTML
+<!doctype html>
+<html lang="en" data-fb-email-shell="modern">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <style>
+        body { margin: 0 !important; padding: 0 !important; background: #edf3f8 !important; color: #172033 !important; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important; -webkit-text-size-adjust: 100%; }
+        .fb-email-content h1 { margin: 0 0 18px !important; color: #111827 !important; font-size: 26px !important; line-height: 1.3 !important; letter-spacing: -.5px !important; }
+        .fb-email-content h2, .fb-email-content h3 { color: #172033 !important; line-height: 1.4 !important; }
+        .fb-email-content p { margin: 0 0 14px !important; color: #56637a !important; font-size: 15px !important; line-height: 1.65 !important; }
+        .fb-email-content ul, .fb-email-content ol { margin: 16px 0 20px !important; padding: 0 0 0 22px !important; color: #56637a !important; }
+        .fb-email-content li { margin: 8px 0 !important; font-size: 14px !important; line-height: 1.55 !important; }
+        .fb-email-content a { color: #3158e8 !important; font-weight: 650 !important; text-decoration: none !important; }
+        .fb-email-content strong { color: #253047 !important; font-weight: 700 !important; }
+        .fb-email-content table { max-width: 100% !important; }
+        .fb-email-content img { max-width: 100% !important; height: auto !important; }
+        .fb-email-content .signature { margin-top: 24px !important; padding-top: 18px !important; border-top: 1px solid #e7ebf2 !important; color: #7d899b !important; font-size: 13px !important; font-style: normal !important; line-height: 1.55 !important; }
+        .fb-email-content code, .fb-email-content pre { overflow-wrap: anywhere; }
+        @media only screen and (max-width: 620px) {
+            .fb-email-outer { padding: 20px 10px !important; }
+            .fb-email-card { padding: 28px 22px !important; }
+            .fb-email-brand { padding-bottom: 22px !important; }
+            .fb-email-content h1 { font-size: 23px !important; }
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#edf3f8;">
+        <tr>
+            <td class="fb-email-outer" align="center" style="padding:36px 16px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;">
+                    <tr>
+                        <td class="fb-email-brand" align="center" style="padding:4px 24px 28px;">
+                            {$logoMarkup}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="fb-email-card fb-email-content" style="border-top:4px solid #5271ff;border-radius:16px;background:#fff;padding:38px 40px;box-shadow:0 12px 35px rgba(25,39,75,.06);">
+                            {$body}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:22px 24px 0;color:#7d899b;font-size:12px;line-height:18px;">
+                            This transactional notification was sent by {$safeBrand}.<br>
+                            Please keep it for your records.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+HTML;
+    }
+
+    /**
+     * Resolve the active client theme's email-safe logo, falling back to the
+     * company logo. Only absolute HTTP(S) URLs are returned to email clients.
+     */
+    private function resolveEmailLogoUrl(): ?string
+    {
+        $logoUrl = null;
+
+        try {
+            $themeService = $this->di['mod_service']('theme');
+            $theme = $themeService->getCurrentClientAreaTheme();
+            $settings = $themeService->getThemeSettings($theme);
+            $logoUrl = trim((string) ($settings['logo_url'] ?? ''));
+        } catch (\Throwable) {
+            // Theme data may not be available during installation or tests.
+        }
+
+        if ($logoUrl === null || $logoUrl === '') {
+            try {
+                $company = $this->di['mod_service']('system')->getCompany();
+                $logoUrl = trim((string) ($company['logo_url'] ?? ''));
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if ($logoUrl === '') {
+            return null;
+        }
+
+        if (!preg_match('~^https?://~i', $logoUrl)) {
+            $logoUrl = rtrim((string) SYSTEM_URL, '/') . '/' . ltrim($logoUrl, '/');
+        }
+
+        $scheme = strtolower((string) parse_url($logoUrl, PHP_URL_SCHEME));
+
+        return filter_var($logoUrl, FILTER_VALIDATE_URL) !== false && in_array($scheme, ['http', 'https'], true)
+            ? $logoUrl
+            : null;
     }
 
     private function _getVarsString(): string
@@ -837,9 +1091,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             throw new \FOSSBilling\Exception('Custom email template :code cannot be reset to a default', [':code' => $code]);
         }
 
-        $template->setSubject($default['subject'])
-            ->setContent($default['content'])
-            ->setIsOverridden(false);
+        $this->resetBuiltinTemplate($template, $default);
         $this->di['em']->flush();
         $this->di['logger']->info('Reset email template: %s', $template->getActionCode());
 
@@ -876,7 +1128,40 @@ class Service implements \FOSSBilling\InjectionAwareInterface
 
     public function templateBatchGenerate(): bool
     {
+        return $this->syncFileBackedTemplates();
+    }
+
+    public function templateBatchRegenerate(): bool
+    {
+        $regenerated = 0;
+
+        foreach ($this->getTemplateRepository()->findAll() as $template) {
+            if ($this->isCustomTemplate($template)) {
+                continue;
+            }
+
+            $default = $this->getDefaultTemplate($template->getActionCode());
+            if ($default === null) {
+                continue;
+            }
+
+            $this->resetBuiltinTemplate($template, $default);
+            ++$regenerated;
+        }
+
+        $this->di['em']->flush();
+        $this->di['logger']->info(sprintf('Regenerated %d existing file-backed email templates.', $regenerated));
+
+        return true;
+    }
+
+    private function syncFileBackedTemplates(): bool
+    {
         $extensionService = $this->di['mod_service']('extension');
+        $templatesByCode = [];
+        foreach ($this->getTemplateRepository()->findAll() as $template) {
+            $templatesByCode[$template->getActionCode()] = $template;
+        }
 
         $finder = new Finder();
         $finder = $finder->files()->in(PATH_MODS . '/*/templates/email/')->name('*.html.twig');
@@ -890,7 +1175,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
                 continue;
             }
 
-            $template = $this->getTemplateRepository()->findOneByActionCode($code);
+            $template = $templatesByCode[$code] ?? null;
             $default = $this->getDefaultTemplate($code, ['code' => $code]);
             if ($default === null) {
                 continue;
@@ -903,7 +1188,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             }
 
             if (!$this->isCustomTemplate($template)) {
-                $this->syncBuiltinTemplateMetadata($template, $default);
+                $this->syncBuiltinTemplate($template, $default);
             }
         }
 
@@ -940,7 +1225,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         if (!$this->isCustomTemplate($template)) {
             $default = $this->getDefaultTemplate($template->getActionCode());
             if ($default !== null) {
-                $this->syncBuiltinTemplateMetadata($template, $default);
+                $this->syncBuiltinTemplate($template, $default);
             }
         }
 
@@ -982,11 +1267,11 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         $systemService = $this->di['mod_service']('System');
 
         foreach ($templates as $template) {
-            [$subjectTemplate, $contentTemplate] = $this->getEffectiveTemplateParts($template);
-            $vars = $this->getVars($template);
             $error = null;
 
             try {
+                [$subjectTemplate, $contentTemplate] = $this->getEffectiveTemplateParts($template);
+                $vars = $this->getVars($template);
                 $systemService->renderEmailTplString($contentTemplate, $vars);
                 $systemService->renderEmailTplString($subjectTemplate, $vars);
             } catch (\Throwable $e) {
@@ -996,6 +1281,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             if ($error !== null) {
                 $template->setLastError($error);
                 $template->setErrorCheckedAt(new \DateTimeImmutable());
+                $this->di['logger']->warning(sprintf('Email template validation failed for "%s": %s', $template->getActionCode(), $error));
                 ++$results['invalid'];
                 $results['errors'][] = [
                     'id' => $template->getId(),

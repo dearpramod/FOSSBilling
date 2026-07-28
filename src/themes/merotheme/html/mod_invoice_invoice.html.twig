@@ -6,10 +6,7 @@
 {% block content %}
 {% set company = guest.system_company %}
 {% set balance = client ? client.client_balance_get_total : 0 %}
-{# Detect add-funds / deposit invoices — paying these with credits would be circular #}
-{% set is_deposit_invoice = false %}
-{% for line in invoice.lines %}{% if line.type == 'deposit' %}{% set is_deposit_invoice = true %}{% endif %}{% endfor %}
-{# Detect add-funds / deposit invoices — paying these with credits would be circular #}
+{# Deposit invoices cannot be paid with credits — circular funding #}
 {% set is_deposit_invoice = false %}
 {% for line in invoice.lines %}{% if line.type == 'deposit' %}{% set is_deposit_invoice = true %}{% endif %}{% endfor %}
 

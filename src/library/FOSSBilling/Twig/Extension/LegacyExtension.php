@@ -13,41 +13,11 @@ namespace FOSSBilling\Twig\Extension;
 
 use FOSSBilling\Twig\Markdown\FOSSBillingMarkdown;
 use Twig\Attribute\AsTwigFilter;
-use Twig\Environment;
 
 class LegacyExtension
 {
     public function __construct(private ?\Pimple\Container $di)
     {
-    }
-
-    #[AsTwigFilter('money', isSafe: ['html'], needsEnvironment: true)]
-    public function money(Environment $env, mixed $price, ?string $currency = null): string
-    {
-        $globals = $env->getGlobals();
-
-        return $globals['guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => false]);
-    }
-
-    #[AsTwigFilter('money_convert', isSafe: ['html'], needsEnvironment: true)]
-    public function moneyConvert(Environment $env, mixed $price, ?string $currency = null): string
-    {
-        $globals = $env->getGlobals();
-        $api_guest = $globals['guest'];
-        if ($currency === null) {
-            $c = $api_guest->cart_get_currency();
-            $currency = $c['code'];
-        }
-
-        return $api_guest->currency_format(['price' => $price, 'code' => $currency, 'convert' => true]);
-    }
-
-    #[AsTwigFilter('money_without_currency', isSafe: ['html'], needsEnvironment: true)]
-    public function moneyWithoutCurrency(Environment $env, mixed $price, ?string $currency = null): string
-    {
-        $globals = $env->getGlobals();
-
-        return $globals['guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => false, 'without_currency' => true]);
     }
 
     #[AsTwigFilter('ip_country_name')]
@@ -102,24 +72,46 @@ class LegacyExtension
         return $this->di['api_guest']->system_period_title(['code' => $period]);
     }
 
-    #[AsTwigFilter('markdown', isSafe: ['html'])]
-    public function markdown(?string $content): string
+    #[AsTwigFilter('money_convert', isSafe: ['html'])]
+    public function moneyConvert(mixed $price, ?string $currency = null): string
     {
-        if ($content === null) {
+        if ($currency === null) {
+            $c = $this->di['api_guest']->cart_get_currency();
+            $currency = $c['code'];
+        }
+
+        return $this->di['api_guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => true]);
+    }
+
+    #[AsTwigFilter('money', isSafe: ['html'])]
+    public function money(mixed $price, ?string $currency = null): string
+    {
+        return $this->di['api_guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => false]);
+    }
+
+    #[AsTwigFilter('money_without_currency', isSafe: ['html'])]
+    public function moneyWithoutCurrency(mixed $price, ?string $currency = null): string
+    {
+        return $this->di['api_guest']->currency_format(['price' => $price, 'code' => $currency, 'convert' => false, 'without_currency' => true]);
+    }
+
+    #[AsTwigFilter('markdown', isSafe: ['html'])]
+    public function markdown(?string $value): string
+    {
+        if ($value === null || $value === '') {
             return '';
         }
 
-        $markdown = new FOSSBillingMarkdown($this->di);
-        return $markdown->convert($content);
+        return (new FOSSBillingMarkdown($this->di))->convert($value);
     }
 
     #[AsTwigFilter('gravatar')]
     public function gravatar(?string $email, int $size = 20): string
     {
-        if (empty($email)) {
+        if ($email === null || trim($email) === '') {
             return '';
         }
 
-        return 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($email))) . "?s={$size}&d=mp&r=g";
+        return 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($email))) . '?s=' . $size . '&d=mp&r=g';
     }
 }

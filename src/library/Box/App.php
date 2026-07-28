@@ -197,7 +197,7 @@ class Box_App
 
             return $this->responseFactory()->redirect($this->di['url']->link('login'));
         } catch (EmailValidationRequiredException) {
-            return $this->responseFactory()->redirect($this->di['url']->link('client/profile'));
+            return $this->responseFactory()->redirect($this->di['url']->link('dashboard'));
         }
     }
 

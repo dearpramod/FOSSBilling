@@ -29,13 +29,13 @@
         <ul class="nav nav-tabs card-header-tabs" data-bs-toggle="tabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <a href="#tab-products" class="nav-link active" data-bs-toggle="tab" role="tab">
-                    <svg class="icon me-1"><use xlink:href="#orders" /></svg>
+                    <svg class="icon me-1"><use href="#receipt" /></svg>
                     {{ 'Product Pricing'|trans }}
                 </a>
             </li>
             <li class="nav-item" role="presentation">
                 <a href="#tab-tlds" class="nav-link" data-bs-toggle="tab" role="tab">
-                    <svg class="icon me-1"><use xlink:href="#link" /></svg>
+                    <svg class="icon me-1"><use href="#link" /></svg>
                     {{ 'Domain (TLD) Pricing'|trans }}
                 </a>
             </li>
@@ -89,7 +89,7 @@
                         </div>
                         <div class="col-md-2">
                             <button type="submit" class="btn btn-primary w-100">
-                                <svg class="icon me-1"><use xlink:href="#plus" /></svg>
+                                <svg class="icon me-1"><use href="#plus" /></svg>
                                 {{ 'Add Rule'|trans }}
                             </button>
                         </div>
@@ -132,13 +132,13 @@
                                             data-bs-toggle="collapse"
                                             data-bs-target="#edit-prod-{{ rule.id }}"
                                             title="{{ 'Edit'|trans }}">
-                                        <svg class="icon"><use xlink:href="#edit" /></svg>
+                                        <svg class="icon"><use href="#edit" /></svg>
                                     </button>
                                     <a class="btn btn-sm btn-outline-danger"
                                        href="#"
                                        {{ fb_api_link({href: 'partnership/product_pricing_delete'|api_url(query: {id: rule.id}), modal: {type: 'confirm', title: 'Are you sure?'|trans}, reload: true}) }}
                                        title="{{ 'Delete'|trans }}">
-                                        <svg class="icon"><use xlink:href="#delete" /></svg>
+                                        <svg class="icon"><use href="#trash" /></svg>
                                     </a>
                                 </td>
                             </tr>
@@ -165,7 +165,7 @@
                                             </div>
                                             <div class="col-auto">
                                                 <button type="submit" class="btn btn-sm btn-success">
-                                                    <svg class="icon me-1"><use xlink:href="#check" /></svg>
+                                                    <svg class="icon me-1"><use href="#check" /></svg>
                                                     {{ 'Save'|trans }}
                                                 </button>
                                                 <button type="button" class="btn btn-sm btn-secondary ms-1"
@@ -221,7 +221,7 @@
                         </div>
                         <div class="col-md-2">
                             <button type="submit" class="btn btn-primary w-100">
-                                <svg class="icon me-1"><use xlink:href="#plus" /></svg>
+                                <svg class="icon me-1"><use href="#plus" /></svg>
                                 {{ 'Add Rule'|trans }}
                             </button>
                         </div>
@@ -259,13 +259,13 @@
                                             data-bs-toggle="collapse"
                                             data-bs-target="#edit-tld-{{ rule.id }}"
                                             title="{{ 'Edit'|trans }}">
-                                        <svg class="icon"><use xlink:href="#edit" /></svg>
+                                        <svg class="icon"><use href="#edit" /></svg>
                                     </button>
                                     <a class="btn btn-sm btn-outline-danger"
                                        href="#"
                                        {{ fb_api_link({href: 'partnership/tld_pricing_delete'|api_url(query: {id: rule.id}), modal: {type: 'confirm', title: 'Are you sure?'|trans}, reload: true}) }}
                                        title="{{ 'Delete'|trans }}">
-                                        <svg class="icon"><use xlink:href="#delete" /></svg>
+                                        <svg class="icon"><use href="#trash" /></svg>
                                     </a>
                                 </td>
                             </tr>
@@ -293,7 +293,7 @@
                                             </div>
                                             <div class="col-auto">
                                                 <button type="submit" class="btn btn-sm btn-success">
-                                                    <svg class="icon me-1"><use xlink:href="#check" /></svg>
+                                                    <svg class="icon me-1"><use href="#check" /></svg>
                                                     {{ 'Save'|trans }}
                                                 </button>
                                                 <button type="button" class="btn btn-sm btn-secondary ms-1"

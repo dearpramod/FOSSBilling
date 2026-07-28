@@ -1,3 +1,54 @@
+{%- set _sd = {
+    'logo_url': '', 'logo_favicon': '',
+    'primary_color': '#5271ff', 'secondary_color': '#224dda',
+    'nav_dashboard': '1', 'nav_services': '1', 'nav_order': '1',
+    'nav_support': '1', 'nav_invoices': '1', 'nav_balance': '1',
+    'nav_profile': '1', 'top_menu_signout': '1',
+    'nav_home_show': '1', 'nav_home_label': '', 'nav_home_url': '',
+    'nav_contact_show': '1', 'nav_contact_label': '', 'nav_contact_url': '',
+    'nav_support_show': '1', 'nav_support_label': '', 'nav_support_url': '',
+    'nav_news_show': '1', 'nav_news_label': '', 'nav_news_url': '',
+    'nav_custom1_label': '', 'nav_custom1_url': '', 'nav_custom1_has_sub': '0',
+    'nav_custom1_sub1_label': '', 'nav_custom1_sub1_url': '',
+    'nav_custom1_sub2_label': '', 'nav_custom1_sub2_url': '',
+    'nav_custom1_sub3_label': '', 'nav_custom1_sub3_url': '',
+    'nav_custom1_sub4_label': '', 'nav_custom1_sub4_url': '',
+    'nav_custom2_label': '', 'nav_custom2_url': '', 'nav_custom2_has_sub': '0',
+    'nav_custom2_sub1_label': '', 'nav_custom2_sub1_url': '',
+    'nav_custom2_sub2_label': '', 'nav_custom2_sub2_url': '',
+    'nav_custom2_sub3_label': '', 'nav_custom2_sub3_url': '',
+    'nav_custom2_sub4_label': '', 'nav_custom2_sub4_url': '',
+    'nav_custom3_label': '', 'nav_custom3_url': '', 'nav_custom3_has_sub': '0',
+    'nav_custom3_sub1_label': '', 'nav_custom3_sub1_url': '',
+    'nav_custom3_sub2_label': '', 'nav_custom3_sub2_url': '',
+    'nav_custom3_sub3_label': '', 'nav_custom3_sub3_url': '',
+    'nav_custom3_sub4_label': '', 'nav_custom3_sub4_url': '',
+    'nav_custom4_label': '', 'nav_custom4_url': '', 'nav_custom4_has_sub': '0',
+    'nav_custom4_sub1_label': '', 'nav_custom4_sub1_url': '',
+    'nav_custom4_sub2_label': '', 'nav_custom4_sub2_url': '',
+    'nav_custom4_sub3_label': '', 'nav_custom4_sub3_url': '',
+    'nav_custom4_sub4_label': '', 'nav_custom4_sub4_url': '',
+    'homepage_mode': 'default', 'homepage_custom_url': '', 'hide_menu': '1',
+    'login_show_register': '1', 'login_show_reset': '1', 'login_logo_url': '',
+    'footer_enabled': '1',
+    'link_terms': '', 'tos': '', 'link_privacy': '', 'link_cookie': '', 'link_support': '',
+    'footer_phone': '', 'footer_email': '', 'footer_address': '',
+    'show_resource_usage': '1', 'show_account_management': '1',
+    'acct_show_password': '1', 'acct_show_domain': '1',
+    'acct_show_username': '1', 'acct_show_cancel': '1',
+    'social_facebook': '', 'social_twitter': '', 'social_instagram': '',
+    'meta_title_prefix': '', 'meta_title_suffix': '', 'meta_description': '',
+    'meta_keywords': '', 'meta_author': '', 'meta_robots': '',
+    'support_phone': '', 'support_whatsapp': '', 'support_chat_url': '', 'support_chat_label': '',
+    'support_show_ticket': '1', 'support_ticket_url': '', 'support_ticket_label': '',
+    'support_show_sales_ticket': '1', 'support_sales_ticket_url': '', 'support_sales_ticket_label': '',
+    'support_show_view_tickets': '1', 'support_show_whatsapp': '1', 'support_show_phone': '1',
+    'support_show_feedback': '1', 'support_feedback_url': '', 'support_feedback_label': '',
+    'support_show_kb': '1', 'support_kb_url': '', 'support_kb_label': '',
+    'support_show_getting_started': '1', 'support_getting_started_url': '', 'support_getting_started_label': '',
+    'category_title_in_tab': '1', 'inject_javascript': ''
+} -%}
+{%- set settings = _sd|merge(settings) -%}
 {% set active_locale = guest.system_locale|default('en')|replace({'_': '-'}) %}
 <!DOCTYPE html>
 <html lang="{{ active_locale }}" class="h-full">
@@ -38,7 +89,7 @@
         <div style="position:fixed;top:0;left:0;right:0;padding:0.75rem 1rem;background:#f59e0b;color:#1c1917;font-size:0.875rem;z-index:9999;text-align:center;">{{ 'JavaScript is required for the full experience. Please enable JavaScript.'|trans }}</div>
     </noscript>
 
-    {{ 'js/fossbilling.js' | public_asset_url | script_tag }}
+    {{ 'js/main.js' | public_asset_url | script_tag }}
     {{ 'js/api.js' | public_asset_url | script_tag }}
     <!-- Merotheme bundle: Alpine.js + @alpinejs/collapse + TomSelect (npm-bundled, no CDN) -->
     {{ 'build/js/meroserver.js' | asset_url | script_tag }}
@@ -178,9 +229,9 @@
 {% endif %}
 {# Invoice data is fetched async via JS — no server-side query per page load #}
 
-<header class="header-bar border-b border-white/[0.06] bg-[#030712]/95 backdrop-blur-md sticky top-0 z-30">
-    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-14">
+<header class="header-bar public-header border-b border-white/[0.06] bg-[#030712]/95 backdrop-blur-md sticky top-0 z-30">
+    <nav class="public-nav-shell max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Primary navigation">
+        <div class="flex items-center justify-between h-16">
 
             <!-- ── Logo ── -->
             <a href="{{ '/'|url }}" class="flex items-center flex-shrink-0">
@@ -195,8 +246,8 @@
 
                 <!-- Services dropdown -->
                 {% set serviceCategories = guest.product_category_get_list({'per_page': 50, 'deep': 0}) %}
-                <div class="relative" x-data="{ open: false }" @click.outside="open=false" @mouseenter="open=true" @mouseleave="open=false">
-                    <button @click="open=!open" class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">
+                <div class="relative" x-data="{ open: false }" @click.outside="open=false" @keydown.escape.window="open=false" @mouseenter="open=true" @mouseleave="open=false">
+                    <button @click="open=!open" :aria-expanded="open.toString()" aria-controls="public-services-menu" class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">
                         Services
                         <svg class="w-3.5 h-3.5 opacity-50 transition-transform duration-150" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -204,11 +255,11 @@
                     </button>
                     {# Transparent bridge fills the mt-1.5 gap so mouseleave never fires when crossing into the panel #}
                     <div class="absolute top-full left-0 right-0 h-2 z-40" x-show="open" style="display:none;"></div>
-                    <div x-show="open"
-                         x-transition:enter="transition ease-out duration-100"
+                    <div id="public-services-menu" x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
                          x-transition:enter-start="opacity-0 translate-y-1"
                          x-transition:enter-end="opacity-100 translate-y-0"
-                         x-transition:leave="transition ease-in duration-75"
+                         x-transition:leave="transition ease-in duration-150"
                          x-transition:leave-start="opacity-100 translate-y-0"
                          x-transition:leave-end="opacity-0 translate-y-1"
                          class="absolute top-full left-0 mt-1.5 w-72 dropdown-panel border border-white/[0.08] rounded-xl shadow-2xl shadow-black/60 py-1.5 z-50">
@@ -270,9 +321,12 @@
                         </button>
                         <div class="absolute top-full left-0 right-0 h-2 z-40" x-show="open" style="display:none;"></div>
                         <div x-show="open"
-                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 translate-y-1"
                              x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 translate-y-0"
+                             x-transition:leave-end="opacity-0 translate-y-1"
                              x-transition:leave="transition ease-in duration-75"
                              x-transition:leave-start="opacity-100 translate-y-0"
                              x-transition:leave-end="opacity-0 translate-y-1"
@@ -337,9 +391,12 @@
                         <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="open"
-                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter="transition ease-out duration-200"
                          x-transition:enter-start="opacity-0 translate-y-1"
                          x-transition:enter-end="opacity-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 translate-y-1"
                          class="absolute right-0 top-full mt-1.5 w-44 bg-[#0d1424] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/60 py-1.5 z-50">
                         <p class="px-4 pt-1.5 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Currency</p>
                         {% for code, title in currencies %}
@@ -376,14 +433,19 @@
                         </svg>
                         {% if client %}
                             <span class="text-xs font-medium text-gray-300 max-w-[72px] truncate">{{ profile.first_name }}</span>
+                        {% else %}
+                            <span class="text-xs font-semibold">Sign in</span>
                         {% endif %}
                         <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
 
                     <div x-show="open"
-                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter="transition ease-out duration-200"
                          x-transition:enter-start="opacity-0 translate-y-1"
                          x-transition:enter-end="opacity-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 translate-y-1"
                          class="absolute right-0 top-full mt-1.5 w-54 bg-[#0d1424] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/60 z-50 overflow-hidden"
                          style="min-width:13rem;">
                         {% if client %}
@@ -447,8 +509,8 @@
                 <div class="w-px h-5 bg-white/[0.08] mx-1"></div>
 
                 {# Primary CTA #}
-                <a href="{{ '/order'|url }}" class="text-sm px-4 py-1.5 rounded-lg btn-primary-gradient whitespace-nowrap">
-                    Get Started
+                <a href="{{ (client ? '/order' : '/signup')|url }}" class="public-header-cta text-sm px-4 py-2 rounded-lg btn-primary-gradient whitespace-nowrap">
+                    {{ client ? 'Get Started' : 'Create account' }}
                 </a>
             </div>
 
@@ -474,7 +536,11 @@
                           class="absolute -top-0.5 -right-0.5 w-[18px] h-[18px] rounded-full text-white text-[9px] font-bold flex items-center justify-center"
                           style="background: linear-gradient(135deg,var(--color-primary),var(--color-secondary)); display:{{ cartCount > 0 ? 'flex' : 'none' }};">{{ cartCount > 0 ? cartCount : '' }}</span>
                 </a>
-                <button @click="mobileMenuOpen = !mobileMenuOpen" class="p-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5">
+                <button @click="mobileMenuOpen = !mobileMenuOpen"
+                        :aria-expanded="mobileMenuOpen.toString()"
+                        aria-controls="public-mobile-menu"
+                        aria-label="Toggle navigation menu"
+                        class="p-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5">
                     <svg x-show="!mobileMenuOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
@@ -486,11 +552,16 @@
         </div>
 
         <!-- ── Mobile menu panel ── -->
-        <div x-show="mobileMenuOpen"
-             x-transition:enter="transition ease-out duration-150"
+        <div id="public-mobile-menu"
+             x-show="mobileMenuOpen"
+             @keydown.escape.window="mobileMenuOpen=false"
+             x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 -translate-y-2"
              x-transition:enter-end="opacity-100 translate-y-0"
-             class="lg:hidden pb-5 border-t border-white/[0.06] pt-4 space-y-1 max-h-[80vh] overflow-y-auto"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 -translate-y-2"
+             class="public-mobile-menu lg:hidden pb-5 border-t border-white/[0.06] pt-4 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto"
              x-data="{ mSub: '' }">
 
             <!-- Home -->
@@ -516,9 +587,8 @@
                     <svg class="w-4 h-4 text-gray-500 transition-transform duration-200" :class="mSub === 'services' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
                 <div x-show="mSub === 'services'"
-                     x-transition:enter="transition ease-out duration-150"
-                     x-transition:enter-start="opacity-0 -translate-y-1"
-                     x-transition:enter-end="opacity-100 translate-y-0"
+                     x-cloak
+                     x-collapse.duration.220ms
                      class="ml-11 mt-1 space-y-0.5 border-l border-white/[0.06] pl-3">
                     {% for category in serviceCategories.list %}
                         {%- set _mci = _nav_type_icons[category.type]|default({'color': 'text-indigo-400', 'icon': 'apps'}) -%}
@@ -543,36 +613,6 @@
                 </div>
             </div>
 
-            <!-- Contact -->
-            {% if settings.nav_contact_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_contact_url|default(settings.link_support|default('/support/contact')))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
-                <span class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
-                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                </span>
-                {{ settings.nav_contact_label|default('Contact') }}
-            </a>
-            {% endif %}
-
-            <!-- Support -->
-            {% if settings.nav_support_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_support_url|default('/support'))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
-                <span class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                </span>
-                {{ settings.nav_support_label|default('Support') }}
-            </a>
-            {% endif %}
-
-            <!-- News -->
-            {% if settings.nav_news_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_news_url|default('/news'))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
-                <span class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
-                    <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
-                </span>
-                {{ settings.nav_news_label|default('News') }}
-            </a>
-            {% endif %}
-
             <!-- Custom nav links -->
             {% if settings is not empty %}{% for n in [1,2,3,4] %}
             {% set cLabel  = attribute(settings, 'nav_custom' ~ n ~ '_label') %}
@@ -592,9 +632,8 @@
                         <svg class="w-4 h-4 text-gray-500 transition-transform duration-200" :class="mSub === 'custom{{ n }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="mSub === 'custom{{ n }}'"
-                         x-transition:enter="transition ease-out duration-150"
-                         x-transition:enter-start="opacity-0 -translate-y-1"
-                         x-transition:enter-end="opacity-100 translate-y-0"
+                         x-cloak
+                         x-collapse.duration.220ms
                          class="ml-11 mt-1 space-y-0.5 border-l border-white/[0.06] pl-3">
                         {% for s in [1,2,3,4] %}
                         {% set sLabel = attribute(settings, 'nav_custom' ~ n ~ '_sub' ~ s ~ '_label') %}
@@ -837,7 +876,7 @@
                         <span class="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>
                         Log in
                     </a>
-                    <a href="{{ '/order'|url }}" class="block px-3 py-3 rounded-xl text-sm text-white font-semibold text-center btn-primary-gradient mt-1">Get Started</a>
+                    <a href="{{ '/signup'|url }}" class="block px-3 py-3 rounded-xl text-sm text-white font-semibold text-center btn-primary-gradient mt-1">Create account</a>
                 {% endif %}
             </div>
         </div>
@@ -875,7 +914,7 @@
         <section class="ref-portal-footer-links">
             <div><h3>Products</h3><a href="{{ '/order/server'|url }}">Nepal VPS Hosting</a><a href="{{ '/order/server'|url }}">Windows VPS</a><a href="{{ '/order'|url }}">Cloud Hosting</a><a href="{{ '/order'|url }}">All Plans</a></div>
             <div><h3>Resources</h3><a href="{{ '/news'|url }}">News</a><a href="{{ '/support/kb'|url }}">Knowledge Base</a><a href="{{ '/support'|url }}">Network Status</a><a href="{{ '/support'|url }}">Support</a></div>
-            <div><h3>Company</h3><a href="{{ '/page/about-us'|url }}">About Us</a><a href="{{ (settings.link_support|default('/support/contact'))|url }}">Contact</a><a href="{{ '/partnership-program'|url }}">Partners</a></div>
+            <div><h3>Company</h3><a href="{{ '/page/about-us'|url }}">About Us</a><a href="{{ (settings.link_support|default('/support/contact'))|url }}">Contact</a><a href="{{ '/partnership-program'|url }}">Partners</a>{% if settings.footer_phone|default('') %}<a href="tel:{{ settings.footer_phone|replace({' ': ''}) }}">{{ settings.footer_phone }}</a>{% endif %}{% if settings.footer_email|default('') %}<a href="mailto:{{ settings.footer_email }}">{{ settings.footer_email }}</a>{% endif %}{% if settings.footer_address|default('') %}<span>{{ settings.footer_address }}</span>{% endif %}</div>
             <div><h3>Legal</h3><a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}">Terms of Service</a><a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">Privacy Policy</a><a href="{{ (settings.link_cookie|default('/page/cookie-policy'))|url }}">Cookie Policy</a></div>
         </section>
 
@@ -884,6 +923,26 @@
         <section class="ref-portal-footer-bottom">
             <a href="{{ '/'|url }}" class="ref-portal-brand">{{ company.name }}</a>
             <p>&copy; {{ "now"|date("Y") }} {{ company.name }}. Nepal-focused hosting and client services.</p>
+            {% set _has_social = settings.social_facebook|default('') or settings.social_twitter|default('') or settings.social_instagram|default('') %}
+            {% if _has_social %}
+            <div class="ref-portal-social">
+                {% if settings.social_facebook|default('') %}
+                <a href="{{ settings.social_facebook }}" target="_blank" rel="noopener" aria-label="Facebook" class="ref-portal-social-link">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
+                </a>
+                {% endif %}
+                {% if settings.social_twitter|default('') %}
+                <a href="{{ settings.social_twitter }}" target="_blank" rel="noopener" aria-label="X / Twitter" class="ref-portal-social-link">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+                {% endif %}
+                {% if settings.social_instagram|default('') %}
+                <a href="{{ settings.social_instagram }}" target="_blank" rel="noopener" aria-label="Instagram" class="ref-portal-social-link">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
             <nav><a href="{{ (settings.link_cookie|default('/page/cookie-policy'))|url }}">Cookies</a><a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">Privacy</a><a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}">Terms</a></nav>
         </section>
     </div>

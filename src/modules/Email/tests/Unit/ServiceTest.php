@@ -10,6 +10,7 @@
 
 declare(strict_types=1);
 
+use Box\Mod\Currency\Entity\Currency;
 use Box\Mod\Email\Entity\EmailTemplate;
 
 use function Tests\Helpers\container;
@@ -212,6 +213,64 @@ test('getVars decrypts and returns variables', function (): void {
     $result = $service->getVars($t);
     expect($result)->toBeArray();
     expect($result)->toBe($expected);
+});
+
+test('getVars supplies the default currency for invoice template previews', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $currencyRepository = Mockery::mock(Box\Mod\Currency\Repository\CurrencyRepository::class);
+    $currencyRepository->shouldReceive('findDefault')->once()->andReturn(new Currency('USD'));
+    $currencyService = Mockery::mock(Box\Mod\Currency\Service::class);
+    $currencyService->shouldReceive('getCurrencyRepository')->once()->andReturn($currencyRepository);
+
+    $di = container();
+    $di['mod_service'] = $di->protect(moduleService(['currency' => $currencyService]));
+    $service->setDi($di);
+
+    $template = emailTemplate('mod_invoice_paid');
+
+    expect($service->getVars($template))->toBe([
+        'invoice' => [
+            'total' => 0,
+            'currency' => 'USD',
+        ],
+    ]);
+});
+
+test('getVars supplies preview variables for support and staff templates before their first send', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $supportVars = $service->getVars(emailTemplate('mod_support_ticket_staff_open'));
+    expect($supportVars)
+        ->toHaveKeys(['c.email', 'ticket.subject', 'ticket.client.first_name', 'ticket.messages.0.content'])
+        ->not->toHaveKeys(['ticket.priority', 'ticket.client.email', 'ticket.messages.0.author.email']);
+
+    $staffVars = $service->getVars(emailTemplate('mod_staff_ticket_open'));
+    expect($staffVars)
+        ->toHaveKeys(['staff.email', 'ticket.priority', 'ticket.client.email', 'ticket.messages.0.content']);
+
+    $passwordResetVars = $service->getVars(emailTemplate('mod_staff_password_reset_approve'));
+    expect($passwordResetVars)->toHaveKeys(['c.id', 'c.email', 'c.name']);
+
+    $signupVars = $service->getVars(emailTemplate('mod_staff_client_signup'));
+    expect($signupVars)->toHaveKeys(['c.email', 'c.first_name', 'c.last_name', 'staff.email']);
+});
+
+test('getVars merges stored examples over preview defaults', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $cryptMock = Mockery::mock('\Box_Crypt');
+    $cryptMock->shouldReceive('decrypt')->once()->andReturn('{"ticket":{"subject":"Stored subject"}}');
+
+    $di = container();
+    $di['crypt'] = $cryptMock;
+    $service->setDi($di);
+
+    $template = emailTemplate('mod_staff_ticket_reply', data: ['vars' => 'encrypted']);
+    $vars = $service->getVars($template);
+
+    expect($vars['ticket']['subject'])->toBe('Stored subject')
+        ->and($vars)->toHaveKeys(['staff.email', 'ticket.priority', 'ticket.client.email']);
 });
 
 test('sendTemplate returns false when template does not exist', function (): void {
@@ -428,6 +487,7 @@ dataset('sendTemplateExistsStaffProvider', fn (): array => [
         ],
         'never',
         'atLeastOnce',
+        'staff@fossbilling.org',
     ],
     [
         [
@@ -440,10 +500,11 @@ dataset('sendTemplateExistsStaffProvider', fn (): array => [
         ],
         'atLeastOnce',
         'never',
+        'example@example.com',
     ],
 ]);
 
-test('sendTemplate handles to_staff and to_client options', function (array $data, string $clientGetExpects, string $staffResolveExpects): void {
+test('sendTemplate handles to_staff and to_client options', function (array $data, string $clientGetExpects, string $staffResolveExpects, string $expectedRecipient): void {
     $service = new Box\Mod\Email\Service();
 
     $di = container();
@@ -456,7 +517,18 @@ test('sendTemplate handles to_staff and to_client options', function (array $dat
     $templateGroupRepo = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateGroupRepository::class);
     $templateGroupRepo->shouldReceive('getGroupIdsForTemplate')->andReturn([3]);
 
+    /** @var Box\Mod\Email\Entity\QueuedEmail|null $persistedQueue */
+    $persistedQueue = null;
     $em = emailBuildEm(null, $templateRepo, null, true, $templateGroupRepo);
+    $em->shouldReceive('persist')
+        ->atLeast()->once()
+        ->with(Mockery::on(function ($entity) use (&$persistedQueue): bool {
+            if ($entity instanceof Box\Mod\Email\Entity\QueuedEmail) {
+                $persistedQueue = $entity;
+            }
+
+            return true;
+        }));
 
     $system = Mockery::mock(Box\Mod\System\Service::class);
     $system->shouldReceive('getParamValue')
@@ -551,6 +623,8 @@ test('sendTemplate handles to_staff and to_client options', function (array $dat
     $result = $service->sendTemplate($data);
 
     expect($result)->toBeTrue();
+    expect($persistedQueue)->not->toBeNull();
+    expect($persistedQueue->getRecipient())->toBe($expectedRecipient);
 })->with('sendTemplateExistsStaffProvider');
 
 test('sendTemplate does not send to staff when template has no assigned groups', function (): void {
@@ -991,8 +1065,48 @@ test('templateCreate creates new template', function (): void {
     expect($result->getActionCode())->toBe($data['action_code']);
 });
 
-test('templateBatchDisable disables all templates', function (): void {
+test('templateBatchRegenerate resets existing built-in templates without module discovery', function (): void {
+    $template = emailTemplate('mod_invoice_created', 1, [
+        'subject' => 'Legacy subject',
+        'content' => '{{ invoice.total|money(invoice.currency) }}',
+        'is_overridden' => true,
+        'last_error' => 'Unknown "money" filter',
+    ]);
+    $customTemplate = emailTemplate('mod_invoice_paid', 2, [
+        'content' => 'Custom template content',
+        'is_custom' => true,
+    ]);
+
+    $templateRepository = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateRepository::class);
+    $templateRepository->shouldReceive('findOneByActionCode')->never();
+    $templateRepository->shouldReceive('findAll')->once()->andReturn([$template, $customTemplate]);
+
+    $em = emailBuildEm(templateRepo: $templateRepository);
+    $em->shouldReceive('flush')->once();
+
+    $di = container();
+    $di['em'] = $em;
+    $di['logger'] = new Tests\Helpers\TestLogger();
+
     $service = new Box\Mod\Email\Service();
+    $service->setDi($di);
+
+    expect($service->templateBatchRegenerate())->toBeTrue()
+        ->and($template->isOverridden())->toBeFalse()
+        ->and($template->getSubject())->not->toBe('Legacy subject')
+        ->and($template->getContent())->not->toContain('|money')
+        ->and($template->hasError())->toBeFalse()
+        ->and($customTemplate->getContent())->toBe('Custom template content');
+
+    $logMessages = array_map(static fn (array $call): string => $call['params'][0], $di['logger']->calls);
+    expect($logMessages)
+        ->not->toContain('Synced file-backed email templates for installed modules.')
+        ->toContain('Regenerated 1 existing file-backed email templates.');
+});
+
+test('templateBatchDisable disables all templates', function (): void {
+    $service = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $service->shouldReceive('templateBatchGenerate')->once()->withNoArgs()->andReturnTrue();
 
     $di = container();
     $di['logger'] = new Tests\Helpers\TestLogger();
@@ -1004,7 +1118,8 @@ test('templateBatchDisable disables all templates', function (): void {
 });
 
 test('templateBatchEnable enables all templates', function (): void {
-    $service = new Box\Mod\Email\Service();
+    $service = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $service->shouldReceive('templateBatchGenerate')->once()->withNoArgs()->andReturnTrue();
 
     $di = container();
     $di['logger'] = new Tests\Helpers\TestLogger();
@@ -1208,6 +1323,46 @@ test('validateAllTemplates reports invalid templates', function (): void {
     expect($result['invalid'])->toBe(1);
     expect($result['errors'])->toHaveCount(1);
     expect($result['errors'][0]['action_code'])->toBe('mod_email_broken');
+    expect($di['logger']->calls)->toContainEqual([
+        'method' => 'warning',
+        'params' => ['Email template validation failed for "mod_email_broken": Email template syntax error: Unknown "filter" filter', []],
+    ]);
+});
+
+test('validateAllTemplates reports stored variable errors instead of aborting', function (): void {
+    $service = Mockery::mock(Box\Mod\Email\Service::class)->makePartial();
+    $template = emailTemplate('mod_email_broken_vars', 1, [
+        'subject' => 'Hello',
+        'content' => 'World',
+    ]);
+
+    $repository = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateRepository::class)->shouldIgnoreMissing();
+    $repository->shouldReceive('findAll')->once()->andReturn([$template]);
+    $service->shouldReceive('getVars')->once()->with($template)->andThrow(new RuntimeException('Unable to decrypt template variables'));
+
+    $systemService = Mockery::mock();
+    $systemService->shouldNotReceive('renderEmailTplString');
+
+    $em = emailBuildEm();
+    $em->shouldReceive('flush')->once();
+
+    $di = container();
+    $di['em'] = $em;
+    $di['mod_service'] = $di->protect(moduleService(['system' => $systemService]));
+    $service->setDi($di);
+
+    $reflection = new ReflectionProperty($service, 'templateRepository');
+    $reflection->setValue($service, $repository);
+
+    expect($service->validateAllTemplates())->toMatchArray([
+        'valid' => 0,
+        'invalid' => 1,
+        'errors' => [[
+            'id' => 1,
+            'action_code' => 'mod_email_broken_vars',
+            'error' => 'Unable to decrypt template variables',
+        ]],
+    ]);
 });
 
 test('validateAllTemplates clears previous errors on valid templates', function (): void {

@@ -62,30 +62,12 @@ function orderProduct(productId, defaultPeriod) {
         productOnceRawPrice: {% if product.pricing.type == 'once' %}{{ product.pricing.once.price|default(0) }}{% else %}0{% endif %},
         domainRawPrice: 0,
         domainName: '',
-
-        // Currency
-        currencyRate: {{ _op_currency.conversion_rate|default(1) }},
-        currencyCode: {{ _op_currency.code|default('USD')|json_encode|raw }},
-        currencyPriceFormat: {{ _op_currency.price_format|default(2)|json_encode|raw }},
-        currencyFormat: {{ (_op_currency.symbol|default(_op_currency.code|default('')) ~ '__PRICE__')|json_encode|raw }},
+        srvFieldPrices: {},
+        srvFieldLabels: {},
+        srvFieldSelections: {},
 
         formatMoney(rawPrice) {
-            const p = parseFloat(rawPrice) * this.currencyRate;
-            const tpl = this.currencyFormat;
-            if (tpl && tpl.includes('__PRICE__')) {
-                const fmt = parseInt(this.currencyPriceFormat);
-                let s;
-                const th = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-                if (fmt === 1) { s = p.toFixed(2); }
-                else if (fmt === 3) { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], '.'); s = pts.join(','); }
-                else if (fmt === 4) { s = th(Math.round(p).toString(), ','); }
-                else if (fmt === 5) { s = Math.round(p).toString(); }
-                else { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], ','); s = pts.join('.'); }
-                return tpl.replace('__PRICE__', s);
-            }
-            return new Intl.NumberFormat(undefined, {
-                style: 'currency', currency: this.currencyCode, currencyDisplay: 'narrowSymbol',
-            }).format(p);
+            return Alpine.store('fbCurrency').formatMoney(rawPrice);
         },
 
         getPeriodMonthly(p) {
@@ -118,6 +100,10 @@ function orderProduct(productId, defaultPeriod) {
             else if (period === 'free') { base = 0; }
             else if (this.productRawPrices[period] !== undefined) { base = this.productRawPrices[period]; }
             base += this.domainRawPrice;
+            if (period !== 'once' && period !== 'free') {
+                const months = this.periodMonthsMap[period] || 1;
+                Object.values(this.srvFieldPrices).forEach(p => { base += (parseFloat(p) || 0) * months; });
+            }
             Object.entries(this.addons).forEach(([id, state]) => {
                 if (!state.selected) return;
                 const type = this.addonPricingTypes[id];
@@ -170,6 +156,24 @@ function orderProduct(productId, defaultPeriod) {
             });
             document.addEventListener('domainSelected', e => {
                 this.domainName = (e.detail && e.detail.domain) || '';
+            });
+            document.addEventListener('srvFieldPriceUpdated', e => {
+                if (!e.detail.fieldId) return;
+                const fieldId = e.detail.fieldId;
+                this.srvFieldPrices = { ...this.srvFieldPrices, [fieldId]: parseFloat(e.detail.monthlyPrice) || 0 };
+                if (e.detail.fieldLabel) this.srvFieldLabels = { ...this.srvFieldLabels, [fieldId]: e.detail.fieldLabel };
+                const nextSelections = { ...this.srvFieldSelections };
+                if (e.detail.optionValue) {
+                    nextSelections[fieldId] = {
+                        id: fieldId,
+                        label: e.detail.fieldLabel || fieldId,
+                        value: e.detail.optionLabel || e.detail.optionValue,
+                        price: parseFloat(e.detail.monthlyPrice) || 0,
+                    };
+                } else {
+                    delete nextSelections[fieldId];
+                }
+                this.srvFieldSelections = nextSelections;
             });
         },
 
@@ -261,6 +265,30 @@ function orderProduct(productId, defaultPeriod) {
                 }
             }
 
+            // Native server option fields configured under Serviceserver settings.
+            // JSON API payloads must use a nested config object; bracket notation is
+            // not expanded server-side as it would be in a regular HTML form post.
+            const serverConfig = {};
+            const serverOptionInputs = this.$el.querySelectorAll('[data-server-option][name^="config["]');
+            for (const el of serverOptionInputs) {
+                const match = el.name.match(/^config\[([^\]]+)\]$/);
+                if (!match) continue;
+                const value = String(el.value || '').trim();
+                if (el.dataset.required === 'true' && !value) {
+                    this.loading = false;
+                    this.errorMsg = `Please select ${String(el.dataset.label || 'a required server option').toLowerCase()}.`;
+                    const section = el.closest('.ord-srv-option-card');
+                    if (section) {
+                        section.classList.add('ord-srv-required-error');
+                        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        window.setTimeout(() => section.classList.remove('ord-srv-required-error'), 1800);
+                    }
+                    return;
+                }
+                if (value) serverConfig[match[1]] = value;
+            }
+            if (Object.keys(serverConfig).length > 0) data.config = serverConfig;
+
             // Selected add-ons — recurrent ones always need a valid period
             const addonPayload = {};
             let hasAddons = false;
@@ -314,5 +342,36 @@ function orderProduct(productId, defaultPeriod) {
         }
     };
 }
+
+// Register the shared currency store on alpine:init — the bundle is deferred, so Alpine
+// isn't available when this inline script executes. alpine:init fires inside Alpine.start()
+// before any x-data component is initialized, so the store is ready for all components.
+document.addEventListener('alpine:init', () => {
+    if (Alpine.store('fbCurrency')) return;
+    Alpine.store('fbCurrency', {
+        rate: {{ _op_currency.conversion_rate|default(1) }},
+        code: {{ _op_currency.code|default('USD')|json_encode|raw }},
+        priceFormat: {{ _op_currency.price_format|default(2)|json_encode|raw }},
+        format: {{ (_op_currency.symbol|default(_op_currency.code|default('')) ~ '__PRICE__')|json_encode|raw }},
+        formatMoney(rawPrice) {
+            const p = parseFloat(rawPrice) * this.rate;
+            const tpl = this.format;
+            if (tpl && tpl.includes('__PRICE__')) {
+                const fmt = parseInt(this.priceFormat);
+                let s;
+                const th = (str, sep) => str.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+                if (fmt === 1) { s = p.toFixed(2); }
+                else if (fmt === 3) { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], '.'); s = pts.join(','); }
+                else if (fmt === 4) { s = th(Math.round(p).toString(), ','); }
+                else if (fmt === 5) { s = Math.round(p).toString(); }
+                else { const pts = p.toFixed(2).split('.'); pts[0] = th(pts[0], ','); s = pts.join('.'); }
+                return tpl.replace('__PRICE__', s);
+            }
+            return new Intl.NumberFormat(undefined, {
+                style: 'currency', currency: this.code, currencyDisplay: 'narrowSymbol',
+            }).format(p);
+        }
+    });
+});
 </script>
 {% endif %}

@@ -28,12 +28,11 @@ class Client implements \FOSSBilling\InjectionAwareInterface
     public function register(\Box_App &$app): void
     {
         $app->get('/order', 'get_products', [], static::class);
-        $app->get('/order/checkout', 'get_checkout', [], static::class);
-        $app->post('/order/checkout/login', 'post_checkout_login', [], static::class);
-        $app->get('/order/domain-registration', 'get_domain_order', [], static::class);
-        $app->get('/order/domain-transfer', 'get_domain_transfer', [], static::class);
         $app->get('/order/service', 'get_orders', [], static::class);
         $app->get('/order/service/manage/:id', 'get_order', ['id' => '[0-9]+'], static::class);
+        $app->get('/order/checkout', 'get_checkout', [], static::class);
+        $app->get('/order/domain-registration', 'get_domain_registration', [], static::class);
+        $app->get('/order/domain-transfer', 'get_domain_transfer', [], static::class);
         $app->get('/order/:id', 'get_configure_product', ['id' => '[0-9]+'], static::class);
         $app->get('/order/:slug', 'get_configure_product_by_slug', ['slug' => '[a-z0-9-]+'], static::class);
     }
@@ -48,36 +47,7 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         return $app->render('mod_order_checkout');
     }
 
-    public function post_checkout_login(\Box_App $app): \Symfony\Component\HttpFoundation\Response
-    {
-        // CSRF protection — validate against the session/cookie token
-        $token = $_POST['CSRFToken'] ?? '';
-        $sessionToken = $this->di['session']->get('csrf_token');
-        $cookieToken = $_COOKIE['csrf_token'] ?? null;
-        $validTokens = array_filter([$sessionToken, $cookieToken]);
-
-        if (empty($token) || empty($validTokens) || !in_array($token, $validTokens, true)) {
-            return $app->redirect('/order/checkout?auth_error=' . urlencode('Security check failed, please try again.'));
-        }
-
-        $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
-
-        if (empty($email) || empty($password)) {
-            return $app->redirect('/order/checkout?auth_error=' . urlencode('Email and password are required.'));
-        }
-
-        try {
-            $api = $this->di['api_guest'];
-            $api->client_login(['email' => $email, 'password' => $password]);
-        } catch (\Exception $e) {
-            return $app->redirect('/order/checkout?auth_tab=login&auth_error=' . urlencode($e->getMessage()));
-        }
-
-        return $app->redirect('/order/checkout');
-    }
-
-    public function get_domain_order(\Box_App $app): string
+    public function get_domain_registration(\Box_App $app): string
     {
         return $app->render('mod_order_domain_plans');
     }
@@ -87,78 +57,39 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         return $app->render('mod_order_domain_transfer');
     }
 
-    public function get_configure_product_by_slug(\Box_App $app, $slug): string|\Symfony\Component\HttpFoundation\Response
+    public function get_configure_product_by_slug(\Box_App $app, $slug): string
     {
         $api = $this->di['api_guest'];
 
-        // First: try to match a product by its slug
+        // Try product lookup first.
         try {
             $product = $api->product_get(['slug' => $slug]);
-
-            // Domain products use the dedicated registration page as their
-            // default order form (canonical URL: /order/domain-registration).
-            if ($product['type'] === 'domain') {
-                return $app->redirect($this->domainRegistrationUrl());
-            }
-
             $tpl = 'mod_service' . $product['type'] . '_order';
             if ($api->system_template_exists(['file' => $tpl . '.html.twig'])) {
                 return $app->render($tpl, ['product' => $product]);
             }
 
             return $app->render('mod_order_product', ['product' => $product]);
-        } catch (\FOSSBilling\Exception) {
-            // Not a product slug — fall through to category lookup
+        } catch (\Exception) {
+            // Fall through to category lookup.
         }
 
-        // Second: try to match a product category by title-derived slug
-        $categories = $api->product_category_get_list(['per_page' => 200]);
+        // Try matching the slug against slugified category titles.
+        $categories = $api->product_category_get_list(['per_page' => 200, 'deep' => 0]);
         foreach ($categories['list'] as $cat) {
-            if ($this->titleToSlug($cat['title']) === $slug) {
-                return $app->render('mod_order_category', [
-                    'category_id'   => $cat['id'],
-                    'category_slug' => $slug,
-                ]);
+            $catSlug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower((string) ($cat['title'] ?? ''))), '-');
+            if ($catSlug === $slug) {
+                return $app->render('mod_order_category', ['category_id' => $cat['id'], 'category_slug' => $slug]);
             }
         }
 
-        throw new \FOSSBilling\InformationException('Page :url not found', [':url' => '/order/' . $slug], 404);
+        throw new \FOSSBilling\InformationException('Page not found', [], 404);
     }
 
-    /**
-     * Canonical domain-registration URL, preserving the incoming query string
-     * (register_sld / register_tld searches keep working across the redirect).
-     */
-    private function domainRegistrationUrl(): string
-    {
-        $query = (string) ($_SERVER['QUERY_STRING'] ?? '');
-
-        return '/order/domain-registration' . ($query !== '' ? '?' . $query : '');
-    }
-
-    /**
-     * Convert a human-readable title to a URL slug.
-     * e.g. "WordPress Hosting" → "wordpress-hosting"
-     */
-    private function titleToSlug(string $title): string
-    {
-        $slug = mb_strtolower($title);
-        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
-
-        return trim($slug, '-');
-    }
-
-    public function get_configure_product(\Box_App $app, $id): string|\Symfony\Component\HttpFoundation\Response
+    public function get_configure_product(\Box_App $app, $id): string
     {
         $api = $this->di['api_guest'];
         $product = $api->product_get(['id' => $id]);
-
-        // Domain products use the dedicated registration page as their
-        // default order form (canonical URL: /order/domain-registration).
-        if ($product['type'] === 'domain') {
-            return $app->redirect($this->domainRegistrationUrl());
-        }
-
         $tpl = 'mod_service' . $product['type'] . '_order';
         if ($api->system_template_exists(['file' => $tpl . '.html.twig'])) {
             return $app->render($tpl, ['product' => $product]);

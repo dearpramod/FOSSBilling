@@ -20,8 +20,8 @@ async function build() {
   await ensureDir(resolve(outputDir, 'editor'));
 
   await buildJsFile({
-    entryPoint: resolve(__dirname, 'core/fossbilling.ts'),
-    outfile: resolve(outputDir, 'js/fossbilling.js'),
+    entryPoint: resolve(__dirname, 'core/main.ts'),
+    outfile: resolve(outputDir, 'js/main.js'),
     isProduction,
     drop: [],
   });
@@ -52,7 +52,7 @@ async function build() {
   });
 
   const manifest = {
-    'js/fossbilling.js': '/public/assets/js/fossbilling.js',
+    'js/main.js': '/public/assets/js/main.js',
     'js/api.js': '/public/assets/js/api.js',
     'css/markdown.css': '/public/assets/css/markdown.css',
     'editor/ckeditor.js': '/public/assets/editor/ckeditor.js',

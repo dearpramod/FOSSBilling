@@ -1,4 +1,6 @@
 {% set active_locale = guest.system_locale|default('en')|replace({'_': '-'}) %}
+{% set normalizedPath = (request_path|default(request.uri|default('/')))|trim('/')|lower %}
+{% set isOrderFlowRoute = normalizedPath starts with 'order' and not (normalizedPath starts with 'order/service') %}
 <!DOCTYPE html>
 <html lang="{{ active_locale }}" class="h-full">
 <head>
@@ -10,6 +12,10 @@
     {% if settings.meta_author|default(false) %}<meta name="author" content="{{ settings.meta_author }}">{% endif %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ CSRFToken }}">
+    {% if isOrderFlowRoute %}
+    {# Enables the order skeleton only when JavaScript is available. #}
+    <script>document.documentElement.classList.add('order-skeleton-enabled');</script>
+    {% endif %}
     {# Prevent browser HTTP cache from storing authenticated pages #}
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, private">
     <meta http-equiv="Pragma" content="no-cache">
@@ -55,9 +61,7 @@
     <!-- Theme CSS: Tailwind utilities + theme.css + custom.css (all bundled, minified in production) -->
     <link rel="stylesheet" href="{{ 'build/css/meroserver.css' | asset_url }}">
 
-    <!-- FOSSBilling core JS (fb_api_form binding, FOSSBilling.api.*) -->
-    <script defer src="{{ 'js/fossbilling.js' | public_asset_url }}"></script>
-    <!-- FOSSBilling API wrapper (FOSSBilling.api.client/guest/admin) -->
+    <script defer src="{{ 'js/main.js' | public_asset_url }}"></script>
     <script src="{{ 'js/api.js' | public_asset_url }}"></script>
     <!-- Merotheme bundle: Alpine.js + @alpinejs/collapse (defer: Alpine.start() runs after DOM parsed) -->
     <script defer src="{{ 'build/js/meroserver.js' | asset_url }}"></script>
@@ -172,6 +176,11 @@
     #sidebar-toggle svg:last-of-type   { display: none; }
     html[data-sb="collapsed"] #sidebar-toggle svg:first-of-type { display: none; }
     html[data-sb="collapsed"] #sidebar-toggle svg:last-of-type  { display: flex; }
+    /* Sidebar logo — pre-Alpine FOUC prevention (mirrors x-show logic) */
+    .sb-logo-icon { display: none; }
+    .sb-logo-full { display: flex; }
+    html[data-sb="collapsed"] .sb-logo-icon { display: flex; }
+    html[data-sb="collapsed"] .sb-logo-full { display: none; }
     /* Chat icon float animation */
     @keyframes chat-float {
         0%, 100% { transform: translateY(0); }
@@ -195,9 +204,8 @@
 </head>
 
 {% set orderServicesActive = 'order/domain-registration' in request.uri or 'order/domain-transfer' in request.uri or (request.uri starts with '/order' and 'service' not in request.uri and 'checkout' not in request.uri) %}
-{% set normalizedPath = (request_path|default(request.uri|default('/')))|trim('/')|lower %}
 {% set isDashboardRoute = normalizedPath == '' or normalizedPath starts with 'dashboard' %}
-<body class="bg-[#f8f9ff] text-[#0b1c30] font-sans h-full {% block body_class %}{% endblock %}" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sb_collapsed') === '1', helpOpen: false, orderServicesOpen: {{ orderServicesActive ? 'true' : 'false' }}, darkMode: localStorage.getItem('merovps_theme') === 'dark' }" x-init="document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light'); document.documentElement.setAttribute('data-sb', sidebarCollapsed ? 'collapsed' : 'expanded'); $watch('sidebarCollapsed', function(v){ localStorage.setItem('sb_collapsed', v ? '1' : '0'); document.documentElement.setAttribute('data-sb', v ? 'collapsed' : 'expanded'); }); $watch('darkMode', function(v){ var t = v ? 'dark' : 'light'; localStorage.setItem('merovps_theme', t); document.documentElement.setAttribute('data-theme', t); });">
+<body class="bg-[#f8f9ff] text-[#0b1c30] font-sans h-full {{ isOrderFlowRoute ? 'order-flow-page' : '' }} {% block body_class %}{% endblock %}" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sb_collapsed') === '1', helpOpen: false, orderServicesOpen: {{ orderServicesActive ? 'true' : 'false' }}, darkMode: localStorage.getItem('merovps_theme') === 'dark' }" x-init="document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light'); document.documentElement.setAttribute('data-sb', sidebarCollapsed ? 'collapsed' : 'expanded'); $watch('sidebarCollapsed', function(v){ localStorage.setItem('sb_collapsed', v ? '1' : '0'); document.documentElement.setAttribute('data-sb', v ? 'collapsed' : 'expanded'); }); $watch('darkMode', function(v){ var t = v ? 'dark' : 'light'; localStorage.setItem('merovps_theme', t); document.documentElement.setAttribute('data-theme', t); }); $watch('helpOpen', function(v){ document.documentElement.classList.toggle('help-panel-open', v); if(v){ $nextTick(function(){ var closeButton = document.querySelector('#help-panel [data-help-close]'); if(closeButton) closeButton.focus({preventScroll:true}); }); } else { $nextTick(function(){ if($refs.helpTrigger) $refs.helpTrigger.focus({preventScroll:true}); }); } });">
 <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-white focus:text-indigo-600 focus:rounded-lg focus:ring-2 focus:ring-indigo-500 focus:shadow-lg">{{ 'Skip to main content'|trans }}</a>
 {% if _gtm_on %}
 {{ guest.googletagmanager_body_snippet|raw }}
@@ -254,9 +262,9 @@
 
            <!-- Logo -->
            <div class="saas-sidebar-header flex-shrink-0 flex items-center border-b border-slate-200 transition-all duration-300"
-               :class="sidebarCollapsed ? 'justify-center px-0' : 'flex-col justify-center gap-1 px-4 py-3 text-center'">
+               :class="sidebarCollapsed ? 'justify-center px-0 py-3' : 'flex-col justify-center gap-1 px-4 py-3 text-center'">
             <!-- Collapsed: favicon icon -->
-            <a x-show="sidebarCollapsed" x-transition.opacity.duration.150ms href="{{ '/'|url }}" class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <a x-show="sidebarCollapsed" x-transition.opacity.duration.150ms href="{{ '/'|url }}" class="sb-logo-icon w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                 {% if settings.logo_favicon|default(false) %}
                 <img src="{{ settings.logo_favicon }}" alt="{{ company.name }}" class="w-6 h-6 object-contain">
                 {% else %}
@@ -264,7 +272,7 @@
                 {% endif %}
             </a>
             <!-- Expanded: logo or brand text, with dashboard label below -->
-            <div x-show="!sidebarCollapsed" x-transition.opacity.duration.150ms class="flex flex-col items-center min-w-0 flex-1 overflow-hidden">
+            <div x-show="!sidebarCollapsed" x-transition.opacity.duration.150ms class="sb-logo-full flex-col items-center min-w-0 flex-1 overflow-hidden">
                 {% if settings.logo_url|default(false) %}
                     <a href="{{ '/'|url }}" class="flex-shrink-0 overflow-hidden">
                         <img src="{{ settings.logo_url }}" alt="{{ company.name }}" class="h-7 w-auto logo-img mx-auto">
@@ -339,10 +347,10 @@
             {% if settings.nav_order|default('1') != '0' %}
             {# Collapsed sidebar: single icon link #}
             <a x-show="sidebarCollapsed"
-               x-transition:enter="transition ease-out duration-150"
+               x-transition:enter="transition ease-out duration-200"
                x-transition:enter-start="opacity-0 scale-95"
                x-transition:enter-end="opacity-100 scale-100"
-               x-transition:leave="transition ease-in duration-100"
+               x-transition:leave="transition ease-in duration-150"
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
                href="{{ '/order'|url }}" title="Order Services"
@@ -357,10 +365,10 @@
 
             {# Expanded sidebar: collapsible header + children #}
             <div x-show="!sidebarCollapsed"
-                 x-transition:enter="transition ease-out duration-180 delay-75"
+                 x-transition:enter="transition ease-out duration-200 delay-75"
                  x-transition:enter-start="opacity-0 -translate-x-1"
                  x-transition:enter-end="opacity-100 translate-x-0"
-                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave="transition ease-in duration-150"
                  x-transition:leave-start="opacity-100 translate-x-0"
                  x-transition:leave-end="opacity-0 -translate-x-1">
                 <button @click="orderServicesOpen = !orderServicesOpen"
@@ -415,9 +423,13 @@
                           <a href="{{ catHref }}"
                               class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
                               {{ catActive ? _ci.active : 'text-slate-400 hover:text-primary hover:bg-violet-50' }}">
+                        {% if category.icon_url %}
+                        <img src="{{ category.icon_url }}" alt="" class="w-3.5 h-3.5 flex-shrink-0 object-contain">
+                        {% else %}
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ _ci.path }}"/>
                         </svg>
+                        {% endif %}
                         {{ category.title }}
                     </a>
                     {% endfor %}
@@ -529,21 +541,24 @@
 
         <!-- Help & Support trigger (panel lives outside aside to avoid transform stacking context) -->
         <div class="px-3 py-2">
-            <button @click.stop="helpOpen = !helpOpen; sidebarOpen = false; if(helpOpen){ $nextTick(() => { const p = document.getElementById('help-panel'); p.classList.remove('hp-anim'); void p.offsetWidth; p.classList.add('hp-anim'); }) }"
+            <button x-ref="helpTrigger"
+                    @click.stop="helpOpen = !helpOpen; sidebarOpen = false"
                     title="Help &amp; Support"
+                    aria-controls="help-panel"
+                    :aria-expanded="helpOpen.toString()"
                     class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-slate-500 hover:bg-violet-50 hover:text-primary"
                     :class="[sidebarCollapsed ? 'justify-center px-2' : '', helpOpen ? 'bg-indigo-500/10 text-indigo-400 help-btn-active' : '']">
                 <div class="relative flex-shrink-0">
                     <svg class="w-5 h-5 chat-icon-animate" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                     <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span class="dot-ping absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span x-show="!helpOpen" class="dot-ping absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400"></span>
                 </div>
                 <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">Help &amp; Support</span>
             </button>
         </div>
 
         <!-- User info — fixed py-5 height matches right section footer -->
-        <div class="saas-sidebar-profile border-t border-slate-100 bg-slate-50/50"
+        <div class="saas-sidebar-profile border-t border-slate-100 dark:border-white/[0.06] dark:bg-transparent"
              :class="sidebarCollapsed ? 'px-2 py-4' : 'px-4 py-4'">
             {% if client %}
                 {% if profile is not defined %}{% set profile = client.profile_get %}{% endif %}
@@ -618,24 +633,29 @@
     <!-- Help & Support panel — outside <aside> so position:fixed works (transforms break fixed) -->
     {# Backdrop — starts below header, above content #}
     <div x-show="helpOpen" x-cloak
-         x-transition:enter="transition-opacity ease-linear duration-200"
+         x-transition:enter="transition-opacity ease-out duration-200"
          x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-         x-transition:leave="transition-opacity ease-linear duration-150"
+         x-transition:leave="transition-opacity ease-in duration-150"
          x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
          @click="helpOpen = false"
-         class="fixed top-[57px] inset-x-0 bottom-0 z-[26] bg-black/20"
+         class="help-panel-backdrop fixed bottom-0 right-0 z-[26] bg-black/20"
          aria-hidden="true">
     </div>
 
     {# Panel — z-[28] keeps it below header (z-30) so header stays on top #}
     <div x-show="helpOpen" x-cloak
-         x-transition:enter="transition-transform ease-out duration-300"
-         x-transition:enter-start="-translate-x-full"
-         x-transition:enter-end="translate-x-0"
-         x-transition:leave="transition-transform ease-in duration-250"
-         x-transition:leave-start="translate-x-0"
-         x-transition:leave-end="-translate-x-full"
-         class="help-panel fixed top-[57px] bottom-0 z-[28] w-72 max-w-[90vw] flex flex-col overflow-hidden" id="help-panel">
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 -translate-x-full"
+         x-transition:enter-end="opacity-100 translate-x-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-x-0"
+         x-transition:leave-end="opacity-0 -translate-x-full"
+         @keydown.escape.window="if (helpOpen) helpOpen = false"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="help-panel-title"
+         tabindex="-1"
+         class="help-panel fixed bottom-0 z-[28] max-w-[90vw] flex flex-col overflow-hidden" id="help-panel">
 
         {# Header #}
         <div class="help-panel-header flex-shrink-0 px-5 py-4 border-b border-white/[0.07] flex items-center justify-between">
@@ -646,11 +666,11 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-sm font-semibold text-white">Help &amp; Support</p>
+                    <p id="help-panel-title" class="text-sm font-semibold text-white">Help &amp; Support</p>
                     <p class="text-[11px] text-gray-500">{{ company.name }}</p>
                 </div>
             </div>
-            <button @click="helpOpen = false" class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-all" aria-label="Close">
+            <button data-help-close @click="helpOpen = false" class="help-panel-close rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-colors" aria-label="Close Help and Support">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
@@ -791,6 +811,8 @@
     {% if _show_sidebar %}
     <!-- Desktop sidebar collapse toggle — fixed pill anchored to sidebar right edge middle -->
     <button id="sidebar-toggle"
+            x-show="!helpOpen"
+            x-transition.opacity.duration.120ms
             @click.stop="sidebarCollapsed = !sidebarCollapsed; helpOpen = false"
             :aria-expanded="(!sidebarCollapsed).toString()"
             aria-controls="sidebar"
@@ -809,7 +831,10 @@
     {% endif %}
 
     <!-- ========== MAIN AREA ========== -->
-    <div class="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+    {# `clip` prevents horizontal paint overflow without creating a scroll
+       container. Using `hidden` here breaks position:sticky descendants
+       inside the independently scrolling #main-content order flow. #}
+    <div class="flex-1 flex flex-col min-w-0 overflow-x-clip">
 
         <!-- Top bar -->
         <header id="global-topbar" class="relative z-30 border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-slate-900/80 flex-shrink-0 px-4 sm:px-8 h-16 flex items-center justify-between">
@@ -850,9 +875,12 @@
                             <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                         </button>
                         <div x-show="open"
-                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 translate-y-1"
                              x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 translate-y-0"
+                             x-transition:leave-end="opacity-0 translate-y-1"
                              class="absolute right-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-lg shadow-lg shadow-black/[0.06] py-1.5 z-50">
                             <p class="px-4 pt-1.5 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Currency</p>
                             {% for code, title in currencies %}
@@ -898,9 +926,12 @@
                         </button>
 
                         <div x-show="open"
-                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 translate-y-1"
                              x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 translate-y-0"
+                             x-transition:leave-end="opacity-0 translate-y-1"
                              class="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg shadow-black/[0.06] dark:shadow-black/40 z-50 overflow-hidden backdrop-blur-sm">
                             {% if client %}
                                 <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
@@ -1003,9 +1034,12 @@
                         <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="open"
-                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter="transition ease-out duration-200"
                          x-transition:enter-start="opacity-0 translate-y-1"
                          x-transition:enter-end="opacity-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 translate-y-1"
                          class="absolute right-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-lg shadow-lg shadow-black/[0.06] py-1.5 z-50">
                         <p class="px-4 pt-1.5 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Currency</p>
                         {% for code, title in currencies %}
@@ -1055,9 +1089,12 @@
                     </button>
 
                     <div x-show="open"
-                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter="transition ease-out duration-200"
                          x-transition:enter-start="opacity-0 translate-y-1"
                          x-transition:enter-end="opacity-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 translate-y-1"
                          class="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800/95 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg shadow-black/[0.06] dark:shadow-black/40 z-50 overflow-hidden backdrop-blur-sm">
                         {% if client %}
                             <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
@@ -1112,7 +1149,7 @@
         {{ include('partial_message.html.twig') }}
 
         <!-- Page content -->
-        <main id="main-content" class="flex-1 overflow-y-auto flex flex-col">
+        <main id="main-content" class="flex-1 min-h-0 overflow-y-auto flex flex-col">
             {% if isDashboardRoute and client %}
             <section class="ref-dashboard-hero">
                 <div>
@@ -1130,12 +1167,77 @@
                 </div>
             </section>
             {% endif %}
-            <div class="flex-1 w-full pb-6 px-4 py-4 sm:px-8 sm:py-5 lg:px-16">
+            <div class="flex-1 w-full pb-6 px-4 py-4 sm:px-8 sm:py-5 lg:px-16 {{ isOrderFlowRoute ? 'order-boot-stage' : '' }}">
+                {% if isOrderFlowRoute %}
+                <div id="order-page-skeleton"
+                     class="order-page-skeleton"
+                     role="status"
+                     aria-live="polite"
+                     aria-label="{{ 'Loading order form'|trans }}">
+                    <span class="sr-only">{{ 'Loading order form'|trans }}</span>
+                    <div class="order-skeleton-heading">
+                        <i></i>
+                        <i></i>
+                    </div>
+                    <div class="order-skeleton-grid" aria-hidden="true">
+                        <div class="order-skeleton-main">
+                            <div class="order-skeleton-card order-skeleton-card-lg">
+                                <i class="order-skeleton-line w-36"></i>
+                                <div class="order-skeleton-options">
+                                    <i></i><i></i><i></i>
+                                </div>
+                            </div>
+                            <div class="order-skeleton-card order-skeleton-card-md">
+                                <i class="order-skeleton-line w-44"></i>
+                                <i class="order-skeleton-row"></i>
+                                <i class="order-skeleton-row"></i>
+                            </div>
+                            <div class="order-skeleton-card order-skeleton-card-sm">
+                                <i class="order-skeleton-line w-28"></i>
+                                <i class="order-skeleton-row"></i>
+                            </div>
+                        </div>
+                        <aside class="order-skeleton-card order-skeleton-summary">
+                            <i class="order-skeleton-line w-32"></i>
+                            <i class="order-skeleton-row"></i>
+                            <i class="order-skeleton-total"></i>
+                            <i class="order-skeleton-button"></i>
+                        </aside>
+                    </div>
+                </div>
+                <div id="order-page-content" class="order-page-content" aria-busy="true">
+                {% endif %}
                 {{ render_widgets('client.theme.content.before') }}
                 {% block content_before %}{% endblock %}
                 {% block content %}{% endblock %}
                 {% block content_after %}{% endblock %}
                 {{ render_widgets('client.theme.content.after') }}
+                {% if isOrderFlowRoute %}
+                </div>
+                <script>
+                (function () {
+                    function revealOrderPage() {
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () {
+                                document.documentElement.classList.add('order-page-ready');
+                                var content = document.getElementById('order-page-content');
+                                var skeleton = document.getElementById('order-page-skeleton');
+                                if (content) content.setAttribute('aria-busy', 'false');
+                                window.setTimeout(function () {
+                                    if (skeleton) skeleton.hidden = true;
+                                }, 240);
+                            });
+                        });
+                    }
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', revealOrderPage, { once: true });
+                    } else {
+                        revealOrderPage();
+                    }
+                    window.setTimeout(revealOrderPage, 4000);
+                })();
+                </script>
+                {% endif %}
             </div>
 
             <!-- Compact client-area footer; the public marketing footer belongs to layout_public only. -->

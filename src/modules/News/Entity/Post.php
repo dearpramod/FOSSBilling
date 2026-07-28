@@ -103,6 +103,7 @@ class Post implements ApiArrayInterface, TimestampInterface
             'updated_at' => $this->getUpdatedAt()?->format('Y-m-d H:i:s'),
             'author' => $this->adminData, /* @todo Doctrine: Replace with actual Admin entity and remove $adminData once it's migrated to Doctrine. */
             'excerpt' => $excerpt,
+            'tags' => [],
         ];
     }
 

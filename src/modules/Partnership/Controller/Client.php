@@ -10,6 +10,9 @@ declare(strict_types=1);
 
 namespace Box\Mod\Partnership\Controller;
 
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Response;
+
 class Client implements \FOSSBilling\InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
@@ -30,7 +33,7 @@ class Client implements \FOSSBilling\InjectionAwareInterface
         $app->get('/partnership-program/', 'get_index', [], static::class);
     }
 
-    public function get_index(\Box_App $app)
+    public function get_index(\Box_App $app): string|RedirectResponse|Response
     {
         if (!$this->di['auth']->isClientLoggedIn()) {
             return $app->redirect($this->di['url']->link('login'));
@@ -52,7 +55,8 @@ class Client implements \FOSSBilling\InjectionAwareInterface
                     $isDefaultGroup = false;
                 }
             }
-        } catch (\Exception) {
+        } catch (\Exception $e) {
+            $this->di['logger']->warning('Partnership: failed to load client group: ' . $e->getMessage());
         }
 
         if ($isDefaultGroup) {

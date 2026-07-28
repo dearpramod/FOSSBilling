@@ -11,23 +11,8 @@
 {% endif %}
 {% set currentPage = request.page|default(1)|number_format(0,'','') %}
 
-{# Stats data — fetch once, used in stat cards #}
-{% set unpaid_all = client.invoice_get_list({'status': 'unpaid', 'per_page': 200}) %}
-{% set paid_recent = client.invoice_get_list({'status': 'paid', 'per_page': 1}) %}
-{% set all_count = client.invoice_get_list({'per_page': 1}) %}
-
-{# Sum outstanding totals #}
-{% set outstanding_total = 0 %}
-{% set outstanding_currency = '' %}
-{% for inv in unpaid_all.list %}
-    {% set outstanding_total = outstanding_total + inv.total %}
-    {% if outstanding_currency == '' %}{% set outstanding_currency = inv.currency %}{% endif %}
-{% endfor %}
-
-{# Fallback currency from main list #}
-{% if outstanding_currency == '' and invoices.list|length > 0 %}
-    {% set outstanding_currency = invoices.list[0].currency %}
-{% endif %}
+{# Stats — 2 SQL queries; replaces 3 × invoice_get_list + Twig sum loops #}
+{% set invoice_stats = client.invoice_get_stats %}
 
 {# Pagination display range #}
 {% set rangeStart = (currentPage - 1) * 10 + 1 %}
@@ -42,8 +27,8 @@
             <h1 class="text-[30px] leading-[38px] tracking-[-0.02em] font-bold text-slate-900 dark:text-white mb-1">Invoices</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 Manage your billing and view payment history.
-                {% if all_count.total > 0 %}
-                <span class="font-semibold" style="color: var(--color-primary);">{{ all_count.total }} invoice{{ all_count.total != 1 ? 's' : '' }} total</span>
+                {% if invoice_stats.total > 0 %}
+                <span class="font-semibold" style="color: var(--color-primary);">{{ invoice_stats.total }} invoice{{ invoice_stats.total != 1 ? 's' : '' }} total</span>
                 {% endif %}
             </p>
         </div>
@@ -64,22 +49,26 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         {# Total Outstanding #}
-        <div class="bg-white dark:bg-white/[0.03] p-6 rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Outstanding</span>
-                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+        <div class="bg-white dark:bg-white/[0.03] p-6 rounded-xl border shadow-sm
+            {{ invoice_stats.unpaid_count > 0 ? 'border-red-200 dark:border-red-500/25 bg-red-50/20 dark:bg-red-500/[0.04]' : 'border-slate-200 dark:border-white/[0.06]' }}">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
+                    {{ invoice_stats.unpaid_count > 0 ? 'bg-red-100 dark:bg-red-500/15 text-red-500' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' }}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Total Outstanding</span>
             </div>
-            {% if unpaid_all.total > 0 %}
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ outstanding_total|money(outstanding_currency) }}</div>
+            {% if invoice_stats.unpaid_count > 0 %}
+            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ invoice_stats.outstanding_total|money(invoice_stats.currency) }}</div>
             <div class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-500">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                {{ unpaid_all.total }} invoice{{ unpaid_all.total != 1 ? 's' : '' }} unpaid
+                {{ invoice_stats.unpaid_count }} invoice{{ invoice_stats.unpaid_count != 1 ? 's' : '' }} unpaid
             </div>
             {% else %}
             <div class="text-2xl font-bold text-slate-900 dark:text-white">—</div>
-            <div class="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-500">
+            <div class="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 All payments up to date
             </div>
@@ -88,16 +77,17 @@
 
         {# Last Payment #}
         <div class="bg-white dark:bg-white/[0.03] p-6 rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Last Payment</span>
-                <svg class="w-5 h-5" style="color: var(--color-primary);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0 text-indigo-600 dark:text-indigo-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Last Payment</span>
             </div>
-            {% if paid_recent.list|length > 0 %}
-            {% set last_paid = paid_recent.list[0] %}
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ last_paid.total|money(last_paid.currency) }}</div>
-            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">Processed on {{ last_paid.updated_at|date('M j, Y') }}</div>
+            {% if invoice_stats.last_paid is not null %}
+            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ invoice_stats.last_paid.total|money(invoice_stats.last_paid.currency) }}</div>
+            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">Processed on {{ invoice_stats.last_paid.updated_at|date('M j, Y') }}</div>
             {% else %}
             <div class="text-2xl font-bold text-slate-900 dark:text-white">—</div>
             <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">No payments yet</div>
@@ -106,15 +96,17 @@
 
         {# Invoice summary #}
         <div class="bg-white dark:bg-white/[0.03] p-6 rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">All Invoices</span>
-                <svg class="w-5 h-5 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                </svg>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center flex-shrink-0 text-slate-600 dark:text-slate-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">All Invoices</span>
             </div>
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ all_count.total }}</div>
+            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ invoice_stats.total }}</div>
             <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                {{ unpaid_all.total }} unpaid · {{ all_count.total - unpaid_all.total }} paid
+                {{ invoice_stats.unpaid_count }} unpaid · {{ invoice_stats.paid_count }} paid
             </div>
         </div>
 

@@ -285,11 +285,11 @@
                         {{ _tagline ?: 'CLOUD HOSTING PLANS' }}
                     </span>
                     <h1 class="font-h1 text-white text-[40px] md:text-[44px] leading-tight font-black mb-5">{{ _page_title }}</h1>
-                    {# Description: first paragraph from category description #}
+                    {# Description: first paragraph from category description — |markdown strips ** bold markers #}
                     {% if _paragraphs|first %}
-                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _paragraphs|first }}</p>
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _paragraphs|first|markdown|replace({'<p>': '', '</p>': ''})|trim|raw }}</p>
                     {% elseif _subtitle and _subtitle != _tagline %}
-                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _subtitle }}</p>
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _subtitle|markdown|replace({'<p>': '', '</p>': ''})|trim|raw }}</p>
                     {% else %}
                     <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">Experience unmatched reliability and speed with enterprise-grade infrastructure built for any scale.</p>
                     {% endif %}
@@ -469,7 +469,7 @@
                         const step = card ? card.offsetWidth + 24 : 352;
                         this.scrollEl.scrollBy({ left: dir * step, behavior: 'smooth' });
                     }
-                }" class="relative max-w-[1120px] mx-auto px-4 pb-16">
+                }" class="relative px-4 pb-16">
 
                 <button @click="scrollBy(-1)" x-show="canPrev"
                         class="ord-cat-scroll-btn absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
@@ -718,7 +718,7 @@
                         Next-Gen Infrastructure
                     </span>
                     <h2 class="font-h1 text-white text-[40px] md:text-[44px] leading-tight font-black mb-5">{{ _page_title }}</h2>
-                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ _paragraphs|first ?: 'Scalable NVMe-powered VPS infrastructure with dedicated resources, instant provisioning, and full root access for demanding workloads.' }}</p>
+                    <p class="text-indigo-100 text-base opacity-90 mb-8 max-w-xl leading-relaxed">{{ (_paragraphs|first ? _paragraphs|first|markdown|replace({'<p>': '', '</p>': ''})|trim : 'Scalable NVMe-powered VPS infrastructure with dedicated resources, instant provisioning, and full root access for demanding workloads.')|raw }}</p>
                     <div class="flex flex-wrap gap-4">
                         <a href="#ord-vps-plans" class="ord-cat-hero-primary px-7 py-3.5 rounded-xl bg-white text-primary font-bold shadow-xl hover:scale-105 transition-transform text-sm inline-flex items-center gap-2" style="color: var(--color-primary) !important;">Deploy Instance <span class="material-symbols-outlined text-[16px]" style="font-variation-settings:'wght' 600;">arrow_downward</span></a>
                         <a href="{{ '/order'|url }}" class="px-7 py-3.5 rounded-xl border border-white/30 text-white font-bold hover:bg-white/10 transition-colors text-sm">All Services</a>
@@ -736,11 +736,12 @@
                             <p class="text-indigo-200">admin@merovps:~$ <span class="text-white">vps-cli create --tier=business</span></p>
                             <p>Provisioning instance...</p>
                             <div class="w-full h-1.5 rounded-full bg-white/20 overflow-hidden mb-2">
-                                <div class="h-full w-2/3 bg-indigo-200"></div>
+                                <div class="h-full ord-vps-terminal-progress bg-indigo-200"></div>
                             </div>
                             <p class="text-emerald-300">[OK] NVMe storage ready</p>
                             <p class="text-emerald-300">[OK] Dedicated resources allocated</p>
                             <p class="text-emerald-300">[OK] IPv4 / IPv6 assigned</p>
+                            <p class="text-indigo-300/70 mt-1">admin@merovps:~$ <span class="ord-vps-cursor"></span></p>
                         </div>
                     </div>
                 </div>
@@ -810,7 +811,7 @@
             <div class="ord-vps-period-shell max-w-[420px] mx-auto mb-7 px-4">
                 <label class="ord-vps-period-label block text-sm font-semibold text-on-surface mb-2">Subscription period</label>
                 <div class="relative">
-                    <select x-model="period" class="ord-period-select ord-vps-period-select w-full h-11 rounded-xl border border-outline-variant bg-white px-4 pr-10 text-sm text-on-surface appearance-none">
+                    <select x-model="period" aria-label="Select VPS subscription period" class="ord-period-select ord-vps-period-select w-full h-11 rounded-xl border border-outline-variant bg-white px-4 pr-10 text-sm text-on-surface appearance-none">
                         {% for pk in _vps_enabled_periods %}
                         <option value="{{ pk }}">{{ _vps_period_meta[pk].label }}</option>
                         {% endfor %}
@@ -838,7 +839,7 @@
                         const step = card ? card.offsetWidth + 24 : 352;
                         this.scrollEl.scrollBy({ left: dir * step, behavior: 'smooth' });
                     }
-                }" class="relative max-w-[1120px] mx-auto px-4">
+                }" class="relative px-4">
 
                 <button @click="scrollBy(-1)" x-show="canPrev"
                         class="ord-cat-scroll-btn absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"
@@ -875,7 +876,7 @@
                 {% set _product_desc_plain = p.description|striptags|trim|replace({'\r\n': ' ', '\n': ' ', '\r': ' ', '✔️': ' ', '✅': ' ', '✓': ' ', '•': ' ', '*': ' '})|replace({'  ': ' '})|replace({'  ': ' '}) %}
                 {% set _card_subtitle = _product_desc_plain ? (_product_desc_plain|length > 88 ? _product_desc_plain|slice(0, 88) ~ '...' : _product_desc_plain) : _server_subtitles[i]|default('High-performance VPS with reliable uptime') %}
 
-                <div data-vps-pricing-card class="ord-product-card relative bg-white rounded-3xl flex flex-col pricing-card-shadow transition-all duration-200 border border-slate-200 overflow-hidden snap-start flex-shrink-0 w-full sm:!w-[340px] lg:!w-[349px] {% if _is_popular %}ord-plan-popular ring-2 ring-primary/20 ring-offset-0{% endif %}" x-data="{ pricing: {{ p.pricing|json_encode }} }">
+                <div data-vps-pricing-card class="ord-product-card ord-vps-card ord-vps-plan-card relative bg-white flex flex-col pricing-card-shadow border border-slate-200 overflow-hidden snap-start flex-shrink-0 w-full sm:!w-[340px] lg:!w-[349px] {% if _is_popular %}ord-plan-popular ring-2 ring-primary/20 ring-offset-0{% endif %}" x-data="{ pricing: {{ p.pricing|json_encode }} }">
                     {% if _is_popular %}
                     <div class="ord-plan-popular-ribbon absolute top-0 left-0 right-0 h-12 bg-primary text-white text-center text-[11px] font-black uppercase tracking-widest flex items-center justify-center z-20">
                         MOST POPULAR
@@ -886,7 +887,8 @@
                         {% if _is_popular %}
                         <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-2">FOR GROWING TEAMS</span>
                         {% endif %}
-                        <h4 class="font-h2 text-h2 text-on-surface mb-4">{{ p.title }}</h4>
+                        <h4 class="font-h2 text-h2 text-on-surface mb-2">{{ p.title }}</h4>
+                        <p class="ord-vps-card-subtitle text-sm text-slate-500 leading-relaxed">{{ _card_subtitle }}</p>
 
                         <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) !== null">
                             <div class="mt-4 mb-5">
@@ -897,11 +899,10 @@
                                     <span class="text-slate-500 font-medium text-sm" x-text="currencyFormat.split('__PRICE__')[1].trim()"></span>
                                     <span class="text-slate-500 font-medium text-sm">/mo</span>
                                 </div>
-                                <p class="text-xs text-slate-500 leading-relaxed mb-1">
-                                    Get <span x-text="({ '1W': '1 week', '1M': '1 month', '3M': '3 months', '6M': '6 months', '1Y': '1 year', '2Y': '2 years', '3Y': '3 years' }[period] || period)"></span>
-                                    for <strong x-text="fmt(getPrice(pricing, period))"></strong>
-                                    <span class="text-slate-400">(regular price <span x-text="fmt((getPrice(pricing, '1M') ?? monthlyEquiv(pricing, period)) * periodMonths(period))"></span>).</span>
-                                    Renews at <strong x-text="fmt(getPrice(pricing, '1M') ?? monthlyEquiv(pricing, period))"></strong>/mo.
+                                <p class="ord-vps-billing-copy text-xs text-slate-500 leading-relaxed mb-1">
+                                    <strong x-text="fmt(getPrice(pricing, period))"></strong>
+                                    billed every <span x-text="periodLabel(period).toLowerCase()"></span>.
+                                    Monthly equivalent shown above.
                                 </p>
                             </div>
                         </template>
@@ -919,21 +920,22 @@
                             </div>
                         {% endif %}
 
-                        <p class="text-xs text-slate-500 mb-5">
-                            Billing Period:
+                        <p class="ord-vps-period-chip text-xs text-slate-500 mb-5">
+                            <span>Billing:</span>
                             {% if p.pricing.type == 'free' %}
-                                Free Plan
+                                <strong>Free Plan</strong>
                             {% elseif p.pricing.type == 'once' %}
-                                One-time Payment
+                                <strong>One-time Payment</strong>
                             {% else %}
-                                <span x-text="periodLabel(period)"></span>
+                                <strong x-text="periodLabel(period)"></strong>
                             {% endif %}
                         </p>
 
                         <template x-if="pricing.type !== 'recurrent' || getPrice(pricing, period) !== null">
                             <a href="{{ ('/order/' ~ p.slug)|url }}"
-                               class="block w-full text-center font-bold text-base transition-all active:scale-[0.98] mb-4 {% if _is_popular %}ord-cat-btn-primary py-4 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border-2 border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
-                                {{ _is_popular ? 'Deploy Now' : 'Select Plan' }}
+                               class="ord-vps-plan-cta flex w-full items-center justify-center gap-2 text-center font-bold text-sm transition-all active:scale-[0.98] mb-4 {% if _is_popular %}ord-cat-btn-primary py-3.5 bg-primary text-white rounded-xl shadow-lg shadow-primary/20{% else %}ord-cat-btn-secondary py-3.5 border border-primary text-primary rounded-xl hover:bg-primary/5{% endif %}">
+                                Configure server
+                                <span class="material-symbols-outlined text-[17px]" aria-hidden="true">arrow_forward</span>
                             </a>
                         </template>
                         <template x-if="pricing.type === 'recurrent' && getPrice(pricing, period) === null">
@@ -946,7 +948,7 @@
                         <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">What's Included</p>
                         <div class="space-y-3.5">
                         {% for feat in cleaned_features|slice(0, 6) %}
-                        <div class="flex items-center text-[13px] text-slate-700">
+                        <div class="flex items-start text-[13px] text-slate-700">
                             <span class="material-symbols-outlined text-[#1a8a47] text-lg mr-2 flex-shrink-0" style="font-variation-settings:'wght' 600;">check</span>
                             <span>{{ feat }}</span>
                         </div>
@@ -961,7 +963,7 @@
             </div>
         </section>
 
-        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-[1120px] mx-auto px-4 pb-8">
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 px-4 pb-8">
             {% set _server_feature_cards = [
                 {'icon': 'key', 'title': 'Full Root Access', 'text': 'Complete administrative control over your server environment via SSH and terminal.'},
                 {'icon': 'settings_input_component', 'title': 'OS Flexibility', 'text': 'Deploy Ubuntu, Debian, CentOS, or custom images for your stack.'},
@@ -979,115 +981,6 @@
             {% endfor %}
         </section>
 
-        <section class="pb-10">
-            <div class="ord-vps-compare rounded-xl p-6 md:p-7 border border-outline-variant/40">
-                {% set _compare_products = [] %}
-                {% for p in _server_products %}
-                    {% set _is_active_plan = true %}
-                    {% if p.status is defined %}
-                        {% set _is_active_plan = p.status|lower in ['enabled', 'active'] %}
-                    {% endif %}
-                    {% if _is_active_plan %}
-                        {% set _compare_products = _compare_products|merge([p]) %}
-                    {% endif %}
-                {% endfor %}
-                {% if _compare_products|length == 0 %}
-                    {% set _compare_products = _server_products %}
-                {% endif %}
-
-                <div class="ord-vps-compare-head flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-                    <div>
-                        <span class="ord-vps-compare-kicker inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-primary mb-2">
-                            <span class="material-symbols-outlined text-[14px]">table_chart</span>
-                            Plan Comparison
-                        </span>
-                        <h4 class="ord-vps-compare-title font-h3 text-on-surface mb-1">Need More Detailed Specs?</h4>
-                        <p class="ord-vps-compare-subtext text-sm text-tertiary">Compare CPU, storage, backups, and network profile across your selected VPS plans.</p>
-                        <div class="ord-vps-compare-meta flex flex-wrap gap-2 mt-3">
-                            <span class="ord-vps-compare-meta-pill">{{ _compare_products|length }} Active Plans</span>
-                            <span class="ord-vps-compare-meta-pill">Sticky Feature Column</span>
-                            <span class="ord-vps-compare-meta-pill">Horizontal Scroll Enabled</span>
-                        </div>
-                    </div>
-                    <a href="{{ '/support/kb'|url }}" class="ord-vps-compare-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-bold transition-all">
-                        <span class="material-symbols-outlined text-base">compare_arrows</span>
-                        Compare Technical Specs
-                    </a>
-                </div>
-
-                <p class="ord-vps-compare-scroll-note text-xs text-slate-500 mb-3">Scroll horizontally to compare all active plans.</p>
-                <div class="overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white shadow-sm ord-vps-compare-table-wrap">
-                    <table class="ord-vps-compare-table w-full text-left text-sm" style="min-width: {{ 280 + (_compare_products|length * 230) }}px;">
-                        <thead class="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th class="ord-vps-compare-sticky ord-vps-compare-feature-head px-5 py-3 font-bold text-on-surface w-[220px] min-w-[220px]">Feature</th>
-                                {% for p in _compare_products %}
-                                <th class="ord-vps-compare-plan-head px-5 py-3 font-bold text-on-surface align-top min-w-[210px]{% if loop.first and _compare_products|length > 1 %} border-l-2 border-primary/20{% endif %}">
-                                    <div class="ord-vps-compare-plan-title font-semibold text-on-surface">{{ p.title }}</div>
-                                    {% if loop.index == 2 %}<span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-full bg-primary/10 text-primary">Popular</span>{% endif %}
-                                </th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <tr>
-                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium">Starting Price</td>
-                                {% for p in _compare_products %}
-                                <td class="ord-vps-compare-price-cell px-5 py-3 min-w-[210px]">
-                                    {% if p.price_starting_from is defined and p.price_starting_from > 0 %}
-                                        <span class="ord-vps-compare-price-amount">{{ p.price_starting_from|money_without_currency }}</span>
-                                        <span class="ord-vps-compare-price-unit">{{ currency.code }}/mo</span>
-                                    {% elseif p.pricing.type == 'free' %}
-                                        <span class="ord-vps-compare-badge ord-vps-compare-badge-free">Free</span>
-                                    {% else %}
-                                        <span class="ord-vps-compare-empty">-</span>
-                                    {% endif %}
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            <tr>
-                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium">Billing Type</td>
-                                {% for p in _compare_products %}
-                                <td class="ord-vps-compare-billing-cell px-5 py-3 min-w-[210px] whitespace-nowrap">
-                                    <span class="ord-vps-compare-badge ord-vps-compare-badge-neutral">{{ p.pricing.type == 'once' ? 'One-time' : p.pricing.type|capitalize }}</span>
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            <tr>
-                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium align-top">Description</td>
-                                {% for p in _compare_products %}
-                                {% set _table_desc_raw = p.description|default('')|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||', '✔️': '|||', '✅': '|||', '✓': '|||', '•': '|||', '*': '|||'})|striptags|trim %}
-                                {% set _table_desc_parts = [] %}
-                                {% for _part in _table_desc_raw|split('|||') %}
-                                    {% set _line = _part|replace({'\r\n': ' ', '\n': ' ', '\r': ' '})|trim|trim(',') %}
-                                    {% if _line and _line|lower != 'check' %}
-                                        {% set _table_desc_parts = _table_desc_parts|merge([_line]) %}
-                                    {% endif %}
-                                {% endfor %}
-                                <td class="ord-vps-compare-desc px-5 py-3 text-slate-700 leading-relaxed align-top min-w-[210px]">
-                                    {% if _table_desc_parts|length > 0 %}
-                                        <ul class="ord-vps-compare-desc-list">
-                                            {% for _line in _table_desc_parts|slice(0, 8) %}
-                                                <li>{{ _line }}</li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <span class="ord-vps-compare-empty">No description available yet.</span>
-                                    {% endif %}
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            <tr>
-                                <td class="ord-vps-compare-sticky ord-vps-compare-row-label px-5 py-3 text-slate-600 font-medium">Provisioning</td>
-                                {% for p in _compare_products %}
-                                <td class="ord-vps-compare-value px-5 py-3 min-w-[210px]"><span class="ord-vps-compare-badge ord-vps-compare-badge-success">Instant</span></td>
-                                {% endfor %}
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
 
         {% elseif _type == 'domain' %}
 
@@ -1512,7 +1405,7 @@
                     const step = card ? card.offsetWidth + 24 : 352;
                     this.scrollEl.scrollBy({ left: dir * step, behavior: 'smooth' });
                 }
-            }" class="relative max-w-[1120px] mx-auto px-4 pb-16">
+            }" class="relative px-4 pb-16">
 
                 <button @click="scrollBy(-1)" x-show="canPrev"
                         class="ord-cat-scroll-btn absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all"

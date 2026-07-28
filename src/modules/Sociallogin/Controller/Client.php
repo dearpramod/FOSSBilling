@@ -12,6 +12,7 @@ namespace Box\Mod\Sociallogin\Controller;
 
 use FOSSBilling\InjectionAwareInterface;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 class Client implements InjectionAwareInterface
 {
@@ -36,15 +37,15 @@ class Client implements InjectionAwareInterface
         $app->get('/sociallogin/link-account', 'link_account_page', [], static::class);
     }
 
-    public function sociallogin_index(\Box_App $app): never
+    public function sociallogin_index(\Box_App $app): RedirectResponse
     {
         $config = $this->di['mod_config']('sociallogin');
 
         if (!empty($config['google_enabled'])) {
-            $app->redirect('/sociallogin/google');
+            return $app->redirect('/sociallogin/google');
         }
 
-        $app->redirect('/login');
+        return $app->redirect('/login');
     }
 
     // -------------------------------------------------------------------------
@@ -149,12 +150,12 @@ class Client implements InjectionAwareInterface
     // SameSite=Strict would block the cookie on the cross-site callback
     // redirect; SameSite=Lax allows it on top-level GET navigations.
     // -------------------------------------------------------------------------
-    public function google_start(\Box_App $app): never
+    public function google_start(\Box_App $app): RedirectResponse
     {
         $config = $this->di['mod_config']('sociallogin');
 
         if (empty($config['google_enabled']) || empty($config['google_client_id']) || empty($config['google_client_secret'])) {
-            $app->redirect('/login');
+            return $app->redirect('/login');
         }
 
         $rawContext = (string) ($this->di['request']->query->get('context') ?? 'login');
@@ -202,7 +203,7 @@ class Client implements InjectionAwareInterface
             'prompt' => 'select_account',
         ]);
 
-        $app->redirectUrl('https://accounts.google.com/o/oauth2/v2/auth?' . $params);
+        return $app->redirectUrl('https://accounts.google.com/o/oauth2/v2/auth?' . $params);
     }
 
     // -------------------------------------------------------------------------

@@ -320,10 +320,13 @@ class Service implements \FOSSBilling\InjectionAwareInterface
     {
         $limit = isset($data['limit']) ? max(1, min(100, (int) $data['limit'])) : 25;
         $rows = $this->di['db']->getAll(
-            'SELECT id, scope, mode, value, applied_changes, created_by, created_at
-             FROM pricing_bulk_job
-             ORDER BY id DESC
-             LIMIT ' . $limit
+            sprintf(
+                'SELECT id, scope, mode, value, applied_changes, created_by, created_at
+                 FROM pricing_bulk_job
+                 ORDER BY id DESC
+                 LIMIT %d',
+                $limit
+            )
         );
 
         return $rows ?: [];

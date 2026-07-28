@@ -8,6 +8,6 @@
     "author_url": "https://merovps.com",
     "license": "Apache-2.0",
     "version": "1.1.0",
-    "minimum_fossbilling_version": "0.8.0",
+    "minimum_fossbilling_version": "0.8.3",
     "icon_url": "icon.svg"
 }

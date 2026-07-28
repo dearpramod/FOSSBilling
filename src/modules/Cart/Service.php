@@ -430,7 +430,41 @@ class Service implements InjectionAwareInterface
             'total' => $total - $items_discount,
             'items' => $items,
             'currency' => $currency->toApiArray(),
+            'subscribable' => $this->getSubscriptionPeriodFromItems($items) !== null,
         ];
+    }
+
+    private function getSubscriptionPeriodFromItems(array $items): ?string
+    {
+        $subscriptionPeriod = null;
+
+        foreach ($items as $item) {
+            $netSetupPrice = (float) ($item['setup_price'] ?? 0) - (float) ($item['discount_setup'] ?? 0);
+            if ($netSetupPrice > 0) {
+                return null;
+            }
+
+            if ((float) ($item['total'] ?? 0) <= 0) {
+                continue;
+            }
+
+            $period = $item['period'] ?? null;
+            if (empty($period)) {
+                return null;
+            }
+
+            if ($subscriptionPeriod === null) {
+                $subscriptionPeriod = $period;
+
+                continue;
+            }
+
+            if ($subscriptionPeriod !== $period) {
+                return null;
+            }
+        }
+
+        return $subscriptionPeriod;
     }
 
     public function isClientAbleToUsePromo(\Model_Client $client, Promo $promo)
@@ -812,23 +846,39 @@ class Service implements InjectionAwareInterface
         $price = $productView['price'];
         $qty = $productView['quantity'];
 
-        // Local patch: partner clients get partner pricing (partnership module).
-        // getPartnerPriceForCartItem() returns null when no partner rule applies.
-        // Best-effort: any failure falls back to the standard price.
-        try {
-            $extensionService = $this->di['mod_service']('extension');
-            if ($extensionService->isExtensionActive('mod', 'partnership')) {
-                $partnerPrice = $this->di['mod_service']('partnership')->getPartnerPriceForCartItem(
-                    (int) $productView['product_id'],
-                    (string) $productView['type'],
-                    is_array($config) ? $config : [],
-                );
-                if ($partnerPrice !== null) {
-                    $price = $partnerPrice;
-                }
+        if ($this->di['mod_service']('extension')->isExtensionActive('mod', 'partnership')) {
+            $partnerPrice = $this->di['mod_service']('partnership')->getPartnerPriceForCartItem(
+                (int) $productView['product_id'],
+                (string) $productView['type'],
+                $config
+            );
+            if ($partnerPrice !== null) {
+                $price = $partnerPrice;
             }
-        } catch (\Throwable) {
-            // Partnership module unavailable — standard pricing applies.
+        }
+
+        // Server option surcharges (e.g. cPanel license): sum price_monthly × period months for each selected option
+        if ($productView['type'] === 'server') {
+            try {
+                $srvConfig = $this->di['mod_config']('Serviceserver');
+                $optionFields = json_decode((string) ($srvConfig['option_fields'] ?? '[]'), true) ?: [];
+                $periodMonthsMap = ['1W' => 0.25, '1M' => 1, '3M' => 3, '6M' => 6, '1Y' => 12, '2Y' => 24, '3Y' => 36];
+                $months = (float) ($periodMonthsMap[$config['period'] ?? '1M'] ?? 1);
+                foreach ($optionFields as $field) {
+                    $fieldId = $field['id'] ?? '';
+                    if (!isset($config[$fieldId])) {
+                        continue;
+                    }
+                    foreach ($field['options'] ?? [] as $opt) {
+                        if (($opt['value'] ?? '') === $config[$fieldId] && !empty($opt['price_monthly'])) {
+                            $price += (float) $opt['price_monthly'] * $months;
+                            break;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                // Non-fatal: silently skip if serviceserver config unavailable
+            }
         }
 
         [$discount_price, $discount_setup] = $this->getProductDiscount($model, $setup);

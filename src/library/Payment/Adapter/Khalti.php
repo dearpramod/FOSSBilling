@@ -61,6 +61,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                         'label' => 'Live Secret Key',
                         'required' => false,
                         'hint' => 'Found under Settings > API in your Khalti merchant dashboard (admin.khalti.com).',
+                        'required_when' => ['enabled' => true, 'test_mode' => false],
                     ],
                 ],
                 'test_secret_key' => [
@@ -69,6 +70,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                         'label' => 'Test / Sandbox Secret Key',
                         'required' => false,
                         'hint' => 'Found under Settings > API in your Khalti test dashboard (test-admin.khalti.com).',
+                        'required_when' => ['enabled' => true, 'test_mode' => true],
                     ],
                 ],
                 'convert_to_npr' => [
@@ -133,26 +135,53 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         $post = $data['post'] ?? [];
         $params = array_merge($post, $get);
 
-        $pidx = $params['pidx'] ?? null;
+        $pidx = trim((string) ($params['pidx'] ?? ''));
 
         /** @var Model_Transaction $tx */
         $tx = $this->di['db']->getExistingModelById('Transaction', $id);
 
-        // Resolve invoice from filesystem-backed intent — never trust browser GET params
-        $intent = $pidx ? $this->loadPaymentIntent($pidx) : null;
+        if ($pidx === '') {
+            $tx->txn_status = 'failed';
+            $tx->error = 'Missing pidx in callback — cannot verify with Khalti.';
+            $tx->status = 'error';
+            $tx->updated_at = date('Y-m-d H:i:s');
+            $this->di['db']->store($tx);
+
+            throw new Payment_Exception('Khalti: Missing pidx in callback.');
+        }
+
+        // === STEP 1: Call the Lookup API first — the only authoritative source ===
+        // Browser-supplied status, amount, and order fields are never trusted.
+        $lookupResult = $this->lookupPayment($pidx);
+        $verifiedStatus = $lookupResult['status'] ?? 'Unknown';
+        $verifiedAmount = (int) ($lookupResult['total_amount'] ?? 0);
+        $verifiedTxnId = $lookupResult['transaction_id'] ?? null;
+        $verifiedFee = (int) ($lookupResult['fee'] ?? 0);
+        $isRefunded = (bool) ($lookupResult['refunded'] ?? false);
+        $verifiedOrderId = $lookupResult['purchase_order_id'] ?? null;
+
+        // === STEP 2: Resolve invoice — only from server-backed sources ===
+
+        // Priority 1: intent cache (written server-side at initiation — most reliable)
+        $intent = $this->loadPaymentIntent($pidx);
         $invoiceId = $intent['invoice_id'] ?? null;
 
-        if ($invoiceId === null) {
-            $invoiceId = $tx->invoice_id ?? null;
-            if ($invoiceId) {
-                $this->log('Khalti: Payment intent not found for pidx=' . $pidx . '. Using tx->invoice_id fallback.', 'warn');
+        // Priority 2: transaction record (set by the IPN handler via invoice_hash — reliable)
+        if ($invoiceId === null && ($tx->invoice_id ?? null)) {
+            $invoiceId = $tx->invoice_id;
+            $this->log('Khalti: Intent cache cold for pidx=' . $pidx . '. Using tx->invoice_id.', 'warn');
+        }
+
+        // Priority 3: decode from the Lookup API's purchase_order_id — server-validated,
+        // never from browser params. This covers a cold cache after a server restart.
+        if ($invoiceId === null && $verifiedOrderId !== null) {
+            $invoiceId = $this->decodeInvoiceIdFromOrderId($verifiedOrderId);
+            if ($invoiceId !== null) {
+                $this->log('Khalti: Decoded invoice_id=' . $invoiceId . ' from Lookup purchase_order_id=' . $verifiedOrderId . '.', 'warn');
             }
         }
 
-        if ($invoiceId === null) {
-            $invoiceId = $params['merchant_invoice_id'] ?? null;
-        }
-
+        // Hydrate invoice_hash so bb-ipn.php can redirect the client after processing
         if ($invoiceId) {
             $inv = $this->di['db']->load('Invoice', $invoiceId);
             if ($inv) {
@@ -160,21 +189,16 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             }
         }
 
-        if (!$invoiceId || !$pidx) {
+        if (!$invoiceId) {
             $tx->txn_status = 'failed';
-            $tx->error = 'Missing pidx or invoice_id in callback.';
+            $tx->error = 'Cannot identify invoice for pidx=' . $pidx . '. Lookup returned purchase_order_id=' . ($verifiedOrderId ?? 'null') . '.';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+            $this->log('Khalti: Could not resolve invoice for pidx=' . $pidx, 'error');
 
-            throw new Payment_Exception('Khalti: Missing pidx or invoice_id in callback.');
+            throw new Payment_Exception('Khalti: Cannot identify invoice — intent cache cold and purchase_order_id not decodable.');
         }
-
-        // Always call Lookup API — never trust browser-supplied status param
-        $lookupResult = $this->lookupPayment($pidx);
-        $verifiedStatus = $lookupResult['status'] ?? 'Unknown';
-        $verifiedAmount = (int) ($lookupResult['total_amount'] ?? 0);
-        $verifiedTxnId = $lookupResult['transaction_id'] ?? null;
 
         if ($verifiedTxnId) {
             $existingTx = $this->di['db']->findOne('Transaction', 'txn_id = ? AND status = ? AND id != ?', [$verifiedTxnId, 'processed', $id]);
@@ -226,17 +250,48 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             throw new Payment_Exception('Khalti: Payment amount does not match invoice total. This transaction has been flagged.');
         }
 
-        // Non-completed statuses: record and return — let ipn.php redirect the client
+        // Map Khalti status values to FOSSBilling transaction states.
+        // Pending / Initiated = still in progress (not an error yet).
+        // Everything else that is not Completed = definitive failure.
         if ($verifiedStatus !== 'Completed') {
             $tx->invoice_id = (int) $invoiceId;
             $tx->txn_id = $verifiedTxnId ?? $pidx;
-            $tx->txn_status = $verifiedStatus;
             $tx->amount = $verifiedAmount / 100;
             $tx->currency = 'NPR';
-            $tx->error = 'Khalti payment status: ' . $verifiedStatus . '. Payment not completed.';
+            $tx->updated_at = date('Y-m-d H:i:s');
+
+            if (in_array($verifiedStatus, ['Pending', 'Initiated'], true)) {
+                // Transaction is in progress — keep the intent alive
+                $tx->txn_status = 'pending';
+                $tx->error = 'Khalti payment is ' . $verifiedStatus . '. Awaiting completion.';
+                $tx->status = 'pending';
+            } else {
+                // User canceled / Expired / Refunded / Partially Refunded / Unknown
+                $tx->txn_status = strtolower(str_replace(' ', '_', $verifiedStatus));
+                $tx->error = 'Khalti payment status: ' . $verifiedStatus . '. Payment not completed.';
+                $tx->status = 'error';
+                if ($pidx) {
+                    $this->deletePaymentIntent($pidx);
+                }
+            }
+
+            $this->di['db']->store($tx);
+
+            return;
+        }
+
+        // Status = Completed but Khalti flagged it as refunded — do not credit
+        if ($isRefunded) {
+            $tx->invoice_id = (int) $invoiceId;
+            $tx->txn_id = $verifiedTxnId ?? $pidx;
+            $tx->txn_status = 'refunded';
+            $tx->amount = $verifiedAmount / 100;
+            $tx->currency = 'NPR';
+            $tx->error = 'Khalti reports transaction as refunded. Service not provisioned.';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
+            $this->log('Khalti: Refunded transaction received for invoice #' . $invoiceId . '. pidx=' . $pidx, 'warn');
 
             if ($pidx) {
                 $this->deletePaymentIntent($pidx);
@@ -251,16 +306,17 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             return;
         }
 
-        $expectedOrderId = 'INV-' . $invoice->serie . sprintf('%05d', $invoice->nr);
-        $returnedOrderId = $lookupResult['purchase_order_id'] ?? null;
+        // purchase_order_id was already fetched from the Lookup API above (server-validated).
+        // Must match what we sent during initiation — same truncation applied.
+        $expectedOrderId = substr('INV-' . $invoice->serie . sprintf('%05d', $invoice->nr), 0, 64);
 
-        if ($returnedOrderId === null) {
+        if ($verifiedOrderId === null) {
             $tx->invoice_id = (int) $invoiceId;
             $tx->txn_id = $verifiedTxnId ?? $pidx;
             $tx->txn_status = 'failed';
             $tx->amount = $verifiedAmount / 100;
             $tx->currency = 'NPR';
-            $tx->error = 'Security: Khalti Lookup API did not return purchase_order_id. Cannot verify order binding.';
+            $tx->error = 'Security: Lookup API did not return purchase_order_id. Cannot verify order binding.';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
@@ -269,13 +325,13 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             throw new Payment_Exception('Khalti: Cannot verify order identity — purchase_order_id missing from Lookup response.');
         }
 
-        if ($returnedOrderId !== $expectedOrderId) {
+        if ($verifiedOrderId !== $expectedOrderId) {
             $tx->invoice_id = (int) $invoiceId;
             $tx->txn_id = $verifiedTxnId ?? $pidx;
             $tx->txn_status = 'failed';
             $tx->amount = $verifiedAmount / 100;
             $tx->currency = 'NPR';
-            $tx->error = 'Security: Purchase order ID mismatch. Expected ' . $expectedOrderId . ', received ' . $returnedOrderId . '.';
+            $tx->error = 'Security: purchase_order_id mismatch. Expected ' . $expectedOrderId . ', Lookup returned ' . $verifiedOrderId . '.';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
@@ -286,22 +342,29 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
 
         $tx->invoice_id = (int) $invoiceId;
         $tx->txn_id = $verifiedTxnId ?? $pidx;
-        $tx->txn_status = $verifiedStatus;
+        $tx->txn_status = 'complete';
         $tx->amount = $verifiedAmount / 100;
         $tx->currency = 'NPR';
+        if ($verifiedFee > 0) {
+            $tx->error = 'Khalti fee: NPR ' . number_format($verifiedFee / 100, 2);
+        }
 
         try {
             $client = $this->di['db']->getExistingModelById('Client', $invoice->client_id);
+            $invoiceService = $this->di['mod_service']('Invoice');
+            $isDepositInvoice = $invoiceService->isInvoiceTypeDeposit($invoice);
+
+            // Credit the invoice total in the invoice's own currency, not the NPR
+            // tx->amount. FOSSBilling's client balance is currency-unaware: crediting 1350
+            // NPR against a $10 USD invoice would leave 1340 phantom credits in the account.
+            $invoiceTotal = (float) $invoiceService->getTotalWithTax($invoice);
             $clientService = $this->di['mod_service']('client');
-            $clientService->addFunds($client, $tx->amount, 'Khalti payment — txn: ' . $tx->txn_id, [
-                'amount' => $tx->amount,
+            $clientService->addFunds($client, $invoiceTotal, 'Khalti payment — txn: ' . $tx->txn_id, [
+                'amount' => $invoiceTotal,
                 'description' => 'Khalti payment — txn: ' . $tx->txn_id,
                 'type' => 'transaction',
                 'rel_id' => $tx->id,
             ]);
-
-            $invoiceService = $this->di['mod_service']('Invoice');
-            $isDepositInvoice = $invoiceService->isInvoiceTypeDeposit($invoice);
 
             if ($isDepositInvoice) {
                 $invoice->status = 'paid';
@@ -370,19 +433,26 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
 
         $invoiceTitle = $this->buildInvoiceTitle($invoice);
         $customerInfo = $this->buildCustomerInfo($invoice);
+        $productDetails = $this->buildProductDetails($invoice, $amountPaisa);
 
-        $purchaseOrderId = 'INV-' . $invoice->serie . sprintf('%05d', $invoice->nr);
+        $purchaseOrderId = substr('INV-' . $invoice->serie . sprintf('%05d', $invoice->nr), 0, 64);
+        $purchaseOrderName = mb_substr($invoiceTitle, 0, 100);
 
         $payload = [
             'return_url' => $returnUrl,
             'website_url' => $websiteUrl ?: 'https://example.com',
             'amount' => $amountPaisa,
             'purchase_order_id' => $purchaseOrderId,
-            'purchase_order_name' => $invoiceTitle,
+            'purchase_order_name' => $purchaseOrderName,
+            'merchant_invoice_id' => (string) $invoice->id,
         ];
 
         if (!empty($customerInfo)) {
             $payload['customer_info'] = $customerInfo;
+        }
+
+        if (!empty($productDetails)) {
+            $payload['product_details'] = $productDetails;
         }
 
         $initiateUrl = $this->getApiBase() . '/epayment/initiate/';
@@ -413,6 +483,8 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
 
         $rawPaymentUrl = $responseBody['payment_url'];
         $rawPidx = $responseBody['pidx'] ?? '';
+        // expires_in is in seconds; default to 1800 (30 min) per Khalti docs if not returned
+        $expiresIn = isset($responseBody['expires_in']) ? max(60, (int) $responseBody['expires_in']) : 1800;
 
         // Validate payment_url is a genuine Khalti domain
         $allowedHosts = ['pay.khalti.com', 'test-pay.khalti.com'];
@@ -427,19 +499,22 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         }
 
         if (!empty($rawPidx)) {
-            $this->storePaymentIntent($rawPidx, (int) $invoice->id, $amountPaisa, $purchaseOrderId);
+            // Add buffer: store intent for 2× the link lifetime so callbacks arriving
+            // just before expiry can still be verified
+            $this->storePaymentIntent($rawPidx, (int) $invoice->id, $amountPaisa, $purchaseOrderId, $expiresIn * 2);
         }
 
         $paymentUrlHtml = htmlspecialchars($rawPaymentUrl, ENT_QUOTES, 'UTF-8');
         $pidxHtml = htmlspecialchars($rawPidx, ENT_QUOTES, 'UTF-8');
         $paymentUrlJs = json_encode($rawPaymentUrl);
+        $expiryMinutes = (int) ceil($expiresIn / 60);
 
         $html = '<div id="khalti-payment-block" style="text-align:center;padding:24px 0;">';
         $html .= '<p style="margin-bottom:16px;color:#6c757d;">You will be redirected to Khalti to complete your payment.</p>';
         $html .= '<a href="' . $paymentUrlHtml . '" id="khalti-pay-btn"';
         $html .= ' style="display:inline-flex;align-items:center;gap:10px;padding:12px 32px;background:#CC0001;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">';
         $html .= '<span style="letter-spacing:0.5px;">Pay with Khalti</span></a>';
-        $html .= '<p style="margin-top:12px;font-size:12px;color:#aaa;">Transaction reference: ' . $pidxHtml . '</p>';
+        $html .= '<p style="margin-top:12px;font-size:12px;color:#aaa;">Payment link expires in ' . $expiryMinutes . ' minutes &mdash; Reference: ' . $pidxHtml . '</p>';
         $html .= '<script>setTimeout(function(){ window.location.href=' . $paymentUrlJs . '; }, 1500);</script>';
         $html .= '</div>';
 
@@ -502,8 +577,27 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             throw new Payment_Exception('Khalti: Lookup API returned an unexpected response (HTTP ' . $statusCode . ').');
         }
 
+        // HTTP 400 is expected for terminal non-success states (Expired, User canceled).
+        // Khalti still returns a structured body with a `status` field for these — return it
+        // so processTransaction can record the correct txn_status and clean up the intent.
+        // Only throw when there is no usable `status` field (invalid pidx, auth error, etc.).
+        if ($statusCode === 400) {
+            if (isset($body['status'])) {
+                return $body;
+            }
+
+            $detail = isset($body['detail']) ? (string) $body['detail'] : 'Unknown error';
+
+            throw new Payment_Exception('Khalti Lookup API error (HTTP 400): ' . $detail);
+        }
+
+        // For 2xx responses, a `detail` field indicates an API-level error (rare).
         if (isset($body['detail'])) {
             throw new Payment_Exception('Khalti Lookup API error: ' . $body['detail']);
+        }
+
+        if ($statusCode !== 200) {
+            throw new Payment_Exception('Khalti: Lookup API returned unexpected HTTP ' . $statusCode . '.');
         }
 
         return $body;
@@ -545,6 +639,93 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         }
 
         return $info;
+    }
+
+    /**
+     * Build Khalti product_details array from invoice line items.
+     *
+     * Khalti uses these for merchant dashboard display and analytics.
+     * The sum of all item total_price values must equal the initiate amount exactly.
+     * We fall back to a single catch-all item when DB items don't sum cleanly.
+     *
+     * @param int $totalPaisa Total amount in paisa (already converted to NPR)
+     */
+    private function buildProductDetails(Model_Invoice $invoice, int $totalPaisa): array
+    {
+        $rows = $this->di['db']->getAll(
+            'SELECT title, quantity, price FROM invoice_item WHERE invoice_id = :id',
+            [':id' => $invoice->id]
+        );
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $items = [];
+        $sumPaisa = 0;
+
+        // Use the item count to distribute the total proportionally in paisa,
+        // then adjust the last item to absorb any rounding delta.
+        $totalNpr = $totalPaisa / 100;
+        $invoiceService = $this->di['mod_service']('Invoice');
+        $invoiceTotal = (float) $invoiceService->getTotalWithTax($invoice);
+        $conversionFactor = $invoiceTotal > 0 ? ($totalNpr / $invoiceTotal) : 1.0;
+
+        foreach ($rows as $i => $row) {
+            $qty = max(1, (int) ($row['quantity'] ?? 1));
+            $unitPriceNpr = round((float) ($row['price'] ?? 0) * $conversionFactor, 2);
+            $unitPricePaisa = (int) round($unitPriceNpr * 100);
+            $itemTotalPaisa = $unitPricePaisa * $qty;
+
+            $items[] = [
+                'identity' => 'ITEM-' . ($i + 1),
+                'name' => mb_substr((string) ($row['title'] ?? 'Item'), 0, 100),
+                'total_price' => $itemTotalPaisa,
+                'quantity' => $qty,
+                'unit_price' => $unitPricePaisa,
+            ];
+            $sumPaisa += $itemTotalPaisa;
+        }
+
+        // Adjust last item so the sum matches exactly
+        $diff = $totalPaisa - $sumPaisa;
+        if ($diff !== 0 && !empty($items)) {
+            $last = &$items[count($items) - 1];
+            $last['total_price'] += $diff;
+            if ($last['quantity'] > 0) {
+                $last['unit_price'] = (int) round($last['total_price'] / $last['quantity']);
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Decode a database invoice ID from a purchase_order_id string.
+     *
+     * Format stored during initiation: INV-{serie}{nr_zero_padded_5} (truncated to 64 chars).
+     * The nr occupies exactly the last 5 characters; serie is everything between "INV-" and nr.
+     *
+     * Used as a server-validated last-resort fallback when the intent cache is cold.
+     * The value comes from the Khalti Lookup API response, never from the browser.
+     */
+    private function decodeInvoiceIdFromOrderId(string $orderId): ?int
+    {
+        if (!str_starts_with($orderId, 'INV-') || strlen($orderId) < 9) {
+            return null;
+        }
+
+        $ref = substr($orderId, 4);
+        if (strlen($ref) < 5 || !ctype_digit(substr($ref, -5))) {
+            return null;
+        }
+
+        $nr = (int) substr($ref, -5);
+        $serie = substr($ref, 0, -5);
+
+        $invoice = $this->di['db']->findOne('Invoice', 'serie = ? AND nr = ?', [$serie, $nr]);
+
+        return $invoice ? (int) $invoice->id : null;
     }
 
     /**
@@ -649,7 +830,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
     // Payment intent — filesystem-backed conversion snapshot
     // -------------------------------------------------------------------------
 
-    private function storePaymentIntent(string $pidx, int $invoiceId, int $expectedPaisa, string $purchaseOrderId): void
+    private function storePaymentIntent(string $pidx, int $invoiceId, int $expectedPaisa, string $purchaseOrderId, int $ttlSeconds = 3600): void
     {
         try {
             $cache = $this->getIntentCache();
@@ -660,7 +841,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                 'purchase_order_id' => $purchaseOrderId,
                 'created_at' => time(),
             ]);
-            $item->expiresAfter(7200);
+            $item->expiresAfter($ttlSeconds);
             $cache->save($item);
         } catch (Throwable $e) {
             $this->log('Khalti: Failed to store payment intent for pidx=' . $pidx . ': ' . $e->getMessage(), 'warn');

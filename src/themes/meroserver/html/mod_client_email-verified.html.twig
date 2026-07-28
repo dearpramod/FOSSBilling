@@ -1,0 +1,52 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}Email Verified{% endblock %}
+{% block page_header %}Email Verified{% endblock %}
+
+{% block content %}
+{% set profile = client.profile_get %}
+
+<div class="flex flex-col items-center justify-center min-h-[60vh] px-4 py-16 text-center">
+
+    {# Success icon #}
+    <div class="w-20 h-20 rounded-full bg-green-100 dark:bg-green-500/15 flex items-center justify-center mb-6 shadow-lg shadow-green-200/50 dark:shadow-green-900/30">
+        <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </div>
+
+    {# Heading #}
+    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+        Email verified!
+    </h1>
+    <p class="text-base text-gray-500 dark:text-gray-400 max-w-sm mb-2">
+        <strong class="text-gray-700 dark:text-gray-300">{{ profile.email }}</strong> has been confirmed.
+    </p>
+    <p class="text-sm text-gray-400 dark:text-gray-500 max-w-xs mb-10">
+        Your account is now fully active. You can place orders, manage services, and access all features.
+    </p>
+
+    {# Primary CTA #}
+    <a href="{{ '/dashboard'|url }}"
+       class="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl bg-[var(--color-primary,#f59e0b)] hover:opacity-90 text-white text-sm font-semibold shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5 active:translate-y-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        Go to Dashboard
+    </a>
+
+    {# Secondary links #}
+    <div class="flex items-center gap-5 mt-5">
+        <a href="{{ '/order'|url }}"
+           class="text-sm font-medium text-gray-400 hover:text-[var(--color-primary,#f59e0b)] dark:text-gray-500 dark:hover:text-[var(--color-primary,#f59e0b)] transition-colors">
+            Browse plans
+        </a>
+        <span class="text-gray-200 dark:text-gray-700">|</span>
+        <a href="{{ '/support'|url }}"
+           class="text-sm font-medium text-gray-400 hover:text-[var(--color-primary,#f59e0b)] dark:text-gray-500 dark:hover:text-[var(--color-primary,#f59e0b)] transition-colors">
+            Support
+        </a>
+    </div>
+
+</div>
+{% endblock %}

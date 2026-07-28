@@ -21,25 +21,25 @@
         <ul class="nav nav-tabs card-header-tabs" data-bs-toggle="tabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <a href="#tab-settings" class="nav-link active" data-bs-toggle="tab" role="tab" aria-selected="true">
-                    <svg class="icon me-1"><use xlink:href="#message" /></svg>
+                    <svg class="icon me-1"><use href="#message-2" /></svg>
                     {{ 'Settings'|trans }}
                 </a>
             </li>
             <li class="nav-item" role="presentation">
                 <a href="#tab-notifications" class="nav-link" data-bs-toggle="tab" role="tab">
-                    <svg class="icon me-1"><use xlink:href="#bell" /></svg>
+                    <svg class="icon me-1"><use href="#bell" /></svg>
                     {{ 'Notifications'|trans }}
                 </a>
             </li>
             <li class="nav-item" role="presentation">
                 <a href="#tab-log" class="nav-link" data-bs-toggle="tab" role="tab">
-                    <svg class="icon me-1"><use xlink:href="#activity" /></svg>
+                    <svg class="icon me-1"><use href="#activity" /></svg>
                     {{ 'Message Log'|trans }}
                 </a>
             </li>
             <li class="nav-item" role="presentation">
                 <a href="#tab-test" class="nav-link" data-bs-toggle="tab" role="tab">
-                    <svg class="icon me-1"><use xlink:href="#wifi" /></svg>
+                    <svg class="icon me-1"><use href="#wifi" /></svg>
                     {{ 'Send Test'|trans }}
                 </a>
             </li>
@@ -195,7 +195,7 @@
                             <a href="{{ 'sms/log_delete'|api_url(query: {'id': entry.id}) }}"
                                {{ fb_api_link({modal: {type: 'danger', title: 'Delete log entry?'|trans, button: 'Delete'|trans}, reload: true}) }}
                                class="btn btn-sm btn-outline-danger">
-                                <svg class="icon"><use xlink:href="#trash" /></svg>
+                                <svg class="icon"><use href="#trash" /></svg>
                             </a>
                         </td>
                     </tr>

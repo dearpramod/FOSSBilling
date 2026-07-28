@@ -1,0 +1,434 @@
+{% extends request.ajax ? 'layout_blank.html.twig' : 'layout_default.html.twig' %}
+
+{% block meta_title %}{{ 'Server Option Fields'|trans }}{% endblock %}
+
+{% set active_menu = 'system' %}
+
+{% block breadcrumbs %}
+    <ul class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ '/'|url(area: 'admin') }}">
+                <svg class="icon"><use href="#home"/></svg>
+            </a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{{ 'system'|url(area: 'admin') }}">{{ 'Settings'|trans }}</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">{{ 'Server Option Fields'|trans }}</li>
+    </ul>
+{% endblock %}
+
+{% block content %}
+{% set option_fields = admin.serviceserver_options_get %}
+
+<div class="card srv-options-shell">
+    <div class="card-header srv-options-header">
+        <div class="srv-options-title">
+            <span class="srv-options-title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg>
+            </span>
+            <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h3 class="card-title mb-0">{{ 'Server Option Fields'|trans }}</h3>
+                    <span id="field-count" class="badge bg-blue-lt"></span>
+                </div>
+                <p class="card-subtitle mt-1">{{ 'Create the location, operating system, server tier, and other searchable choices shown during server checkout.'|trans }}</p>
+            </div>
+        </div>
+        <div class="card-actions srv-options-actions">
+            <button id="btn-reset-defaults" type="button" class="btn btn-ghost-secondary">
+                <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9M3 12V7m0 5H8"/></svg>
+                {{ 'Reset to Defaults'|trans }}
+            </button>
+            <button id="btn-save" type="button" class="btn btn-primary">
+                <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                {{ 'Save'|trans }}
+            </button>
+        </div>
+    </div>
+
+    <div class="card-body srv-options-body">
+        <div class="srv-options-help mb-4" role="note">
+            <div class="d-flex align-items-start">
+                <span class="srv-options-help-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                </span>
+                <div>
+                    <strong class="d-block mb-1">{{ 'How server options work'|trans }}</strong>
+                    <span class="text-secondary">{{ 'Use a short lowercase Field ID; FOSSBilling submits it as'|trans }} <code>config[field_id]</code>. {{ 'Group organizes related choices, Meta can show latency or version details, and Badge highlights availability.'|trans }}</span>
+                    <div class="srv-badge-key mt-2" aria-label="{{ 'Available badge styles'|trans }}">
+                        <span class="badge bg-green text-green-fg">Best</span>
+                        <span class="badge bg-cyan text-cyan-fg">Good</span>
+                        <span class="badge bg-yellow text-yellow-fg">Fair</span>
+                        <span class="badge bg-secondary">Distant</span>
+                        <small class="text-secondary">{{ 'Optional—leave blank for no indicator.'|trans }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="fields-editor" class="srv-fields-editor" aria-live="polite"></div>
+
+        <div class="srv-add-field-wrap">
+            <button id="btn-add-field" type="button" class="btn btn-outline-primary">
+                <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                {{ 'Add Option Field'|trans }}
+            </button>
+            <span class="text-secondary small">{{ 'Add another picker to the server order form.'|trans }}</span>
+        </div>
+    </div>
+</div>
+
+<style>
+.srv-options-shell { border: 1px solid var(--tblr-border-color); box-shadow: 0 10px 34px rgba(15, 23, 42, .045); overflow: hidden; }
+.srv-options-header { min-height: 5.5rem; padding: 1.15rem 1.35rem; align-items: center; gap: 1.5rem; }
+.srv-options-title { display: flex; align-items: flex-start; gap: .9rem; min-width: 0; }
+.srv-options-title-icon {
+    width: 2.6rem; height: 2.6rem; display: grid; place-items: center; flex: none;
+    color: var(--tblr-primary); background: rgba(var(--tblr-primary-rgb), .08);
+    border: 1px solid rgba(var(--tblr-primary-rgb), .14); border-radius: .75rem;
+}
+.srv-options-title-icon svg { width: 1.3rem; height: 1.3rem; stroke-width: 1.75; }
+.srv-options-actions { display: flex; align-items: center; gap: .5rem; flex: none; }
+.srv-options-body { padding: 1.25rem 1.35rem 1.5rem; background: rgba(98, 105, 118, .018); }
+.srv-options-help {
+    padding: .9rem 1rem; border: 1px solid rgba(var(--tblr-primary-rgb), .15);
+    border-radius: .75rem; background: rgba(var(--tblr-primary-rgb), .035);
+}
+.srv-options-help-icon {
+    width: 1.8rem; height: 1.8rem; display: grid; place-items: center; flex: none;
+    margin-right: .7rem; color: var(--tblr-primary);
+}
+.srv-options-help-icon svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.8; }
+.srv-badge-key { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; }
+.srv-fields-editor { display: grid; gap: 1rem; }
+.srv-field-card { border: 1px solid var(--tblr-border-color); border-radius: .85rem; background: var(--tblr-bg-surface); overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease; }
+.srv-field-card:focus-within { border-color: rgba(var(--tblr-primary-rgb), .42); box-shadow: 0 0 0 3px rgba(var(--tblr-primary-rgb), .07); }
+.srv-field-head { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--tblr-border-color); }
+.srv-field-index {
+    width: 2rem; height: 2rem; display: grid; place-items: center; flex: none; margin-top: 1.35rem;
+    border-radius: .55rem; color: var(--tblr-primary); background: rgba(var(--tblr-primary-rgb), .09);
+    font-size: .75rem; font-weight: 700;
+}
+.srv-field-form { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(9rem, .27fr) 1fr; gap: .75rem; }
+.srv-field-description, .srv-field-required, .srv-field-display { grid-column: 1 / -1; }
+.srv-field-required { display: flex; align-items: center; justify-content: space-between; padding-top: .1rem; }
+.srv-remove-field { margin-top: 1.15rem; flex: none; }
+.srv-options-list { padding: .85rem 1rem 1rem; }
+.srv-options-list-head, .srv-option-row {
+    display: grid; grid-template-columns: minmax(8rem, .8fr) minmax(11rem, 1.55fr) minmax(7rem, .75fr) minmax(7rem, .65fr) minmax(6.5rem, .6fr) minmax(5.5rem, .5fr) 2.3rem;
+    gap: .55rem; align-items: center;
+}
+.srv-options-list-head { padding: 0 .1rem .45rem; color: var(--tblr-secondary); font-size: .68rem; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
+.srv-option-row { padding: .5rem; margin: 0 -.5rem; border-radius: .65rem; transition: background-color .15s ease; }
+.srv-option-row:hover, .srv-option-row:focus-within { background: rgba(98, 105, 118, .045); }
+.srv-option-row .form-control, .srv-option-row .form-select, .srv-field-form .form-control { min-height: 2.35rem; }
+.srv-option-mobile-label { display: none; color: var(--tblr-secondary); font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+.srv-field-footer { display: flex; align-items: center; justify-content: space-between; padding: .7rem 1rem; border-top: 1px solid var(--tblr-border-color); background: rgba(98, 105, 118, .025); }
+.srv-empty-options { padding: 1.25rem; text-align: center; color: var(--tblr-secondary); }
+.srv-empty-editor { padding: 2.5rem 1rem; border: 1px dashed var(--tblr-border-color); border-radius: .85rem; text-align: center; background: var(--tblr-bg-surface); }
+.srv-empty-editor svg { width: 2rem; height: 2rem; margin-bottom: .65rem; color: var(--tblr-secondary); stroke-width: 1.5; }
+.srv-add-field-wrap { display: flex; align-items: center; gap: .75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--tblr-border-color); }
+@media (max-width: 991.98px) {
+    .srv-options-header { align-items: flex-start; }
+    .srv-options-list-head { display: none; }
+    .srv-option-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: .75rem; margin: 0; border: 1px solid var(--tblr-border-color); }
+    .srv-option-cell { min-width: 0; }
+    .srv-option-cell-label { grid-column: 1 / -1; }
+    .srv-option-mobile-label { display: block; margin-bottom: .3rem; }
+    .srv-option-delete { grid-column: 2; justify-self: end; }
+}
+@media (max-width: 767.98px) {
+    .srv-options-header, .srv-field-head { flex-direction: column; }
+    .srv-options-actions { width: 100%; }
+    .srv-options-actions .btn { flex: 1; }
+    .srv-field-index { display: none; }
+    .srv-field-form { width: 100%; grid-template-columns: 1fr; }
+    .srv-field-form > * { grid-column: 1; }
+    .srv-remove-field { width: 100%; margin-top: 0; }
+    .srv-option-row { grid-template-columns: 1fr; }
+    .srv-option-cell-label, .srv-option-delete { grid-column: 1; }
+    .srv-option-delete { justify-self: end; }
+    .srv-add-field-wrap { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .srv-options-shell *, .srv-options-shell *::before, .srv-options-shell *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<script>
+/* NOTE: |raw is required here — Twig autoescape in <script> context converts " to &quot;
+   which breaks JSON.parse. Inside HTML attributes (x-data="...") the browser decodes
+   entities automatically, so |raw is NOT needed there. */
+const DEFAULTS = {{ option_fields|json_encode|raw }};
+let fields = JSON.parse(JSON.stringify(DEFAULTS));
+
+const BADGE_OPTS = ['', 'Best', 'Good', 'Fair', 'Distant'];
+
+function esc(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function render() {
+    const container = document.getElementById('fields-editor');
+    const counter = document.getElementById('field-count');
+    counter.textContent = fields.length === 1
+        ? '1 {{ 'field'|trans }}'
+        : `${fields.length} {{ 'fields'|trans }}`;
+
+    if (!fields.length) {
+        container.innerHTML = `
+            <div class="srv-empty-editor">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M8 7h8M8 17h8"/></svg>
+                <h3 class="h4 mb-1">{{ 'No server option fields yet'|trans }}</h3>
+                <p class="text-secondary mb-0">{{ 'Add a field to create a location, operating system, or other checkout picker.'|trans }}</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = fields.map((field, fi) => `
+        <section class="srv-field-card" data-fi="${fi}" aria-label="{{ 'Server option field'|trans }} ${fi + 1}">
+            <div class="srv-field-head">
+                <span class="srv-field-index" aria-hidden="true">${String(fi + 1).padStart(2, '0')}</span>
+                <div class="srv-field-form">
+                    <div>
+                        <label for="field-id-${fi}" class="form-label text-secondary small mb-1">{{ 'Field ID'|trans }}</label>
+                        <input id="field-id-${fi}" class="form-control font-monospace"
+                               value="${esc(field.id)}"
+                               oninput="fields[${fi}].id = this.value"
+                               pattern="[a-z0-9_]+"
+                               aria-describedby="field-id-help-${fi}"
+                               placeholder="location">
+                        <small id="field-id-help-${fi}" class="form-hint">{{ 'Lowercase letters, numbers, and underscores.'|trans }}</small>
+                    </div>
+                    <div>
+                        <label for="field-label-${fi}" class="form-label text-secondary small mb-1">{{ 'Customer-facing label'|trans }}</label>
+                        <input id="field-label-${fi}" class="form-control fw-semibold"
+                               value="${esc(field.label)}"
+                               oninput="fields[${fi}].label = this.value"
+                               placeholder="{{ 'e.g. Server Location, Operating System'|trans }}">
+                    </div>
+                    <div class="srv-field-description">
+                        <label for="field-description-${fi}" class="form-label text-secondary small mb-1">{{ 'Helper description'|trans }} <span class="fw-normal">({{ 'optional'|trans }})</span></label>
+                        <input id="field-description-${fi}" class="form-control"
+                               value="${esc(field.description ?? '')}"
+                               oninput="fields[${fi}].description = this.value"
+                               placeholder="{{ 'e.g. Choose a datacenter closest to your audience'|trans }}">
+                    </div>
+                    <div class="srv-field-display">
+                        <label for="field-display-${fi}" class="form-label text-secondary small mb-1">{{ 'Display style'|trans }}</label>
+                        <select id="field-display-${fi}" class="form-select form-select-sm mt-1"
+                                onchange="fields[${fi}].display = this.value">
+                            <option value="dropdown" ${(field.display || 'dropdown') === 'dropdown' ? 'selected' : ''}>{{ 'Searchable dropdown'|trans }}</option>
+                            <option value="card-grid" ${field.display === 'card-grid' ? 'selected' : ''}>{{ 'Card grid with tabs'|trans }}</option>
+                        </select>
+                        <small class="form-hint">{{ 'How this field appears on the server order form.'|trans }}</small>
+                    </div>
+                    <div class="srv-field-required">
+                        <div>
+                            <strong class="d-block small">{{ 'Require a selection'|trans }}</strong>
+                            <span class="text-secondary small">{{ 'Customers must select an option before continuing.'|trans }}</span>
+                        </div>
+                        <label class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox"
+                                   ${field.required ? 'checked' : ''}
+                                   aria-label="{{ 'Require a selection for this field'|trans }}"
+                                   onchange="fields[${fi}].required = this.checked">
+                        </label>
+                    </div>
+                </div>
+                <div class="srv-remove-field">
+                    <button type="button" class="btn btn-ghost-danger btn-sm" onclick="removeField(${fi})" aria-label="{{ 'Remove this option field'|trans }}">
+                        <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+                        {{ 'Remove field'|trans }}
+                    </button>
+                </div>
+            </div>
+
+            ${field.options && field.options.length ? `
+            <div class="srv-options-list">
+                <div class="srv-options-list-head" aria-hidden="true">
+                    <span>{{ 'Value / slug'|trans }}</span>
+                    <span>{{ 'Customer-facing label'|trans }}</span>
+                    <span>{{ 'Group'|trans }}</span>
+                    <span>{{ 'Badge'|trans }}</span>
+                    <span>{{ 'Meta'|trans }}</span>
+                    <span>{{ '$/mo'|trans }}</span>
+                    <span></span>
+                </div>
+                ${field.options.map((opt, oi) => `
+                        <div class="srv-option-row">
+                            <div class="srv-option-cell">
+                                <label for="option-value-${fi}-${oi}" class="srv-option-mobile-label">{{ 'Value / slug'|trans }}</label>
+                                <input id="option-value-${fi}-${oi}" class="form-control form-control-sm font-monospace"
+                                       value="${esc(opt.value)}"
+                                       oninput="fields[${fi}].options[${oi}].value = this.value"
+                                       placeholder="india">
+                            </div>
+                            <div class="srv-option-cell srv-option-cell-label">
+                                <label for="option-label-${fi}-${oi}" class="srv-option-mobile-label">{{ 'Customer-facing label'|trans }}</label>
+                                <input id="option-label-${fi}-${oi}" class="form-control form-control-sm"
+                                       value="${esc(opt.label)}"
+                                       oninput="fields[${fi}].options[${oi}].label = this.value"
+                                       placeholder="{{ 'India'|trans }}">
+                            </div>
+                            <div class="srv-option-cell">
+                                <label for="option-group-${fi}-${oi}" class="srv-option-mobile-label">{{ 'Group'|trans }}</label>
+                                <input id="option-group-${fi}-${oi}" class="form-control form-control-sm"
+                                       value="${esc(opt.group ?? '')}"
+                                       oninput="fields[${fi}].options[${oi}].group = this.value"
+                                       placeholder="{{ 'Asia'|trans }}">
+                            </div>
+                            <div class="srv-option-cell">
+                                <label for="option-badge-${fi}-${oi}" class="srv-option-mobile-label">{{ 'Badge'|trans }}</label>
+                                <select id="option-badge-${fi}-${oi}" class="form-select form-select-sm"
+                                        onchange="fields[${fi}].options[${oi}].badge = this.value">
+                                    ${BADGE_OPTS.map(b => `<option value="${b}"${opt.badge === b ? ' selected' : ''}>${b || '—'}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="srv-option-cell">
+                                <label for="option-meta-${fi}-${oi}" class="srv-option-mobile-label">{{ 'Meta'|trans }}</label>
+                                <input id="option-meta-${fi}-${oi}" class="form-control form-control-sm"
+                                       value="${esc(opt.meta ?? '')}"
+                                       oninput="fields[${fi}].options[${oi}].meta = this.value"
+                                       placeholder="39ms">
+                            </div>
+                            <div class="srv-option-cell">
+                                <label for="option-price-${fi}-${oi}" class="srv-option-mobile-label">{{ '$/mo'|trans }}</label>
+                                <input id="option-price-${fi}-${oi}" class="form-control form-control-sm"
+                                       type="number" min="0" step="0.01"
+                                       value="${parseFloat(opt.price_monthly || 0).toFixed(2)}"
+                                       oninput="fields[${fi}].options[${oi}].price_monthly = parseFloat(this.value) || 0"
+                                       placeholder="0.00">
+                            </div>
+                            <div class="srv-option-delete">
+                                <button type="button"
+                                        class="btn btn-ghost-danger btn-icon btn-sm"
+                                        onclick="removeOption(${fi}, ${oi})"
+                                        title="{{ 'Remove option'|trans }}"
+                                        aria-label="{{ 'Remove option'|trans }}">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+                                </button>
+                            </div>
+                        </div>`).join('')}
+            </div>` : `<div class="srv-empty-options">
+                <strong class="d-block mb-1">{{ 'No choices added yet'|trans }}</strong>
+                <span class="small">{{ 'Add the first selectable value for this field.'|trans }}</span>
+            </div>`}
+
+            <div class="srv-field-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addOption(${fi})">
+                    <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    {{ 'Add Option'|trans }}
+                </button>
+                <span class="text-secondary small">${field.options?.length || 0} ${(field.options?.length || 0) === 1 ? '{{ 'option'|trans }}' : '{{ 'options'|trans }}'}</span>
+            </div>
+        </section>
+    `).join('');
+}
+
+function addField() {
+    fields.push({ id: 'field_' + Date.now(), label: '{{ 'New Field'|trans }}', description: '', required: false, display: 'dropdown', options: [] });
+    render();
+    const cards = document.querySelectorAll('#fields-editor [data-fi]');
+    if (cards.length) cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function removeField(fi) {
+    if (!confirm('{{ 'Remove this option field and all its options?'|trans }}')) return;
+    fields.splice(fi, 1);
+    render();
+}
+
+function addOption(fi) {
+    fields[fi].options = fields[fi].options || [];
+    fields[fi].options.push({ value: '', label: '', group: '', badge: '', meta: '', price_monthly: 0 });
+    render();
+    const rows = document.querySelectorAll(`[data-fi="${fi}"] tbody tr`);
+    if (rows.length) {
+        const last = rows[rows.length - 1];
+        const inp = last.querySelector('input');
+        if (inp) inp.focus();
+    }
+}
+
+function removeOption(fi, oi) {
+    fields[fi].options.splice(oi, 1);
+    render();
+}
+
+function validateFields() {
+    for (let fi = 0; fi < fields.length; fi++) {
+        const field = fields[fi];
+        if (!/^[a-z0-9_]+$/.test((field.id || '').trim())) {
+            const input = document.getElementById(`field-id-${fi}`);
+            input?.focus();
+            input?.classList.add('is-invalid');
+            alert('{{ 'Field ID must use lowercase letters, numbers, or underscores only.'|trans }}');
+            return false;
+        }
+        if (!(field.label || '').trim()) {
+            const input = document.getElementById(`field-label-${fi}`);
+            input?.focus();
+            input?.classList.add('is-invalid');
+            alert('{{ 'Every option field needs a customer-facing label.'|trans }}');
+            return false;
+        }
+        for (let oi = 0; oi < (field.options || []).length; oi++) {
+            const option = field.options[oi];
+            if (!(option.value || '').trim() || !(option.label || '').trim()) {
+                const input = document.getElementById(!(option.value || '').trim() ? `option-value-${fi}-${oi}` : `option-label-${fi}-${oi}`);
+                input?.focus();
+                input?.classList.add('is-invalid');
+                alert('{{ 'Every option needs both a submitted value and a customer-facing label.'|trans }}');
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+document.getElementById('btn-add-field').addEventListener('click', addField);
+
+document.getElementById('btn-reset-defaults').addEventListener('click', function() {
+    if (!confirm('{{ 'Reset all option fields to built-in defaults? Your current configuration will be lost.'|trans }}')) return;
+    fields = JSON.parse(JSON.stringify(DEFAULTS));
+    render();
+});
+
+document.getElementById('btn-save').addEventListener('click', function() {
+    const btn = this;
+    if (!validateFields()) return;
+    const saveSvg = '<svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>{{ 'Saving…'|trans }}';
+
+    /* FOSSBilling.api.admin.post does NOT return a Promise — use success/error callbacks (3rd/4th args). */
+    FOSSBilling.api.admin.post('serviceserver/options_save', {
+        options_json: JSON.stringify(fields)
+    }, function() {
+        btn.disabled = false;
+        btn.innerHTML = saveSvg + '{{ 'Save'|trans }}';
+
+        const toast = document.createElement('div');
+        toast.className = 'alert alert-success alert-dismissible fade show position-fixed bottom-0 end-0 m-4 shadow';
+        toast.style.cssText = 'z-index:9999;min-width:280px;';
+        toast.innerHTML = '<svg class="icon me-2 text-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>{{ 'Option fields saved successfully.'|trans }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }, function(err) {
+        btn.disabled = false;
+        btn.innerHTML = saveSvg + '{{ 'Save'|trans }}';
+
+        const msg = (err && err.message) ? err.message : JSON.stringify(err);
+        alert('{{ 'Error saving option fields: '|trans }}' + msg);
+    });
+});
+
+render();
+</script>
+{% endblock %}

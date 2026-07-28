@@ -9,7 +9,7 @@
 {% block breadcrumbs %}
 <ol class="breadcrumb">
     <li class="breadcrumb-item">
-        <a href="{{ ''|url }}"><svg class="icon"><use xlink:href="#home"/></svg></a>
+        <a href="{{ ''|url }}"><svg class="icon"><use href="#home"/></svg></a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">{{ 'Support PIN Lookup'|trans }}</li>
 </ol>
@@ -33,7 +33,7 @@
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <svg class="icon me-2 text-primary"><use xlink:href="#search"/></svg>
+                        <svg class="icon me-2 text-primary"><use href="#search"/></svg>
                         {{ 'Look Up Client by PIN'|trans }}
                     </h3>
                 </div>
@@ -47,7 +47,7 @@
                                placeholder="000000" autocomplete="off">
                     </div>
                     <button id="btn-lookup" class="btn btn-primary w-100">
-                        <svg class="icon me-1"><use xlink:href="#search"/></svg>
+                        <svg class="icon me-1"><use href="#search"/></svg>
                         {{ 'Find Client'|trans }}
                     </button>
                 </div>
@@ -59,7 +59,7 @@
             <div class="card" id="result-card" style="display:none">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <svg class="icon me-2 text-success"><use xlink:href="#circle-check"/></svg>
+                        <svg class="icon me-2 text-success"><use href="#circle-check"/></svg>
                         {{ 'Client Found'|trans }}
                     </h3>
                 </div>
@@ -92,7 +92,7 @@
                 </div>
             </div>
             <div class="alert alert-danger mt-3" id="lookup-error" style="display:none">
-                <svg class="icon alert-icon"><use xlink:href="#alert-triangle"/></svg>
+                <svg class="icon alert-icon"><use href="#alert-triangle"/></svg>
                 <span id="lookup-error-msg"></span>
             </div>
         </div>
@@ -149,7 +149,7 @@
 
     function resetBtn() {
         btn.disabled = false;
-        btn.innerHTML = '<svg class="icon me-1"><use xlink:href="#search"/></svg> {{ 'Find Client'|trans|e('js') }}';
+        btn.innerHTML = '<svg class="icon me-1"><use href="#search"/></svg> {{ 'Find Client'|trans|e('js') }}';
     }
 
     function showError(msg) {

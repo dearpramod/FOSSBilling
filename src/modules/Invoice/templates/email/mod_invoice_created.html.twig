@@ -1,63 +1,146 @@
-{% block subject %}[{{ guest.system_company.name }}] Invoice Created{% endblock %}
+{% block subject %}[{{ guest.system_company.name }}] New Invoice {{ invoice.serie_nr|default(invoice.id|default('')) }}{% endblock %}
 {% block content %}
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en" data-fb-email-shell="modern">
 <head>
-	<meta charset="utf-8">
-	<style type="text/css">
-		body {
-			font-family: Arial, sans-serif;
-			font-size: 14px;
-			color: #333333;
-		}
-
-		h1 {
-			font-size: 24px;
-			font-weight: bold;
-			margin: 0 0 20px;
-		}
-
-		p {
-			margin: 0 0 10px;
-		}
-
-		strong {
-			font-weight: bold;
-		}
-
-		.signature {
-			font-style: italic;
-			color: #999999;
-			margin-top: 20px;
-			border-top: 1px solid #cccccc;
-			padding-top: 10px;
-		}
-	</style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>New invoice from {{ guest.system_company.name }}</title>
 </head>
-<body>
-	<h1>Invoice Created</h1>
-	<p>Hello {{ c.first_name|default('') }} {{ c.last_name|default('') }},</p>
-	<p>This is to notify that invoice {{ invoice.id|default('') }} was generated on {{ invoice.created_at|default('')|format_date }}.</p>
-    <ul>
-        <li><strong>Amount Due:</strong> {{ invoice.total|default(0)|format_currency(invoice.currency|default(default_currency)) }}</li>
-        <li><strong>Due Date:</strong>  {{ invoice.due_at|default('')|format_date }}</li>
-        {% if invoice.orders|default([])|length > 0 %}
-            {% for order in invoice.orders|default([]) %}
-                <li><strong>Order ID:</strong> #{{ order.id }}</li>
-                {% if order.product_name %}
-                    <li><strong>Product:</strong> {{ order.product_name }}</li>
-                {% endif %}
-                {% if order.expires_at %}
-                    <li><strong>Renewal Date:</strong> {{ order.expires_at|format_date }}</li>
-                {% endif %}
-            {% endfor %}
+<body style="margin:0;padding:0;background-color:#edf3f8;color:#172033;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;-webkit-text-size-adjust:100%;">
+    {# Gmail Invoice structured data. Kept in the HTML email but visually hidden. #}
+    <div itemscope itemtype="http://schema.org/Invoice" style="display:none!important;max-height:0;overflow:hidden;mso-hide:all;">
+        <meta itemprop="accountId" content="{{ c.id|default(c.email|default('')) }}">
+        <meta itemprop="confirmationNumber" content="{{ invoice.serie_nr|default(invoice.id|default('')) }}">
+        {% if invoice.due_at|default('') %}
+        <meta itemprop="paymentDue" content="{{ invoice.due_at|date('c') }}">
         {% endif %}
-    </ul>
+        <meta itemprop="paymentStatus" content="PaymentDue">
+        <div itemprop="provider" itemscope itemtype="http://schema.org/Organization">
+            <meta itemprop="name" content="{{ guest.system_company.name }}">
+        </div>
+        <div itemprop="customer" itemscope itemtype="http://schema.org/Person">
+            <meta itemprop="name" content="{{ c.first_name|default('') }} {{ c.last_name|default('') }}">
+            <meta itemprop="email" content="{{ c.email|default('') }}">
+        </div>
+        <div itemprop="minimumPaymentDue" itemscope itemtype="http://schema.org/PriceSpecification">
+            <meta itemprop="price" content="{{ invoice.total|default(0) }}">
+            <meta itemprop="priceCurrency" content="{{ invoice.currency|default(default_currency) }}">
+        </div>
+        <div itemprop="totalPaymentDue" itemscope itemtype="http://schema.org/PriceSpecification">
+            <meta itemprop="price" content="{{ invoice.total|default(0) }}">
+            <meta itemprop="priceCurrency" content="{{ invoice.currency|default(default_currency) }}">
+        </div>
+    </div>
 
-    <p>You may view and pay the invoice <a href='{{ "invoice/#{invoice.hash|default('')}"|url(area: 'client') }}' target="_blank">here.</a></p>
-    <p>You can also <a href="{{ "invoice/pdf/#{invoice.hash|default('')}"|url(area: 'client') }}" target="_blank">download the invoice as a PDF</a>, <a href="{{ 'login'|url(query: { 'email': c.email|default('') }, area: 'client') }}" target="_blank">login</a>, or <a href="{{ 'client/profile'|url(area: 'client') }}" target="_blank">edit your profile.</a></p>
+    <div style="display:none!important;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">
+        Invoice {{ invoice.serie_nr|default(invoice.id|default('')) }} for {{ invoice.total|default(0)|format_currency(invoice.currency|default(default_currency)) }} is due {{ invoice.due_at|default('')|format_date }}.
+    </div>
 
-	<div class="signature">{{ guest.system_email.signature }}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:#edf3f8;">
+        <tr>
+            <td align="center" style="padding:36px 16px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;">
+                    <tr>
+                        <td align="center" style="padding:4px 24px 28px;">
+                            <!--FB_EMAIL_LOGO-->
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="border-top:4px solid #5271ff;border-radius:16px 16px 0 0;background-color:#ffffff;padding:38px 40px 22px;">
+                            <div style="margin-bottom:12px;color:#5271ff;font-size:12px;font-weight:700;line-height:18px;letter-spacing:1.2px;text-transform:uppercase;">
+                                New billing document
+                            </div>
+                            <h1 style="margin:0;color:#111827;font-size:28px;font-weight:750;line-height:36px;letter-spacing:-.7px;">
+                                Your invoice is ready
+                            </h1>
+                            <p style="margin:16px 0 0;color:#56637a;font-size:16px;line-height:25px;">
+                                Hi {{ c.first_name|default('there') }}, a new invoice has been issued for your {{ guest.system_company.name }} account.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="background-color:#ffffff;padding:0 40px 28px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border:1px solid #e4e9f2;border-radius:12px;background-color:#f8faff;">
+                                <tr>
+                                    <td style="padding:22px 24px;">
+                                        <div style="color:#728096;font-size:11px;font-weight:700;line-height:16px;letter-spacing:1px;text-transform:uppercase;">Amount due</div>
+                                        <div style="margin-top:5px;color:#10172a;font-size:28px;font-weight:800;line-height:36px;letter-spacing:-.7px;">
+                                            {{ invoice.total|default(0)|format_currency(invoice.currency|default(default_currency)) }}
+                                        </div>
+                                    </td>
+                                    <td align="right" style="padding:22px 24px;border-left:1px solid #e4e9f2;">
+                                        <div style="color:#728096;font-size:11px;font-weight:700;line-height:16px;letter-spacing:1px;text-transform:uppercase;">Payment due</div>
+                                        <div style="margin-top:7px;color:#10172a;font-size:16px;font-weight:700;line-height:24px;">
+                                            {{ invoice.due_at|default('')|format_date }}
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="background-color:#ffffff;padding:0 40px 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;">
+                                <tr>
+                                    <td style="padding:11px 0;border-bottom:1px solid #edf0f5;color:#7a879a;font-size:14px;line-height:21px;">Invoice number</td>
+                                    <td align="right" style="padding:11px 0;border-bottom:1px solid #edf0f5;color:#172033;font-size:14px;font-weight:700;line-height:21px;">{{ invoice.serie_nr|default(invoice.id|default('')) }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:11px 0;border-bottom:1px solid #edf0f5;color:#7a879a;font-size:14px;line-height:21px;">Issued</td>
+                                    <td align="right" style="padding:11px 0;border-bottom:1px solid #edf0f5;color:#172033;font-size:14px;font-weight:650;line-height:21px;">{{ invoice.created_at|default('')|format_date }}</td>
+                                </tr>
+                                {% if invoice.orders|default([])|length > 0 %}
+                                    {% for order in invoice.orders|default([]) %}
+                                    <tr>
+                                        <td style="padding:11px 0;border-bottom:1px solid #edf0f5;color:#7a879a;font-size:14px;line-height:21px;">{{ order.product_name|default('Order') }}</td>
+                                        <td align="right" style="padding:11px 0;border-bottom:1px solid #edf0f5;color:#172033;font-size:14px;font-weight:650;line-height:21px;">#{{ order.id }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endif %}
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td align="center" style="background-color:#ffffff;padding:0 40px 36px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td align="center" style="border-radius:10px;background-color:#3158e8;">
+                                        <a href="{{ "invoice/#{invoice.hash|default('')}"|url(area: 'client') }}" target="_blank" style="display:inline-block;min-width:190px;padding:14px 22px;color:#ffffff;font-size:15px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;border-radius:10px;">
+                                            View and pay invoice
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:18px 0 0;color:#7a879a;font-size:13px;line-height:20px;">
+                                Prefer a copy? <a href="{{ "invoice/pdf/#{invoice.hash|default('')}"|url(area: 'client') }}" target="_blank" style="color:#3158e8;font-weight:650;text-decoration:none;">Download the PDF invoice</a>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="border-top:1px solid #e8ecf3;border-radius:0 0 16px 16px;background-color:#f9fafc;padding:24px 40px;color:#6d788c;font-size:13px;line-height:20px;">
+                            <div style="color:#253047;font-weight:700;">Need help with this invoice?</div>
+                            <div style="margin-top:5px;">Reply to this email or visit your client dashboard. Our support team is ready to help.</div>
+                            <div style="margin-top:16px;color:#8a95a7;">{{ guest.system_email.signature }}</div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td align="center" style="padding:24px 24px 0;color:#7d899b;font-size:12px;line-height:18px;">
+                            This is a transactional billing notification from {{ guest.system_company.name }}.<br>
+                            Please keep this email for your records.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
 {% endblock %}

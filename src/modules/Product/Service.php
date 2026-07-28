@@ -662,32 +662,43 @@ class Service implements InjectionAwareInterface
 
     public function toProductCategoryApiArray(ProductCategory $model, $deep = true, $identity = null): array
     {
+        $pr = $this->getCategoryProducts($model);
+        $type = null;
+
+        if (!$deep) {
+            foreach ($pr as $p) {
+                $type = $p->getType();
+                break;
+            }
+
+            return [
+                'id' => $model->getId(),
+                'title' => $model->getTitle(),
+                'description' => $model->getDescription(),
+                'icon_url' => $model->getIconUrl(),
+                'created_at' => $this->formatDateTimeValue($model->getCreatedAt()),
+                'updated_at' => $this->formatDateTimeValue($model->getUpdatedAt()),
+                'price_starting_from' => 0,
+                'type' => $type,
+                'products' => [],
+            ];
+        }
+
         $min_price = 0;
         $products = [];
-        $pr = $this->getCategoryProducts($model);
 
-        $type = null; // identified by first product in category
-        if (!$deep) {
-            // Local patch: fast path for navigation lists (deep=0) — category
-            // type only, skipping the per-product pricing API calls below.
-            $first = reset($pr);
-            if ($first instanceof Product) {
-                $type = $first->getType();
+        foreach ($pr as $p) {
+            $pa = $this->toApiArray($p, false, $identity);
+            if (reset($pr) == $p) {
+                $type = $p->getType();
             }
-        } else {
-            foreach ($pr as $p) {
-                $pa = $this->toApiArray($p, false, $identity);
-                if (reset($pr) == $p) {
-                    $type = $p->getType();
-                }
-                $products[] = $pa;
-                $startingPrice = $pa['price_starting_from'] ?? 0;
+            $products[] = $pa;
+            $startingPrice = $pa['price_starting_from'] ?? 0;
 
-                if ($min_price == 0) {
-                    $min_price = $startingPrice;
-                } elseif ($startingPrice < $min_price) {
-                    $min_price = $startingPrice;
-                }
+            if ($min_price == 0) {
+                $min_price = $startingPrice;
+            } elseif ($startingPrice < $min_price) {
+                $min_price = $startingPrice;
             }
         }
 
@@ -722,14 +733,10 @@ class Service implements InjectionAwareInterface
 
     public function getPaginatedProductCategories(array $data, $identity = null): array
     {
-        // Local patch: honor $data['deep'] (default true); deep=0 skips
-        // per-product pricing enrichment for cheap navigation lists.
-        $deep = (bool) ($data['deep'] ?? true);
-
         return $this->di['pager']->paginateMappedQuery(
             $this->getProductCategorySearchQueryBuilder($data),
             PaginationOptions::fromArray($data),
-            fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, $deep, $identity),
+            fn (ProductCategory $category): array => $this->toProductCategoryApiArray($category, (bool) ($data['deep'] ?? true), $identity),
         );
     }
 

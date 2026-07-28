@@ -5,6 +5,8 @@ module.exports = {
     './html/**/*.twig',
     '../../modules/*/html_client/**/*.twig',
     '../../modules/*/html_admin/**/*.twig',
+    '../../modules/*/templates/client/**/*.twig',
+    '../../modules/*/templates/admin/**/*.twig',
   ],
   safelist: [
     'grid-rows-[0fr]',

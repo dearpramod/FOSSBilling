@@ -1,39 +1,94 @@
 {# Shown under Admin > Orders > [order] > Manage tab.
    Variables: order, service (toApiArray result) #}
 
+{# Load configured option fields and index them by id for fast lookup #}
+{% set srvOptionsList = admin.serviceserver_options_get %}
+{% set srvOptionsMap = {} %}
+{% for field in srvOptionsList %}
+    {% set srvOptionsMap = srvOptionsMap|merge({(field.id): field}) %}
+{% endfor %}
+
+{# Helper macro: render a grouped <select> for a given option field definition #}
+{% macro optSelect(field, currentVal, fieldName) %}
+    {# Collect unique group names in definition order #}
+    {% set groups = [] %}
+    {% for opt in field.options %}
+        {% set grp = opt.group is defined ? opt.group : '' %}
+        {% if grp not in groups %}{% set groups = groups|merge([grp]) %}{% endif %}
+    {% endfor %}
+
+    {# Determine whether the stored value is among the configured options #}
+    {% set known = false %}
+    {% for opt in field.options %}
+        {% if opt.value == currentVal %}{% set known = true %}{% endif %}
+    {% endfor %}
+
+    <select class="form-select" name="{{ fieldName }}">
+        {% if not known and currentVal %}
+            <option value="{{ currentVal }}" selected>{{ currentVal }} ({{ 'current'|trans }})</option>
+            <option disabled>───────────────</option>
+        {% endif %}
+        {% for grp in groups %}
+            {% if grp != '' %}<optgroup label="{{ grp|trans }}">{% endif %}
+            {% for opt in field.options|filter(o => (o.group is defined ? o.group : '') == grp) %}
+                {% set optLabel = opt.label %}
+                {% if opt.meta is defined and opt.meta %}{% set optLabel = optLabel ~ ' — ' ~ opt.meta %}{% endif %}
+                {% if opt.price_monthly is defined and opt.price_monthly %}{% set optLabel = optLabel ~ ' (+$' ~ opt.price_monthly ~ '/mo)' %}{% endif %}
+                <option value="{{ opt.value }}" {{ currentVal == opt.value ? 'selected' : '' }}>{{ optLabel }}</option>
+            {% endfor %}
+            {% if grp != '' %}</optgroup>{% endif %}
+        {% endfor %}
+    </select>
+{% endmacro %}
+
+{% if not service %}
+<div class="alert alert-warning">{{ 'No service record found for this order. Activate the order to create one.'|trans }}</div>
+{% else %}
 <div class="card mb-3">
     <div class="card-header">
         <h3 class="card-title">{{ 'Server Details'|trans }} — {{ order.title }}</h3>
     </div>
     <div class="card-body">
-        <form {{ fb_api_form({'message': 'Server details updated'|trans}) }}>
-            <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+        <form method="post" action="{{ 'serviceserver/update'|api_url }}"
+              {{ fb_api_form({'message': 'Server details updated'|trans, reload: true}) }}>
             <input type="hidden" name="order_id" value="{{ order.id }}">
 
             <div class="row g-3">
+                {# ── Credentials ── #}
                 <div class="col-md-6">
                     <label class="form-label">{{ 'Hostname'|trans }}</label>
-                    <input class="form-control" type="text" name="hostname" value="{{ service.hostname }}" placeholder="server01.example.com">
+                    <input class="form-control" type="text" name="hostname" value="{{ service.hostname ?? '' }}" placeholder="server01.example.com">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">{{ 'IP Address'|trans }}</label>
-                    <input class="form-control" type="text" name="ip" value="{{ service.ip }}" placeholder="203.0.113.10">
+                    <input class="form-control" type="text" name="ip" value="{{ service.ip ?? '' }}" placeholder="203.0.113.10">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">{{ 'Root Password'|trans }}</label>
-                    <input class="form-control" type="text" name="root_password" value="{{ service.root_password }}" placeholder="{{ 'Leave blank to keep current'|trans }}">
+                    <input class="form-control" type="text" name="root_password" value="{{ service.root_password ?? '' }}" placeholder="{{ 'Leave blank to keep current'|trans }}">
                 </div>
+
+                {# ── Operating System — grouped select or plain text fallback ── #}
                 <div class="col-md-6">
                     <label class="form-label">{{ 'Operating System'|trans }}</label>
-                    <input class="form-control" type="text" name="os" value="{{ service.os }}" placeholder="Ubuntu 24.04 LTS">
+                    {% if srvOptionsMap['os'] is defined %}
+                        {{ _self.optSelect(srvOptionsMap['os'], service.os ?? '', 'os') }}
+                        {% if srvOptionsMap['os'].description is defined and srvOptionsMap['os'].description %}
+                            <div class="form-hint">{{ srvOptionsMap['os'].description }}</div>
+                        {% endif %}
+                    {% else %}
+                        <input class="form-control" type="text" name="os" value="{{ service.os ?? '' }}" placeholder="Ubuntu 24.04 LTS">
+                    {% endif %}
                 </div>
+
+                {# ── Hardware specs ── #}
                 <div class="col-md-3">
                     <label class="form-label">{{ 'CPU Cores'|trans }}</label>
                     <input class="form-control" type="number" min="1" name="cpu_cores" value="{{ service.cpu_cores ?? '' }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ 'RAM (MB)'|trans }}</label>
-                    <input class="form-control" type="number" min="128" step="128" name="ram_mb" value="{{ service.ram_mb ?? '' }}">
+                    <input class="form-control" type="number" min="1" step="1" name="ram_mb" value="{{ service.ram_mb ?? '' }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ 'Disk (GB)'|trans }}</label>
@@ -43,10 +98,21 @@
                     <label class="form-label">{{ 'Bandwidth (GB)'|trans }}</label>
                     <input class="form-control" type="number" min="0" name="bandwidth_gb" value="{{ service.bandwidth_gb ?? '' }}">
                 </div>
+
+                {# ── Location — grouped select or plain text fallback ── #}
                 <div class="col-md-6">
                     <label class="form-label">{{ 'Location'|trans }}</label>
-                    <input class="form-control" type="text" name="location" value="{{ service.location }}" placeholder="Singapore, SG">
+                    {% if srvOptionsMap['location'] is defined %}
+                        {{ _self.optSelect(srvOptionsMap['location'], service.location ?? '', 'location') }}
+                        {% if srvOptionsMap['location'].description is defined and srvOptionsMap['location'].description %}
+                            <div class="form-hint">{{ srvOptionsMap['location'].description }}</div>
+                        {% endif %}
+                    {% else %}
+                        <input class="form-control" type="text" name="location" value="{{ service.location ?? '' }}" placeholder="Singapore, SG">
+                    {% endif %}
                 </div>
+
+                {# ── Status ── #}
                 <div class="col-md-6">
                     <label class="form-label">{{ 'Status'|trans }}</label>
                     <select class="form-select" name="status">
@@ -55,9 +121,10 @@
                         {% endfor %}
                     </select>
                 </div>
+
                 <div class="col-12">
                     <label class="form-label">{{ 'Admin Notes'|trans }}</label>
-                    <textarea class="form-control" rows="3" name="notes">{{ service.notes }}</textarea>
+                    <textarea class="form-control" rows="3" name="notes">{{ service.notes ?? '' }}</textarea>
                 </div>
             </div>
 
@@ -67,3 +134,29 @@
         </form>
     </div>
 </div>
+
+{# Extra configured option fields whose ids don't map to a standard service column #}
+{% set extraFields = srvOptionsList|filter(f => f.id not in ['os', 'location']) %}
+{% if extraFields|length %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3 class="card-title">{{ 'Additional Options'|trans }}</h3>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for field in extraFields %}
+            <div class="col-md-6">
+                <label class="form-label">{{ field.label|trans }}</label>
+                {% if field.description is defined and field.description %}
+                    <div class="form-hint mb-1">{{ field.description }}</div>
+                {% endif %}
+                {% set currentFieldVal = service[field.id] is defined ? service[field.id] : '' %}
+                {{ _self.optSelect(field, currentFieldVal, field.id) }}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-3 text-muted small">{{ 'Note: these additional fields are not persisted to the service record unless wired up in update().'|trans }}</div>
+    </div>
+</div>
+{% endif %}
+{% endif %}{# end service null guard #}

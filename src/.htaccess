@@ -1,6 +1,12 @@
 # BEGIN FOSSBilling
 # Read documentation https://docs.fossbilling.org/ for more information.
 Options -Indexes +SymLinksIfOwnerMatch
+
+# Route Apache-level 4xx/5xx through FOSSBilling so the themed error page is shown.
+ErrorDocument 400 /index.php?_errcode=400
+ErrorDocument 403 /index.php?_errcode=403
+ErrorDocument 404 /index.php?_errcode=404
+ErrorDocument 500 /index.php?_errcode=500
 <IfModule !mod_rewrite.c>
     DirectoryIndex rewrite-missing.html
     FallbackResource rewrite-missing.html

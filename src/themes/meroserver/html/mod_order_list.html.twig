@@ -30,12 +30,12 @@
 
 {% set orders = client.order_get_list(api_params) %}
 
-{# Reuse orders.total for the active tab when no search/filter narrows the result set,
-   saving one redundant API call on the most common page load. #}
+{# Only compute the count for the currently-active tab. Inactive tabs skip their count
+   queries entirely — this saves 2 extra API calls on every default page load. #}
 {% set _no_extra = not search_query and not invoice_type and not category_id %}
-{% set count_active    = (_no_extra and status_tab == 'active')    ? orders.total|default(0) : client.order_get_list({'per_page': 1, 'hide_addons': 1, 'status': 'active'}).total|default(0) %}
-{% set count_cancelled = (_no_extra and status_tab == 'cancelled') ? orders.total|default(0) : client.order_get_list({'per_page': 1, 'hide_addons': 1, 'status': 'canceled'}).total|default(0) %}
-{% set count_all       = (_no_extra and status_tab == 'all')       ? orders.total|default(0) : client.order_get_list({'per_page': 1, 'hide_addons': 1}).total|default(0) %}
+{% set count_active    = status_tab == 'active'    ? ((_no_extra ? orders.total : client.order_get_list({'per_page': 1, 'hide_addons': 1, 'status': 'active'}).total)|default(0))   : null %}
+{% set count_cancelled = status_tab == 'cancelled' ? ((_no_extra ? orders.total : client.order_get_list({'per_page': 1, 'hide_addons': 1, 'status': 'canceled'}).total)|default(0)) : null %}
+{% set count_all       = status_tab == 'all'       ? ((_no_extra ? orders.total : client.order_get_list({'per_page': 1, 'hide_addons': 1}).total)|default(0))                       : null %}
 {% set categories      = guest.product_category_get_list({'per_page': 50, 'deep': 0}) %}
 
 {% block content %}

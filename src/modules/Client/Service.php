@@ -758,6 +758,62 @@ class Service implements InjectionAwareInterface
         return $client;
     }
 
+    /**
+     * Creates a client account for an OAuth-verified registration.
+     *
+     * Identical field whitelist to guestCreateClient() but skips onBeforeClientSignUp
+     * (which contains the CAPTCHA check) because the OAuth provider has already
+     * verified the user's identity. onAfterClientSignUp still fires so welcome
+     * emails, hooks, and other post-signup actions run normally.
+     *
+     * @param array $data Must include 'email', 'first_name', 'last_name', 'password'
+     */
+    public function oauthCreateClient(array $data): \Model_Client
+    {
+        $allowedFields = [
+            'email', 'first_name', 'last_name', 'password',
+            'phone', 'phone_cc', 'gender', 'birthday',
+            'company', 'company_vat', 'company_number', 'type',
+            'address_1', 'address_2', 'city', 'state', 'postcode', 'country',
+            'currency', 'lang', 'timezone', 'auth_type',
+            'custom_1', 'custom_2', 'custom_3', 'custom_4', 'custom_5',
+            'custom_6', 'custom_7', 'custom_8', 'custom_9', 'custom_10',
+            'custom_11', 'custom_12', 'custom_13', 'custom_14', 'custom_15',
+            'custom_16', 'custom_17', 'custom_18', 'custom_19', 'custom_20',
+        ];
+
+        $safeData = [
+            'ip' => $this->di['request']->getClientIp(),
+            'status' => \Model_Client::ACTIVE,
+        ];
+        foreach ($allowedFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $safeData[$field] = $data[$field];
+            }
+        }
+
+        $client = $this->createClient($safeData);
+
+        // Google has already verified the email — mark it approved so the
+        // dashboard verification banner never shows for OAuth accounts.
+        if (($safeData['auth_type'] ?? null) === 'google') {
+            $client->email_approved = 1;
+            $this->di['db']->store($client);
+        }
+
+        $event_params = [
+            'id' => $client->id,
+            'email' => $client->email,
+            'first_name' => $client->first_name,
+            'last_name' => $client->last_name,
+            'ip' => $safeData['ip'],
+        ];
+        $this->di['events_manager']->fire(['event' => 'onAfterClientSignUp', 'params' => $event_params]);
+        $this->di['logger']->info('Client #%s signed up via OAuth', $client->id);
+
+        return $client;
+    }
+
     public function createPasswordResetRequestForClient(\Model_Client $client): string
     {
         $existingReset = $this->di['db']->findOne('ClientPasswordReset', 'client_id = ?', [$client->id]);

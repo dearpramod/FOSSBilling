@@ -6,6 +6,51 @@
     --font-brand-sans:    "Inter", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
     --font-brand-display: "Inter Tight", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
     --font-brand-mono:    "JetBrains Mono", "Fira Code", Consolas, monospace;
+    --motion-fast: 150ms;
+    --motion-base: 220ms;
+    --motion-slow: 300ms;
+    --ease-enter: cubic-bezier(.22, 1, .36, 1);
+    --ease-exit: cubic-bezier(.4, 0, 1, 1);
+    --ease-standard: cubic-bezier(.2, .75, .25, 1);
+    --control-height-sm: 2.5rem;
+    --control-height-md: 2.75rem;
+    --control-radius: .75rem;
+}
+
+/* Shared app interaction language. Page-level styles may change layout, but
+   typography, easing and control geometry remain consistent. */
+button,
+input,
+select,
+textarea,
+[role="button"] {
+    font-family: var(--font-brand-sans);
+}
+
+button,
+a,
+[role="button"],
+input,
+select,
+textarea {
+    transition-timing-function: var(--ease-standard);
+}
+
+.btn-primary-gradient,
+.btn-outline,
+.ref-btn,
+.auth-primary-btn,
+.ord-srv-submit,
+.ord-coupon-apply {
+    min-height: var(--control-height-md);
+    border-radius: var(--control-radius);
+    font-family: var(--font-brand-sans);
+    font-size: .875rem;
+    font-weight: 650;
+}
+
+[x-collapse] {
+    transition-timing-function: var(--ease-enter) !important;
 }
 
 /* Hide Alpine-controlled elements until Alpine boots */
@@ -1796,11 +1841,19 @@ html[data-theme="light"] .category-description blockquote p {
    Help & Support slide-in panel — dark mode base + light overrides
    =========================== */
 .help-panel {
+    top: var(--portal-shell-header-height, 4rem);
+    width: 19rem;
+    will-change: transform, opacity;
     background: rgba(8, 12, 24, 0.88);
     backdrop-filter: blur(24px) saturate(1.6);
     -webkit-backdrop-filter: blur(24px) saturate(1.6);
     border-right: 1px solid rgba(255,255,255,0.09);
     box-shadow: 6px 0 32px rgba(0,0,0,0.35), inset -1px 0 0 rgba(255,255,255,0.04);
+}
+.help-panel-backdrop {
+    top: var(--portal-shell-header-height, 4rem);
+    left: 17.25rem;
+    transition: left 300ms ease-in-out, opacity 200ms ease;
 }
 .help-panel-header {
     background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.14), rgba(var(--color-secondary-rgb),0.07));
@@ -1812,29 +1865,16 @@ html[data-theme="light"] .category-description blockquote p {
 .help-panel-footer {
     background: rgba(16,185,129,0.05);
 }
-
-/* Help panel: staggered content entry animation */
-@keyframes help-item-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+.help-panel-close {
+    width: 2.75rem;
+    height: 2.75rem;
 }
-.help-panel.hp-anim .help-panel-header {
-    animation: help-item-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s both;
+.help-panel-close:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
 }
-.help-panel.hp-anim .help-scroll-body {
-    animation: help-item-in 0.3s ease-out 0.20s both;
-}
-.help-panel.hp-anim .help-panel-footer {
-    animation: help-item-in 0.28s ease-out 0.30s both;
-}
-/* Help trigger button: glow pulse when panel is open */
-@keyframes help-btn-glow {
-    0%   { box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb),0.5); }
-    70%  { box-shadow: 0 0 0 6px rgba(var(--color-primary-rgb),0); }
-    100% { box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb),0); }
-}
-.help-btn-active {
-    animation: help-btn-glow 1.2s ease-out 1;
+html.help-panel-open #main-content {
+    overflow-y: hidden;
 }
 
 /* Mobile: full-width panel anchored to left edge, max 18rem wide */
@@ -1843,16 +1883,22 @@ html[data-theme="light"] .category-description blockquote p {
         left: 0 !important;
         width: min(18rem, 85vw) !important;
     }
+    .help-panel-backdrop {
+        left: 0 !important;
+    }
 }
 
 /* Desktop: panel left tracks sidebar width via data-sb on <html> */
-/* Default (expanded sidebar = 16rem) */
+/* Default expanded sidebar is 17.25rem; keep the drawer flush with its edge. */
 @media (min-width: 1024px) {
     #help-panel {
-        left: 16rem;
+        left: 17.25rem;
         transition: left 300ms ease-in-out;
     }
     html[data-sb="collapsed"] #help-panel {
+        left: 4rem;
+    }
+    html[data-sb="collapsed"] .help-panel-backdrop {
         left: 4rem;
     }
 }
@@ -1876,14 +1922,14 @@ html[data-theme="light"] .help-panel-footer {
     background: rgba(5,150,105,0.06) !important;
     border-top-color: rgb(var(--brand-300) / 0.20) !important;
 }
-/* Restore Alpine slide transition on the help panel (suppressed by global x-show rule) */
-html[data-theme="light"] .help-panel[x-show],
-html[data-theme="light"] .help-panel[x-transition] {
-    transition: transform 300ms ease !important;
-}
-/* Restore backdrop fade transition in light mode */
-html[data-theme="light"] .bg-black\/20[x-show] {
-    transition: opacity 200ms ease-linear !important;
+@media (prefers-reduced-motion: reduce) {
+    .help-panel,
+    .help-panel-backdrop,
+    .help-panel *,
+    .help-btn-active {
+        animation: none !important;
+        transition-duration: .01ms !important;
+    }
 }
 
 /* ═══════════════════════════════════════════════════

@@ -25,6 +25,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Returns paginated list of invoices.
      *
+     * @optional bool $summary - return only fields needed by invoice list views, without expanding related records
+     *
      * @return array
      */
     public function get_list($data)
@@ -34,9 +36,17 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $service = $this->getService();
         [$sql, $params] = $service->getSearchQuery($data);
         $pager = $this->getDi()['pager']->getPaginatedResultSet($sql, $params, PaginationOptions::fromArray($data));
+        if (!empty($data['summary'])) {
+            foreach ($pager['list'] as $key => $item) {
+                $pager['list'][$key] = $service->toApiSummaryArray($item);
+            }
+
+            return $pager;
+        }
+
         foreach ($pager['list'] as $key => $item) {
             $invoice = $this->getDi()['db']->getExistingModelById('Invoice', $item['id'], 'Invoice not found');
-            $pager['list'][$key] = $this->getService()->toApiArray($invoice, true, $this->getIdentity());
+            $pager['list'][$key] = $service->toApiArray($invoice, true, $this->getIdentity());
         }
 
         return $pager;
@@ -147,7 +157,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      * @optional int $gateway_id - selected payment method - gateway id
      * @optional array $new_item - [title] [price]
      * @optional string $text_1 - Custom invoice text 1
-     * @optional string $text_2 - Custom invoice text 1
+     * @optional string $text_2 - Custom invoice text 2
      * @optional string $seller_company - Seller company name
      * @optional string $seller_company_vat - Seller company VAT number
      * @optional string $seller_company_number - Seller company number
@@ -166,6 +176,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      * @optional string $buyer_zip - Buyer zip
      * @optional string $buyer_phone - Buyer phone
      * @optional string $buyer_email - Buyer email
+     * @optional bool $approve - approve the invoice after saving the supplied changes
      *
      * @return bool
      */
@@ -174,8 +185,13 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $this->checkPermissions('invoice', 'manage_invoices');
 
         $model = $this->_getInvoice($data);
+        $result = $this->getService()->updateInvoice($model, $data);
 
-        return $this->getService()->updateInvoice($model, $data);
+        if ($result && !empty($data['approve'])) {
+            return $this->getService()->approveInvoice($model, $data);
+        }
+
+        return $result;
     }
 
     /**
@@ -283,9 +299,12 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
-     * Legacy hook point for buyer payment reminders.
-     *
-     * Automatic reminder intervals are processed by batch_invoke_due_event().
+     * Attempts the invoice due event batch (see batch_invoke_due_event()), limited to once per
+     * rolling 24-hour period. If that batch ran within the previous 24 hours, it falls back to
+     * dispatching the same due-date events directly so newly-eligible invoices are not missed
+     * for up to 24 hours. Either way, the built-in reminder handlers atomically claim each
+     * invoice via reminded_at before sending anything, so the same invoice is never reminded
+     * twice even across overlapping cron runs or repeated dispatch of the underlying events.
      *
      * @return bool
      */
@@ -474,8 +493,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $pager = $this->getDi()['pager']->getPaginatedResultSet($sql, $params, PaginationOptions::fromArray($data));
 
         foreach ($pager['list'] as $key => $item) {
-            $transaction = $this->getDi()['db']->getExistingModelById('Transaction', $item['id'], 'Transaction not found');
-            $pager['list'][$key] = $transactionService->toApiArray($transaction);
+            $pager['list'][$key] = $transactionService->searchResultToApiArray($item);
         }
 
         return $pager;

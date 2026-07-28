@@ -16,6 +16,7 @@ use Box\Mod\Staff\Entity\AdminGroupMember;
 use Box\Mod\Staff\Repository\AdminGroupMemberRepository;
 use Box\Mod\Staff\Repository\AdminGroupRepository;
 use Box\Mod\Support\Entity\Helpdesk;
+use Box\Mod\Support\Entity\SupportTicket;
 use FOSSBilling\i18n;
 use FOSSBilling\InjectionAwareInterface;
 use FOSSBilling\PaginationOptions;
@@ -266,7 +267,7 @@ class Service implements InjectionAwareInterface
         try {
             $supportTicketService = $di['mod_service']('support');
             $ticketModel = $supportTicketService->getTicketById((int) $params['id']);
-            $ticket = $supportTicketService->toApiArray($ticketModel, true);
+            $ticket = self::getTicketEmailVars($di, $ticketModel);
 
             $helpdeskId = $ticketModel->getSupportHelpdeskId();
             $helpdeskModel = $helpdeskId !== null ? $di['em']->getRepository(Helpdesk::class)->find($helpdeskId) : null;
@@ -299,7 +300,7 @@ class Service implements InjectionAwareInterface
         try {
             $supportTicketService = $di['mod_service']('support');
             $ticketModel = $supportTicketService->getTicketById((int) $params['id']);
-            $ticket = $supportTicketService->toApiArray($ticketModel, true);
+            $ticket = self::getTicketEmailVars($di, $ticketModel);
 
             $email = [];
             $email['to_staff'] = true;
@@ -321,7 +322,7 @@ class Service implements InjectionAwareInterface
         try {
             $supportTicketService = $di['mod_service']('support');
             $ticketModel = $supportTicketService->getTicketById((int) $params['id']);
-            $ticket = $supportTicketService->toApiArray($ticketModel, true);
+            $ticket = self::getTicketEmailVars($di, $ticketModel);
             $email = [];
             $email['to_staff'] = true;
             $email['code'] = 'mod_staff_ticket_close';
@@ -332,6 +333,26 @@ class Service implements InjectionAwareInterface
         } catch (\Exception $exc) {
             $di['logger']->setChannel('email')->error('Failed to send staff ticket close notification email', ['exception' => $exc->getMessage()]);
         }
+    }
+
+    private static function getTicketEmailVars(\Pimple\Container $di, SupportTicket $ticketModel): array
+    {
+        $ticket = $di['mod_service']('support')->toApiArray($ticketModel, true);
+        $ticket['priority'] = $ticketModel->getPriority();
+
+        $clientId = $ticketModel->getClientId();
+        if ($clientId !== null) {
+            $clientService = $di['mod_service']('client');
+
+            try {
+                $client = $clientService->get(['id' => $clientId]);
+            } catch (\FOSSBilling\InformationException) {
+                return $ticket;
+            }
+            $ticket['client'] = $clientService->toApiArray($client);
+        }
+
+        return $ticket;
     }
 
     public static function onAfterClientSignUp(\Box_Event $event): bool
@@ -345,7 +366,8 @@ class Service implements InjectionAwareInterface
             $email = [];
             $email['to_staff'] = true;
             $email['code'] = 'mod_staff_client_signup';
-            $email['c'] = $clientService->get(['id' => $params['id']]);
+            $client = $clientService->get(['id' => $params['id']]);
+            $email['c'] = $clientService->toApiArray($client);
             $emailService = $di['mod_service']('email');
             $emailService->sendTemplate($email);
         } catch (\Exception $exc) {

@@ -120,7 +120,6 @@ function billingPage() {
             this.passwordModalOpen = false;
         },
 
-        // Login via server-side form POST (avoids AJAX session-cookie race condition)
         submitLogin() {
             const self = this;
             self.error = '';
@@ -129,7 +128,15 @@ function billingPage() {
                 return;
             }
             self.loading = true;
-            document.getElementById('co-login-form').submit();
+            API.guest.post(
+                'client/login',
+                { email: self.loginEmail, password: self.loginPassword },
+                () => { window.location.href = '{{ "/order/checkout"|url }}'; },
+                (err) => {
+                    self.loading = false;
+                    self.error = err.message || 'Invalid email or password.';
+                }
+            );
         },
 
         submit() {
@@ -174,11 +181,13 @@ function billingPage() {
                     password_confirm: self.passwordConfirm,
                 },
                 function () {
-                    // Registration succeeded — use server-side POST to log in and
-                    // redirect to checkout (avoids AJAX session-cookie race condition)
-                    document.getElementById('co-reg-login-email').value    = self.regEmail;
-                    document.getElementById('co-reg-login-password').value = self.password;
-                    document.getElementById('co-reg-login-form').submit();
+                    // Registration succeeded — log in via AJAX then redirect to checkout
+                    API.guest.post(
+                        'client/login',
+                        { email: self.regEmail, password: self.password },
+                        () => { window.location.href = '{{ "/order/checkout"|url }}'; },
+                        () => { window.location.href = '{{ "/order/checkout"|url }}'; }
+                    );
                 },
                 function (err) {
                     self.loading = false;
@@ -406,9 +415,7 @@ function orderCheckout() {
                      x-transition:enter-start="opacity-0 -translate-y-2"
                      x-transition:enter-end="opacity-100 translate-y-0"
                      style="display:none;">
-                    {# Server-side form POST — avoids AJAX session-cookie race condition #}
-                    <form id="co-login-form" method="POST" action="{{ "/order/checkout/login"|url }}">
-                    <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
+                    <form id="co-login-form" @submit.prevent="submitLogin()">
                     {# Google sign-in — shown only after expanding this panel #}
                     {% if social.google_enabled|default(false) %}
                     <div class="px-6 pt-4 pb-2 space-y-3">
@@ -671,12 +678,6 @@ function orderCheckout() {
                         </button>
                     </div>
 
-                    {# Hidden form: after AJAX registration succeeds, JS fills this and submits server-side login #}
-                    <form id="co-reg-login-form" method="POST" action="{{ "/order/checkout/login"|url }}" style="display:none;">
-                        <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
-                        <input type="hidden" id="co-reg-login-email" name="email">
-                        <input type="hidden" id="co-reg-login-password" name="password">
-                    </form>
 
                 </div>
             </div>

@@ -7,16 +7,9 @@
 {% set balance = client.client_balance_get_total %}
 {% set currentPage = request.page|default(1) %}
 {% set transactions = client.invoice_get_list({'per_page': 10, 'page': currentPage}) %}
-{% set unpaid = client.invoice_get_list({'status': 'unpaid', 'per_page': 200}) %}
-{% set paid = client.invoice_get_list({'status': 'paid', 'per_page': 200}) %}
+{% set invoice_stats = client.invoice_get_stats %}
 {% set client_profile = client.profile_get %}
 {% set currency_code = client_profile.currency|default(guest.cart_get_currency.code) %}
-
-{% set unpaid_total = 0 %}
-{% for inv in unpaid.list %}{% set unpaid_total = unpaid_total + inv.total %}{% endfor %}
-
-{% set paid_total = 0 %}
-{% for inv in paid.list %}{% set paid_total = paid_total + inv.total %}{% endfor %}
 
 <div class="max-w-7xl space-y-6">
 
@@ -58,13 +51,13 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
-                {% if unpaid.list|length > 0 %}
-                <span class="text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded">{{ unpaid.list|length }} Unpaid</span>
+                {% if invoice_stats.unpaid_count > 0 %}
+                <span class="text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded">{{ invoice_stats.unpaid_count }} Unpaid</span>
                 {% endif %}
             </div>
             <div class="mt-4">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Unpaid Invoices</p>
-                <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ unpaid_total|money(currency_code) }}</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ invoice_stats.outstanding_total|money(currency_code) }}</p>
             </div>
         </div>
 
@@ -78,12 +71,12 @@
                 </div>
                 <span class="text-xs font-bold px-2 py-1 rounded"
                       style="color: var(--color-primary); background: rgba(var(--color-primary-rgb,99,102,241),0.08);">
-                    {{ paid.list|length }} Paid
+                    {{ invoice_stats.paid_count }} Paid
                 </span>
             </div>
             <div class="mt-4">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Expenditure</p>
-                <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ paid_total|money(currency_code) }}</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ invoice_stats.paid_total|money(currency_code) }}</p>
             </div>
         </div>
 

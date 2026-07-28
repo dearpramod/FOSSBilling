@@ -120,7 +120,6 @@ function billingPage() {
             this.passwordModalOpen = false;
         },
 
-        // Login via server-side form POST (avoids AJAX session-cookie race condition)
         submitLogin() {
             const self = this;
             self.error = '';
@@ -129,7 +128,29 @@ function billingPage() {
                 return;
             }
             self.loading = true;
-            document.getElementById('co-login-form').submit();
+            const loginData = { email: self.loginEmail, password: self.loginPassword };
+            {% if _rc.enabled %}
+            const _lrc = document.querySelector('#co-login-captcha .g-recaptcha-response, #co-login-captcha [name="h-captcha-response"]');
+            if (_lrc && _lrc.value) loginData['g-recaptcha-response'] = _lrc.value;
+            const _lts = document.querySelector('#co-login-captcha [name="cf-turnstile-response"]');
+            if (_lts && _lts.value) loginData['cf-turnstile-response'] = _lts.value;
+            {% endif %}
+            {% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+            grecaptcha.ready(function() {
+                grecaptcha.execute('{{ _rc.publickey|e('js') }}', { action: 'CHECKOUT_LOGIN' }).then(function(token) {
+                    loginData['g-recaptcha-response'] = token;
+                    API.guest.post('client/login', loginData,
+                        function() { window.location.href = '{{ "/order/checkout"|url }}'; },
+                        function(err) { self.loading = false; self.error = err.message || 'Login failed. Please check your credentials.'; }
+                    );
+                });
+            });
+            {% else %}
+            API.guest.post('client/login', loginData,
+                function() { window.location.href = '{{ "/order/checkout"|url }}'; },
+                function(err) { self.loading = false; self.error = err.message || 'Login failed. Please check your credentials.'; }
+            );
+            {% endif %}
         },
 
         submit() {
@@ -141,50 +162,98 @@ function billingPage() {
                 return;
             }
 
-            // Register
-            if (!self.firstName || !self.regEmail || !self.password) {
-                self.error = 'Please fill in all required fields.';
-                return;
+            // Register — client-side validation
+            const _required = {{ r|json_encode|raw }};
+            const _emailRe  = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+            const _phoneRe  = /^\+?[\d\s\-\.\(\)]{5,30}$/;
+
+            if (!self.firstName.trim()) {
+                self.error = 'First name is required.'; return;
+            }
+            if (self.firstName.trim().length > 100) {
+                self.error = 'First name must be 100 characters or fewer.'; return;
+            }
+            if (!self.regEmail.trim()) {
+                self.error = 'Email address is required.'; return;
+            }
+            if (!_emailRe.test(self.regEmail.trim())) {
+                self.error = 'Please enter a valid email address.'; return;
+            }
+            if (_required.includes('phone') && !self.phone.trim()) {
+                self.error = 'Phone number is required.'; return;
+            }
+            if (self.phone.trim() && !_phoneRe.test(self.phone.trim())) {
+                self.error = 'Phone number contains invalid characters.'; return;
+            }
+            if (_required.includes('address_1') && !self.address1.trim()) {
+                self.error = 'Street address is required.'; return;
+            }
+            if (_required.includes('city') && !self.city.trim()) {
+                self.error = 'City is required.'; return;
+            }
+            if (_required.includes('country') && !self.country) {
+                self.error = 'Please select a country.'; return;
+            }
+            if (_required.includes('state') && !self.state.trim()) {
+                self.error = 'State / Province is required.'; return;
+            }
+            if (_required.includes('postcode') && !self.postcode.trim()) {
+                self.error = 'Postcode is required.'; return;
+            }
+            if (!self.password) {
+                self.error = 'Password is required.'; return;
             }
             if (self.password.length < 8) {
-                self.error = 'Password must be at least 8 characters.';
-                return;
+                self.error = 'Password must be at least 8 characters.'; return;
             }
             if (self.password !== self.passwordConfirm) {
-                self.error = 'Passwords do not match.';
-                return;
+                self.error = 'Passwords do not match.'; return;
             }
 
             self.loading = true;
 
-            API.guest.post(
-                'client/create',
-                {
-                    first_name:       self.firstName,
-                    last_name:        self.lastName,
-                    email:            self.regEmail,
-                    phone_cc:         self.phoneCC,
-                    phone:            self.phone,
-                    address_1:        self.address1,
-                    city:             self.city,
-                    country:          self.country,
-                    state:            self.state,
-                    postcode:         self.postcode,
-                    password:         self.password,
-                    password_confirm: self.passwordConfirm,
-                },
-                function () {
-                    // Registration succeeded — use server-side POST to log in and
-                    // redirect to checkout (avoids AJAX session-cookie race condition)
-                    document.getElementById('co-reg-login-email').value    = self.regEmail;
-                    document.getElementById('co-reg-login-password').value = self.password;
-                    document.getElementById('co-reg-login-form').submit();
-                },
-                function (err) {
-                    self.loading = false;
-                    self.error = err.message || 'Registration failed. Please try again.';
-                }
-            );
+            const regData = {
+                first_name:       self.firstName,
+                last_name:        self.lastName,
+                email:            self.regEmail,
+                phone_cc:         self.phoneCC,
+                phone:            self.phone,
+                address_1:        self.address1,
+                city:             self.city,
+                country:          self.country,
+                state:            self.state,
+                postcode:         self.postcode,
+                password:         self.password,
+                password_confirm: self.passwordConfirm,
+            };
+            {% if _rc.enabled %}
+            const _rrc = document.querySelector('#co-reg-captcha .g-recaptcha-response, #co-reg-captcha [name="h-captcha-response"]');
+            if (_rrc && _rrc.value) regData['g-recaptcha-response'] = _rrc.value;
+            const _rts = document.querySelector('#co-reg-captcha [name="cf-turnstile-response"]');
+            if (_rts && _rts.value) regData['cf-turnstile-response'] = _rts.value;
+            {% endif %}
+
+            const doRegister = function(captchaToken) {
+                if (captchaToken) regData['g-recaptcha-response'] = captchaToken;
+                API.guest.post('client/create', regData,
+                    function() {
+                        // client/create auto-logs in via auto_login_after_signup; go to checkout
+                        window.location.href = '{{ "/order/checkout"|url }}';
+                    },
+                    function(err) {
+                        self.loading = false;
+                        self.error = err.message || 'Registration failed. Please try again.';
+                    }
+                );
+            };
+
+            {% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+            grecaptcha.ready(function() {
+                grecaptcha.execute('{{ _rc.publickey|e('js') }}', { action: 'CHECKOUT_REGISTER' }).then(doRegister);
+            });
+            {% else %}
+            doRegister(null);
+            {% endif %}
         },
 
         removeItem(id) {
@@ -270,7 +339,7 @@ function orderCheckout() {
 
             {% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
             grecaptcha.ready(function () {
-                grecaptcha.execute('{{ _rc.publickey }}', { action: 'CHECKOUT' }).then(function (token) {
+                grecaptcha.execute('{{ _rc.publickey|e('js') }}', { action: 'CHECKOUT' }).then(function (token) {
                     data['g-recaptcha-response'] = token;
                     doCheckout();
                 });
@@ -407,7 +476,7 @@ function orderCheckout() {
                      x-transition:enter-end="opacity-100 translate-y-0"
                      style="display:none;">
                     {# Server-side form POST — avoids AJAX session-cookie race condition #}
-                    <form id="co-login-form" method="POST" action="{{ "/order/checkout/login"|url }}">
+                    <form id="co-login-form" @submit.prevent="submitLogin()">
                     <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
                     {# Google sign-in — shown only after expanding this panel #}
                     {% if social.google_enabled|default(false) %}
@@ -436,6 +505,8 @@ function orderCheckout() {
                             <label for="co-login-email" class="co-label">Email Address <span style="color:var(--color-primary);">*</span></label>
                             <input id="co-login-email" type="email" name="email" x-model="loginEmail" class="co-input"
                                    placeholder="you@example.com" autocomplete="email"
+                                   inputmode="email" spellcheck="false"
+                                   autocorrect="off" autocapitalize="off" maxlength="254"
                                    @keydown.enter="submitLogin()">
                         </div>
                         <div>
@@ -446,7 +517,7 @@ function orderCheckout() {
                         </div>
                     </div>
                     {# Inline error (validation / server-side login errors) #}
-                    <div x-show="activeTab === 'login' && error" x-transition
+                    <div x-show="activeTab === 'login' && error" x-transition.opacity.duration.200ms
                          role="alert" aria-live="assertive"
                          class="mx-6 mb-4 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
                          style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
@@ -455,6 +526,22 @@ function orderCheckout() {
                         </svg>
                         <span x-text="error"></span>
                     </div>
+
+                    {# reCAPTCHA for login tab #}
+                    {% if _rc.enabled %}
+                    {% set _lp = _rc.captcha_provider|default('recaptcha_v2') %}
+                    {% if _lp != 'recaptcha_v3' %}
+                    <div id="co-login-captcha" class="px-6 pb-3">
+                        {% if _lp == 'turnstile' and _rc.turnstile_site_key %}
+                        <div class="cf-turnstile" data-sitekey="{{ _rc.turnstile_site_key }}" data-theme="dark"></div>
+                        {% elseif _lp == 'hcaptcha' and _rc.hcaptcha_site_key %}
+                        <div class="h-captcha" data-sitekey="{{ _rc.hcaptcha_site_key }}"></div>
+                        {% elseif _rc.publickey %}
+                        <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}" data-theme="dark"></div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endif %}
 
                     {# Footer row — full-width border matching card pattern #}
                     <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-between gap-3 rounded-b-2xl" style="background:rgba(255,255,255,0.02);">
@@ -527,30 +614,37 @@ function orderCheckout() {
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label for="co-reg-first-name" class="co-label">First Name <span style="color:var(--color-primary);">*</span></label>
-                                    <input id="co-reg-first-name" type="text" x-model="firstName" class="co-input"
-                                           placeholder="First name" autocomplete="given-name" maxlength="100">
+                                    <input id="co-reg-first-name" type="text" name="first_name" x-model="firstName" class="co-input"
+                                           placeholder="First name" autocomplete="given-name"
+                                           maxlength="100" spellcheck="false">
                                 </div>
                                 <div>
                                     <label for="co-reg-last-name" class="co-label">Last Name{% if 'last_name' in r %} <span style="color:var(--color-primary);">*</span>{% endif %}</label>
-                                    <input id="co-reg-last-name" type="text" x-model="lastName" class="co-input"
-                                           placeholder="Last name" autocomplete="family-name" maxlength="100">
+                                    <input id="co-reg-last-name" type="text" name="last_name" x-model="lastName" class="co-input"
+                                           placeholder="Last name" autocomplete="family-name"
+                                           maxlength="100" spellcheck="false">
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label for="co-reg-email" class="co-label">Email Address <span style="color:var(--color-primary);">*</span></label>
-                                    <input id="co-reg-email" type="email" x-model="regEmail" class="co-input"
-                                           placeholder="you@example.com" autocomplete="email">
+                                    <input id="co-reg-email" type="email" name="email" x-model="regEmail" class="co-input"
+                                           placeholder="you@example.com" autocomplete="email"
+                                           inputmode="email" spellcheck="false"
+                                           autocorrect="off" autocapitalize="off" maxlength="254">
                                 </div>
                                 <div>
                                     <label for="co-reg-phone" class="co-label">Phone Number{% if 'phone' in r %} <span style="color:var(--color-primary);">*</span>{% endif %}</label>
                                     <div class="flex gap-2">
-                                        <input type="text" x-model="phoneCC" class="co-input text-center"
+                                        <input type="text" name="phone_cc" x-model="phoneCC" class="co-input text-center"
                                                style="width:5rem;flex-shrink:0;"
-                                               placeholder="+1" maxlength="6" inputmode="numeric" autocomplete="tel-country-code"
-                                               aria-label="Country code">
-                                        <input id="co-reg-phone" type="tel" x-model="phone" class="co-input"
-                                               placeholder="Phone number" maxlength="30" autocomplete="tel-national">
+                                               placeholder="+1" maxlength="6" inputmode="numeric"
+                                               autocomplete="tel-country-code" aria-label="Country code"
+                                               pattern="^\+?\d{1,5}$">
+                                        <input id="co-reg-phone" type="tel" name="phone" x-model="phone" class="co-input"
+                                               placeholder="Phone number" maxlength="30"
+                                               autocomplete="tel-national" inputmode="tel"
+                                               pattern="^\+?[\d\s\-\.\(\)]{5,30}$">
                                     </div>
                                 </div>
                             </div>
@@ -565,22 +659,22 @@ function orderCheckout() {
                             {% if 'address_1' in r %}
                             <div>
                                 <label class="co-label">Street Address <span style="color:var(--color-primary);">*</span></label>
-                                <input type="text" x-model="address1" class="co-input"
-                                       placeholder="Street address" autocomplete="address-line1">
+                                <input type="text" name="address_1" x-model="address1" class="co-input"
+                                       placeholder="Street address" autocomplete="address-line1" maxlength="255">
                             </div>
                             {% endif %}
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {% if 'city' in r %}
                                 <div>
                                     <label class="co-label">City <span style="color:var(--color-primary);">*</span></label>
-                                    <input type="text" x-model="city" class="co-input"
+                                    <input type="text" name="city" x-model="city" class="co-input"
                                            placeholder="City" autocomplete="address-level2" maxlength="100">
                                 </div>
                                 {% endif %}
                                 {% if 'country' in r %}
                                 <div>
                                     <label class="co-label">Country <span style="color:var(--color-primary);">*</span></label>
-                                    <select x-model="country" class="co-input" autocomplete="country">
+                                    <select name="country" x-model="country" class="co-input" autocomplete="country">
                                         <option value="">Select country…</option>
                                         {% for val, label in countries %}
                                             <option value="{{ val }}">{{ label }}</option>
@@ -593,14 +687,14 @@ function orderCheckout() {
                                 {% if 'state' in r %}
                                 <div>
                                     <label class="co-label">State / Province <span style="color:var(--color-primary);">*</span></label>
-                                    <input type="text" x-model="state" class="co-input"
+                                    <input type="text" name="state" x-model="state" class="co-input"
                                            placeholder="State / Province" autocomplete="address-level1" maxlength="100">
                                 </div>
                                 {% endif %}
                                 {% if 'postcode' in r %}
                                 <div>
                                     <label class="co-label">Postcode <span style="color:var(--color-primary);">*</span></label>
-                                    <input type="text" x-model="postcode" class="co-input"
+                                    <input type="text" name="postcode" x-model="postcode" class="co-input"
                                            placeholder="Postcode / ZIP" autocomplete="postal-code" maxlength="20">
                                 </div>
                                 {% endif %}
@@ -624,13 +718,15 @@ function orderCheckout() {
                                             </svg>
                                         </span>
                                     </div>
-                                    <input type="password" x-model="password" class="co-input"
-                                           placeholder="Password" autocomplete="new-password">
+                                    <input type="password" name="password" x-model="password" class="co-input"
+                                           placeholder="Password" autocomplete="new-password"
+                                           minlength="8" maxlength="255">
                                 </div>
                                 <div>
                                     <label class="co-label">Confirm Password <span style="color:var(--color-primary);">*</span></label>
-                                    <input type="password" x-model="passwordConfirm" class="co-input"
-                                           placeholder="Repeat password" autocomplete="new-password">
+                                    <input type="password" name="password_confirm" x-model="passwordConfirm" class="co-input"
+                                           placeholder="Repeat password" autocomplete="new-password"
+                                           minlength="8" maxlength="255">
                                 </div>
                             </div>
                             <button type="button" @click="openPasswordModal()"
@@ -646,7 +742,7 @@ function orderCheckout() {
                     </div>{# end form fields #}
 
                     {# Inline error (validation / server-side registration errors) #}
-                    <div x-show="activeTab === 'register' && error" x-transition
+                    <div x-show="activeTab === 'register' && error" x-transition.opacity.duration.200ms
                          role="alert" aria-live="assertive"
                          class="mx-6 mb-4 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
                          style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
@@ -655,6 +751,22 @@ function orderCheckout() {
                         </svg>
                         <span x-text="error"></span>
                     </div>
+
+                    {# reCAPTCHA for register tab #}
+                    {% if _rc.enabled %}
+                    {% set _rp = _rc.captcha_provider|default('recaptcha_v2') %}
+                    {% if _rp != 'recaptcha_v3' %}
+                    <div id="co-reg-captcha" class="px-6 pb-3">
+                        {% if _rp == 'turnstile' and _rc.turnstile_site_key %}
+                        <div class="cf-turnstile" data-sitekey="{{ _rc.turnstile_site_key }}" data-theme="dark"></div>
+                        {% elseif _rp == 'hcaptcha' and _rc.hcaptcha_site_key %}
+                        <div class="h-captcha" data-sitekey="{{ _rc.hcaptcha_site_key }}"></div>
+                        {% elseif _rc.publickey %}
+                        <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}" data-theme="dark"></div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endif %}
 
                     {# Footer row — full-width, matching card pattern #}
                     <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-end rounded-b-2xl" style="background:rgba(255,255,255,0.02);">
@@ -670,13 +782,6 @@ function orderCheckout() {
                             <span x-text="loading ? 'Creating account…' : 'Create Account'"></span>
                         </button>
                     </div>
-
-                    {# Hidden form: after AJAX registration succeeds, JS fills this and submits server-side login #}
-                    <form id="co-reg-login-form" method="POST" action="{{ "/order/checkout/login"|url }}" style="display:none;">
-                        <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}">
-                        <input type="hidden" id="co-reg-login-email" name="email">
-                        <input type="hidden" id="co-reg-login-password" name="password">
-                    </form>
 
                 </div>
             </div>
@@ -868,7 +973,7 @@ function orderCheckout() {
     <h1 class="text-xl font-bold text-white mb-6">Review &amp; Checkout</h1>
 
     {# Error banner (logged-in view) #}
-    <div x-show="error" x-transition
+    <div x-show="error" x-transition.opacity.duration.200ms
          role="alert" aria-live="assertive"
          class="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
          style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;display:none;">
@@ -1099,8 +1204,8 @@ function orderCheckout() {
 
             </div>
 
-            {# reCAPTCHA #}
-            {% if _rc.enabled %}
+            {# reCAPTCHA — only for guests; logged-in users skip it #}
+            {% if _rc.enabled and not client %}
             <div class="px-6 pb-4">
                 {% set _provider = _rc.captcha_provider|default('recaptcha_v2') %}
                 {% if _provider == 'turnstile' and _rc.turnstile_site_key %}
@@ -1227,4 +1332,17 @@ function orderCheckout() {
 {% endif %}{# end if client #}
 {% endblock %}
 
-{% block js %}{% endblock %}
+{% block js %}
+{% if _rc.enabled and not client %}
+{% set _cap = _rc.captcha_provider|default('recaptcha_v2') %}
+{% if _cap == 'turnstile' and _rc.turnstile_site_key %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% elseif _cap == 'hcaptcha' and _rc.hcaptcha_site_key %}
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+{% elseif _cap == 'recaptcha_v3' and _rc.publickey %}
+<script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
+{% elseif _rc.publickey %}
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+{% endif %}
+{% endif %}
+{% endblock %}

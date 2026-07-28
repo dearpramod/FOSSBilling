@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Box\Mod\Whatsapp\Controller;
 
+use Symfony\Component\HttpFoundation\RedirectResponse;
+
 class Admin implements \FOSSBilling\InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
@@ -45,9 +47,10 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
         $app->get('/whatsapp', 'get_index', [], static::class);
     }
 
-    public function get_index(\Box_App $app): never
+    public function get_index(\Box_App $app): RedirectResponse
     {
         $this->di['is_admin_logged'];
-        $app->redirect('extension/settings/whatsapp');
+
+        return $app->redirect('extension/settings/whatsapp');
     }
 }

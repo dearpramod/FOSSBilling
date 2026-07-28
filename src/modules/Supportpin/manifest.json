@@ -4,6 +4,7 @@
   "name": "Support PIN",
   "description": "Generates and manages unique 6-digit support PINs per client for identity verification and 3rd-party API lookups.",
   "version": "1.0.0",
+  "minimum_fossbilling_version": "0.8.3",
   "author": "MeroVPS",
   "author_url": "https://merovps.com",
   "license": "Apache-2.0",

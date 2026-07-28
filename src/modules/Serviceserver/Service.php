@@ -27,6 +27,14 @@ class Service implements InjectionAwareInterface
         return $this->di;
     }
 
+    public function getModulePermissions(): array
+    {
+        return [
+            'can_always_access' => true,
+            'manage_settings'   => [],
+        ];
+    }
+
     public function install(): bool
     {
         $sql = "
@@ -222,9 +230,9 @@ class Service implements InjectionAwareInterface
         }
     }
 
-    public function toApiArray(OODBBean $model): array
+    public function toApiArray(OODBBean $model, bool $isAdmin = false): array
     {
-        return [
+        $data = [
             'id' => $model->id,
             'order_id' => $model->order_id,
             'client_id' => $model->client_id,
@@ -240,6 +248,94 @@ class Service implements InjectionAwareInterface
             'status' => $model->status,
             'created_at' => $model->created_at,
             'updated_at' => $model->updated_at,
+        ];
+
+        if ($isAdmin) {
+            $data['root_password'] = $model->root_password;
+        }
+
+        return $data;
+    }
+
+    public function getDefaultOptions(): array
+    {
+        return [
+            [
+                'id'          => 'location',
+                'label'       => 'Server Location',
+                'description' => 'Choose a datacenter closest to you or your audience for optimal performance.',
+                'required'    => false,
+                'options'     => [
+                    ['value' => 'india',       'label' => 'India',          'group' => 'Asia',          'badge' => 'Best',    'meta' => '39ms'],
+                    ['value' => 'singapore',   'label' => 'Singapore',      'group' => 'Asia',          'badge' => 'Good',    'meta' => '52ms'],
+                    ['value' => 'malaysia',    'label' => 'Malaysia',       'group' => 'Asia',          'badge' => 'Good',    'meta' => '87ms'],
+                    ['value' => 'indonesia',   'label' => 'Indonesia',      'group' => 'Asia',          'badge' => 'Good',    'meta' => '97ms'],
+                    ['value' => 'japan',       'label' => 'Japan',          'group' => 'Asia',          'badge' => 'Fair',    'meta' => '132ms'],
+                    ['value' => 'south-korea', 'label' => 'South Korea',    'group' => 'Asia',          'badge' => 'Fair',    'meta' => '118ms'],
+                    ['value' => 'netherlands', 'label' => 'Netherlands',    'group' => 'Europe',        'badge' => 'Fair',    'meta' => '164ms'],
+                    ['value' => 'germany',     'label' => 'Germany',        'group' => 'Europe',        'badge' => 'Fair',    'meta' => '172ms'],
+                    ['value' => 'uk',          'label' => 'United Kingdom', 'group' => 'Europe',        'badge' => 'Fair',    'meta' => '188ms'],
+                    ['value' => 'us-west',     'label' => 'USA (West)',     'group' => 'North America',  'badge' => 'Distant', 'meta' => '218ms'],
+                    ['value' => 'us-east',     'label' => 'USA (East)',     'group' => 'North America',  'badge' => 'Distant', 'meta' => '235ms'],
+                ],
+            ],
+            [
+                'id'          => 'os',
+                'label'       => 'Operating System',
+                'description' => 'Choose an OS, control panel, or application. You can change this later from the VPS dashboard.',
+                'required'    => false,
+                'display'     => 'card-grid',
+                'options'     => [
+                    ['value' => 'ubuntu-22',    'label' => 'Ubuntu 22.04 LTS', 'group' => 'Plain OS',      'badge' => '', 'meta' => 'LTS'],
+                    ['value' => 'ubuntu-20',    'label' => 'Ubuntu 20.04 LTS', 'group' => 'Plain OS',      'badge' => '', 'meta' => 'LTS'],
+                    ['value' => 'debian-12',    'label' => 'Debian 12',        'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'debian-11',    'label' => 'Debian 11',        'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'almalinux-9',  'label' => 'AlmaLinux 9',      'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'almalinux-8',  'label' => 'AlmaLinux 8',      'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'rocky-9',      'label' => 'Rocky Linux 9',    'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'rocky-8',      'label' => 'Rocky Linux 8',    'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'centos-7',     'label' => 'CentOS 7',         'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'alpine',       'label' => 'Alpine Linux',     'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'arch',         'label' => 'Arch Linux',       'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'fedora-39',    'label' => 'Fedora 39',        'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'cloudlinux-8', 'label' => 'CloudLinux 8',     'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'kali',         'label' => 'Kali Linux',       'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'nixos',        'label' => 'NixOS',            'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'opensuse',     'label' => 'openSUSE',         'group' => 'Plain OS',      'badge' => '', 'meta' => ''],
+                    ['value' => 'cpanel',       'label' => 'cPanel / WHM',     'group' => 'Control Panel', 'badge' => '', 'meta' => 'License req.', 'price_monthly' => 15],
+                    ['value' => 'plesk',        'label' => 'Plesk',            'group' => 'Control Panel', 'badge' => '', 'meta' => 'License req.', 'price_monthly' => 10],
+                    ['value' => 'directadmin',  'label' => 'DirectAdmin',      'group' => 'Control Panel', 'badge' => '', 'meta' => '', 'price_monthly' => 5],
+                    ['value' => 'cyberpanel',   'label' => 'CyberPanel',       'group' => 'Control Panel', 'badge' => '', 'meta' => 'Free'],
+                    ['value' => 'hestiacp',     'label' => 'HestiaCP',         'group' => 'Control Panel', 'badge' => '', 'meta' => 'Free'],
+                    ['value' => 'aapanel',      'label' => 'aaPanel',          'group' => 'Control Panel', 'badge' => '', 'meta' => 'Free'],
+                    ['value' => 'wordpress',    'label' => 'WordPress',        'group' => 'Applications',  'badge' => '', 'meta' => ''],
+                    ['value' => 'lamp',         'label' => 'LAMP Stack',       'group' => 'Applications',  'badge' => '', 'meta' => ''],
+                    ['value' => 'lemp',         'label' => 'LEMP Stack',       'group' => 'Applications',  'badge' => '', 'meta' => ''],
+                ],
+            ],
+        ];
+    }
+
+    public function getDefaultLocations(): array
+    {
+        return [
+            ['region' => 'Asia', 'options' => [
+                ['id' => 'india',       'label' => 'India',       'latency' => 39,  'quality' => 'Best'],
+                ['id' => 'singapore',   'label' => 'Singapore',   'latency' => 52,  'quality' => 'Good'],
+                ['id' => 'malaysia',    'label' => 'Malaysia',    'latency' => 87,  'quality' => 'Good'],
+                ['id' => 'indonesia',   'label' => 'Indonesia',   'latency' => 97,  'quality' => 'Good'],
+                ['id' => 'japan',       'label' => 'Japan',       'latency' => 132, 'quality' => 'Fair'],
+                ['id' => 'south-korea', 'label' => 'South Korea', 'latency' => 118, 'quality' => 'Fair'],
+            ]],
+            ['region' => 'Europe', 'options' => [
+                ['id' => 'netherlands', 'label' => 'Netherlands',    'latency' => 164, 'quality' => 'Fair'],
+                ['id' => 'germany',     'label' => 'Germany',        'latency' => 172, 'quality' => 'Fair'],
+                ['id' => 'uk',          'label' => 'United Kingdom', 'latency' => 188, 'quality' => 'Fair'],
+            ]],
+            ['region' => 'North America', 'options' => [
+                ['id' => 'us-west', 'label' => 'USA (West)', 'latency' => 218, 'quality' => 'Distant'],
+                ['id' => 'us-east', 'label' => 'USA (East)', 'latency' => 235, 'quality' => 'Distant'],
+            ]],
         ];
     }
 

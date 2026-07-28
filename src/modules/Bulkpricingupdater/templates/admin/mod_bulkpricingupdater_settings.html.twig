@@ -638,7 +638,7 @@
         });
     }
 
-    function performUpdate() {
+    function performUpdate(onComplete) {
         callApi(getApplyEndpoint(), getActivePayload(), function (result) {
             state.applyResult = result;
             printOutput('bpu-final-output', result);
@@ -653,9 +653,11 @@
 
             successSummary.textContent = '{{ 'Database records updated:'|trans|e('js') }} ' + changes;
             goToStep(4);
+            if (typeof onComplete === 'function') { onComplete(); }
         }, function (error) {
             printOutput('bpu-final-output', { error: error });
             goToStep(4);
+            if (typeof onComplete === 'function') { onComplete(); }
         });
     }
 
@@ -693,10 +695,15 @@
             goToStep(2);
         });
 
+        var bpuApplying = false;
         document.getElementById('bpu-confirm-apply').addEventListener('click', function () {
+            if (bpuApplying) return;
+            bpuApplying = true;
+            var btn = this;
+            btn.disabled = true;
             var modal = bootstrap.Modal.getInstance(document.getElementById('bpu-confirm-modal'));
             if (modal) { modal.hide(); }
-            performUpdate();
+            performUpdate(function () { bpuApplying = false; btn.disabled = false; });
         });
 
         document.getElementById('bpu-step4-back').addEventListener('click', function () {

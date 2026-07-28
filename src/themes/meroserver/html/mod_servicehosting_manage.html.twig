@@ -288,7 +288,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
               </svg>
             </button>
-            <div x-show="activePanel === 'password'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+            <div x-show="activePanel === 'password'" x-collapse.duration.220ms class="px-5 pb-5 bg-slate-50/50">
               <form class="acct-form pt-4 space-y-4"
                     action="{{ 'api/client/servicehosting/change_password'|url }}"
                     {{ fb_api_form({message: 'Your cPanel password has been updated successfully.'|trans}) }}>
@@ -336,7 +336,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
               </svg>
             </button>
-            <div x-show="activePanel === 'domain'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+            <div x-show="activePanel === 'domain'" x-collapse.duration.220ms class="px-5 pb-5 bg-slate-50/50">
               <form class="acct-form pt-4 space-y-4"
                     action="{{ 'api/client/servicehosting/change_domain'|url }}"
                     {{ fb_api_form({message: 'Primary domain has been updated. DNS propagation may take a few minutes.'|trans}) }}>
@@ -384,7 +384,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
               </svg>
             </button>
-            <div x-show="activePanel === 'username'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+            <div x-show="activePanel === 'username'" x-collapse.duration.220ms class="px-5 pb-5 bg-slate-50/50">
               <form class="acct-form pt-4 space-y-4"
                     action="{{ 'api/client/servicehosting/change_username'|url }}"
                     {{ fb_api_form({message: 'Username updated. Use your new username to log in to cPanel.'|trans}) }}>
@@ -424,7 +424,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
               </svg>
             </button>
-            <div x-show="activePanel === 'upgrade'" x-collapse class="px-5 pb-5 bg-slate-50/50">
+            <div x-show="activePanel === 'upgrade'" x-collapse.duration.220ms class="px-5 pb-5 bg-slate-50/50">
               <form class="acct-form pt-4 space-y-4"
                     action="{{ 'api/client/support/ticket_create'|url }}"
                     {{ fb_api_form({message: 'Upgrade request submitted. Our team will review and apply the changes shortly.'|trans}) }}>

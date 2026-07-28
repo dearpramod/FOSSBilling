@@ -16,8 +16,11 @@ class Box_AppClient extends Box_App
 {
     protected function init(): void
     {
-        $m = $this->di['mod']($this->mod);
-        $m->registerClientRoutes($this);
+        // Paths without letters can resolve to custom pages, but cannot identify modules.
+        if (preg_match('/[a-zA-Z]/', $this->mod) === 1) {
+            $m = $this->di['mod']($this->mod);
+            $m->registerClientRoutes($this);
+        }
 
         if ($this->mod == 'api') {
             define('API_MODE', true);
@@ -32,10 +35,9 @@ class Box_AppClient extends Box_App
                 $m->registerClientRoutes($this);
             }
 
-            // Register partnership-program routes explicitly (not module-prefix based)
             if ($extensionService->isExtensionActive('mod', 'partnership')) {
-                $this->get('/partnership-program', 'get_index', [], \Box\Mod\Partnership\Controller\Client::class);
-                $this->get('/partnership-program/', 'get_index', [], \Box\Mod\Partnership\Controller\Client::class);
+                $m = $this->di['mod']('partnership');
+                $m->registerClientRoutes($this);
             }
 
             // init index module manually
@@ -60,6 +62,11 @@ class Box_AppClient extends Box_App
             $ext = substr((string) $page, strpos((string) $page, '.') + 1);
             $page = substr((string) $page, 0, strpos((string) $page, '.'));
         }
+
+        if ($page === 'login' && $this->di['auth']->isClientLoggedIn()) {
+            return $this->redirect('/');
+        }
+
         $page = str_replace('/', '_', $page);
         $tpl = 'mod_page_' . $page;
 
@@ -96,6 +103,78 @@ class Box_AppClient extends Box_App
         $this->di['logger']->setChannel('routing')->info($e->getMessage());
 
         return $this->errorResponse($e, 404);
+    }
+
+    /**
+     * Catch any exception from module controllers and route it through the
+     * error template rather than letting it bubble to PHP's raw handler.
+     * The base run() only catches Auth/Email exceptions; InformationException
+     * thrown by module routes (Order, Support, etc.) would otherwise escape.
+     */
+    #[Override]
+    public function run(): Response
+    {
+        try {
+            return parent::run();
+        } catch (FOSSBilling\InformationException $e) {
+            return $this->errorResponse($e, $e->getCode() ?: null);
+        } catch (\Throwable $e) {
+            $this->di['logger']->setChannel('routing')->error($e->getMessage(), ['exception' => $e]);
+            $internal = new FOSSBilling\InformationException('An unexpected error occurred.', [], 500);
+
+            return $this->errorResponse($internal, 500);
+        }
+    }
+
+    /**
+     * Override errorResponse so that a failure inside error.html.twig itself
+     * never escapes to the raw PHP handler — falls back to a minimal inline page.
+     */
+    #[Override]
+    public function errorResponse(\Exception $e, ?int $statusCode = null, array $headers = []): Response
+    {
+        try {
+            $html = $this->render('error', ['exception' => $e]);
+        } catch (\Throwable $renderEx) {
+            $this->di['logger']->setChannel('routing')->error(
+                'error.html.twig itself failed to render: ' . $renderEx->getMessage(),
+                ['exception' => $renderEx]
+            );
+            $code = $statusCode ?? ($e->getCode() ?: 500);
+            $msg  = htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $html = <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Error {$code}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#0d0f1a;color:#f1f5f9;
+         display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
+    .wrap{text-align:center;max-width:420px}
+    .code{font-size:5rem;font-weight:800;line-height:1;
+          background:linear-gradient(135deg,#5271ff,#224dda);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .msg{margin:1rem 0 .5rem;color:rgba(255,255,255,.55);font-size:.9375rem;line-height:1.6}
+    a{display:inline-flex;align-items:center;gap:.4rem;margin-top:1.5rem;padding:.6rem 1.25rem;
+      border-radius:.75rem;background:linear-gradient(135deg,#5271ff,#224dda);
+      color:#fff;font-weight:600;font-size:.875rem;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="code">{$code}</p>
+    <p class="msg">{$msg}</p>
+    <a href="/">&#8592; Go Home</a>
+  </div>
+</body>
+</html>
+HTML;
+        }
+
+        return $this->responseFactory()->error($html, $e, $statusCode, $headers);
     }
 
     /**

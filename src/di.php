@@ -474,9 +474,16 @@ $di['api_identity'] = $di->protect(function ($role) use ($di) {
         $routePath = RequestFactory::getRoutePath($di['request']);
         $isApiRequest = str_starts_with($routePath, '/api/');
         $isAllowedClientApi = str_starts_with($routePath, '/api/client/client/')
-            || str_starts_with($routePath, '/api/client/profile/');
+            || str_starts_with($routePath, '/api/client/profile/')
+            || str_starts_with($routePath, '/api/client/cart/')
+            || str_starts_with($routePath, '/api/client/invoice/');
         $isAllowedClientPage = str_starts_with($routePath, '/client/profile')
-            || str_starts_with($routePath, '/client/logout');
+            || str_starts_with($routePath, '/client/logout')
+            || str_starts_with($routePath, '/client/confirm-email/')
+            || str_starts_with($routePath, '/client/email-verified')
+            || str_starts_with($routePath, '/dashboard')
+            || str_starts_with($routePath, '/order/')
+            || str_starts_with($routePath, '/invoice/');
 
         if (($isApiRequest && !$isAllowedClientApi) || (!$isApiRequest && !$isAllowedClientPage)) {
             throw new EmailValidationRequiredException();

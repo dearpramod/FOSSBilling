@@ -9,9 +9,9 @@
 {% set isActive = order.status == 'active' %}
 {% set service = client.order_service({'id': order.id}) %}
 {% set daysLeft = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
-{% set clientProfile = client.profile_get %}
 
 {% block content %}
+{% set clientProfile = profile %}
 <div class="space-y-5">
 
     {# Expiry warning #}

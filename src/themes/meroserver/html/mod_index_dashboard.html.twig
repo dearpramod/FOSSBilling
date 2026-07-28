@@ -1,6 +1,7 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_public.html.twig" %}
 
 {% block meta_title %}Order{% endblock %}
+{% block body_class %}public-home-page{% endblock %}
 
 {% block content %}
 {% if settings.homepage_mode|default('') == 'store' %}
@@ -83,7 +84,7 @@
                             <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-200" :class="showTlds ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                         </button>
                         <div x-show="showTlds" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                             x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                              class="absolute right-0 mt-2 w-36 rounded-xl border border-white/[0.08] bg-gray-900/95 backdrop-blur-xl shadow-2xl py-1 z-50 max-h-52 overflow-y-auto">
                             {% for t in tlds %}
                             <button type="button" @click="tld = '{{ t.tld }}'; showTlds = false"

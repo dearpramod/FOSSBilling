@@ -285,7 +285,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             ]
         );
 
-        $id = (int) $db->getInsertId();
+        $id = (int) $db->getCell('SELECT LAST_INSERT_ID()');
 
         $this->di['logger']->info(sprintf(
             'Partner product pricing rule created/updated: group=%d product=%d period=%s price=%s (rule id=%d)',
@@ -398,7 +398,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             ]
         );
 
-        $id = (int) $db->getInsertId();
+        $id = (int) $db->getCell('SELECT LAST_INSERT_ID()');
 
         $this->di['logger']->info(sprintf(
             'Partner TLD pricing rule created/updated: group=%d tld=%s (rule id=%d)',

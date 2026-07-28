@@ -116,50 +116,6 @@ class Guest extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
-     * Validate a promo code without applying it to the cart.
-     * Returns promo details (type, value, periods, products) for client-side
-     * discount previews. Local patch — merotheme order pages depend on it.
-     *
-     * @return array Promo details
-     */
-    #[RequiredParams(['promocode' => 'Promo code was not passed'])]
-    public function validate_promo($data)
-    {
-        $this->getDi()['rate_limiter']->consumeOrThrow('cart_promo_apply_ip', (string) $this->getIp());
-
-        $promo = $this->getService()->findActivePromoByCode($data['promocode']);
-        if (!$promo instanceof Promo) {
-            throw new \FOSSBilling\InformationException('The promo code has expired or does not exist');
-        }
-
-        if (!$this->getService()->isPromoAvailableForClientGroup($promo)) {
-            throw new \FOSSBilling\InformationException('Promo code cannot be applied to your account');
-        }
-
-        if (!$this->getService()->promoCanBeApplied($promo)) {
-            throw new \FOSSBilling\InformationException('The promo code has expired or does not exist');
-        }
-
-        $products = json_decode($promo->getProducts() ?? '', true) ?? [];
-        if (!empty($data['product_id']) && $products !== [] && !in_array((string) $data['product_id'], array_map(strval(...), $products), true)) {
-            throw new \FOSSBilling\InformationException('The promo code cannot be applied to this product');
-        }
-
-        $periods = json_decode($promo->getPeriods() ?? '', true) ?? [];
-        if (!empty($data['period']) && $periods !== [] && !in_array($data['period'], $periods, true)) {
-            throw new \FOSSBilling\InformationException('The promo code cannot be applied to the selected billing period');
-        }
-
-        return [
-            'code' => $promo->getCode(),
-            'type' => $promo->getType(),
-            'value' => $promo->getValue(),
-            'periods' => $periods,
-            'products' => $products,
-        ];
-    }
-
-    /**
      * Removes promo from shopping cart and resets discounted prices if any.
      *
      * @return bool

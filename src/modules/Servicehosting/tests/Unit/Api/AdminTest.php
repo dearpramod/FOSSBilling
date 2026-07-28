@@ -61,15 +61,12 @@ test('testChangePlan', function (): void {
 });
 
 test('testChangePlanMissingPlanId', function (): void {
-    $api = apiEndpoint(new Admin());
-    $data = [];
+    $adminApi = apiEndpoint(new Admin());
 
-    $di = container();
-    $api->setDi($di);
+    $dispatcher = new FOSSBilling\Api\Dispatcher();
 
-    $this->expectException(FOSSBilling\Exception::class);
-    $this->expectExceptionMessage('plan_id is missing');
-    $api->change_plan($data);
+    expect(fn () => $dispatcher->validateRequiredParams($adminApi, 'change_plan', []))
+        ->toThrow(FOSSBilling\InformationException::class, 'plan_id is missing');
 });
 
 test('testChangeUsername', function (): void {
@@ -245,15 +242,22 @@ test('testAccountGetList', function (): void {
     ->shouldReceive('getAccountsSearchQuery')
     ->atLeast()->once()
     ->andReturn(['SQLstring', []]);
+    $serviceMock
+    ->shouldReceive('getAccountsBatchForApi')
+    ->once()
+    ->with([['id' => 1]], null)
+    ->andReturn([['id' => 1, 'order' => null]]);
 
     $pagerMock = Mockery::mock(FOSSBilling\Pagination::class)->makePartial();
     $pagerMock
     ->shouldReceive('getPaginatedResultSet')
     ->atLeast()->once()
-    ->andReturn(['list' => []]);
+    ->andReturn(['list' => [['id' => 1]]]);
 
     $di = container();
     $dbStub = Mockery::mock('Box_Database');
+    $dbStub->shouldNotReceive('dispense');
+    $dbStub->shouldNotReceive('findOne');
     $di['mod_service'] = $di->protect(moduleService());
     $di['pager'] = $pagerMock;
     $di['db'] = $dbStub;
@@ -262,7 +266,7 @@ test('testAccountGetList', function (): void {
     $api->setService($serviceMock);
 
     $result = $api->account_get_list([]);
-    expect($result)->toBeArray();
+    expect($result['list'])->toBe([['id' => 1, 'order' => null]]);
 });
 
 test('testServerGetList', function (): void {

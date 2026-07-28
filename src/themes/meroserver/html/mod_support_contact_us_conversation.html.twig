@@ -3,6 +3,7 @@
 {% import "macro_functions.html.twig" as mf %}
 
 {% block meta_title %}{{ ticket.subject }}{% endblock %}
+{% block body_class %}public-contact-page public-conversation-page{% endblock %}
 
 {% block head %}
     {{ mf.wysiwyg('#ticket-reply-text') }}

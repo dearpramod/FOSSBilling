@@ -8,6 +8,21 @@
 > config hardening (debug, force_https, DB password) — intentionally left for the
 > production deployment, as applying them breaks local development.
 
+> **RE-AUDIT 2026-07-26:** All 10 local core patches verified present in source.
+> Checked: `Cart/Api/Guest.php` (`validate_promo` ✅), `Cart/Service.php` (partnership
+> override ✅ + server option surcharge ✅), `Server/Manager/Whm.php` (`max_duration:28`
+> + `TransportExceptionInterface` catch ✅), `Servicedomain/Api/Guest.php`
+> (`InformationException` wrapping ✅), `Product/Service.php` (`deep` param ✅),
+> `LegacyExtension.php` (`money`,`money_convert`,`money_without_currency`,`markdown`,
+> `gravatar` ✅), `Order/Controller/Client.php` (slug routing ✅),
+> `Box/AppClient.php` (partnership route ✅), `router.php` (`/data/` 403 ✅),
+> `mod_page_signup.html.twig` both themes (honeypot ✅). `Connectreseller.php` untracked
+> adapter still present ✅. New patches added since original audit: `Serviceserver/`
+> module (email templates, lifecycle methods), meroserver+merotheme order templates
+> (location pricing, OS card-grid, Alpine store currency, `srvFieldPrices`/`srvFieldLabels`/
+> `srvFieldSelections` generic field-price system). All smoke-suite items open: #8/#11
+> (production config) — unchanged, intentionally deferred.
+
 Audited against the official 0.7 → 0.8 migration guide
 (https://docs.fossbilling.org/maintenance/updating/0-7-to-0-8/) plus the local-patch
 inventory in CLAUDE.md. Verified by live probing `localhost:9000`, the database, and

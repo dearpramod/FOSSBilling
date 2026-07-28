@@ -86,7 +86,20 @@ try {
 if ($request->query->has('redirect') && $request->query->has('invoice_hash')) {
     $invoiceHash = $request->query->get('invoice_hash');
     $hash = preg_replace('/[^a-zA-Z0-9]/', '', is_string($invoiceHash) ? $invoiceHash : '');
-    $url = $di['url']->link('invoice/' . $hash);
+
+    // Forward restore_token so the client portal can restore the session
+    // (the token was signed at checkout time and placed in the return_url).
+    $redirectParams = [];
+    $rawRestoreToken = $request->query->get('restore_token');
+    if (is_string($rawRestoreToken) && $rawRestoreToken !== '') {
+        $redirectParams['restore_token'] = $rawRestoreToken;
+    }
+
+    // Surface a status hint so the invoice template can show cancel/error feedback.
+    // 'ok' is set only when the transaction was fully processed; otherwise 'cancel'.
+    $redirectParams['status'] = isset($output) && $output ? 'ok' : 'cancel';
+
+    $url = $di['url']->link('invoice/' . $hash, $redirectParams);
     emitResponse((new ResponseFactory())->redirect($url));
 }
 

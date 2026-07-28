@@ -4,6 +4,7 @@
   "name": "Bulk Pricing Updater",
   "description": "Bulk update product and TLD renewal pricing with dry-run preview and active-order renewal repricing.",
   "version": "1.0.0",
+  "minimum_fossbilling_version": "0.8.3",
   "author": "MeroVPS",
   "author_url": "https://merovps.com",
   "license": "Apache-2.0",

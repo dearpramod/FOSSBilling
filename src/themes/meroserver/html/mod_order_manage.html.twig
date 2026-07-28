@@ -313,10 +313,10 @@
                         <div class="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-white/[0.08]" style="background: rgba(255,255,255,0.03);">
                             <div class="flex-1 min-w-0">
                                 <p id="tp-status-heading" class="text-sm font-medium text-white mb-0.5">
-                                    Thief Protection is {% if service.thief_protected %}<span class="text-green-400">Active</span>{% else %}<span class="text-gray-400">Inactive</span>{% endif %}
+                                    Thief Protection is {% if service.thief_protected ?? false %}<span class="text-green-400">Active</span>{% else %}<span class="text-gray-400">Inactive</span>{% endif %}
                                 </p>
                                 <p id="tp-status-desc" class="text-xs text-gray-500">
-                                    {% if service.thief_protected %}
+                                    {% if service.thief_protected ?? false %}
                                         Your domain has an extra theft guard enabled. Disable it first if you need to change privacy protection.
                                     {% else %}
                                         No active theft guard on this domain.
@@ -325,13 +325,13 @@
                             </div>
                             <div class="flex gap-2">
                                 <button id="btn-enable-tp"
-                                        {% if service.thief_protected %}style="display:none;"{% endif %}
+                                        {% if service.thief_protected ?? false %}style="display:none;"{% endif %}
                                         class="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 text-sm border border-indigo-500/25 transition-all">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                                     Enable Protection
                                 </button>
                                 <button id="btn-disable-tp"
-                                        {% if not service.thief_protected %}style="display:none;"{% endif %}
+                                        {% if not (service.thief_protected ?? false) %}style="display:none;"{% endif %}
                                         class="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-sm border border-orange-500/20 transition-all">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01"/></svg>
                                     Disable Protection

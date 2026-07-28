@@ -8,17 +8,18 @@
 {% set social        = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
 
 {% block meta_title %}Create Account{% endblock %}
+{% block body_class %}public-auth-page auth-signup-page{% endblock %}
 
 {# Make <main> a flex column so the split panels can fill it exactly #}
 {% block head %}<style>main{display:flex;flex-direction:column;}</style>{% endblock %}
 
 {% block content %}
-<div class="flex flex-1 min-h-screen">
+<div class="auth-page-shell auth-signup-shell flex flex-1">
 
     {# ══════════════════════════════════════════════════════════════
        LEFT PANEL — "Need help choosing?" support panel
        ══════════════════════════════════════════════════════════════ #}
-    <div class="hidden lg:flex lg:w-[30%] flex-col items-center justify-center px-10 py-16 relative overflow-hidden"
+    <aside class="auth-aside auth-signup-aside hidden lg:flex lg:w-[34%] flex-col items-center justify-center px-10 py-16 relative overflow-hidden"
          style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
 
         {# Orb — top left #}
@@ -32,7 +33,7 @@
              style="opacity:.05; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 24px 24px;"></div>
 
         {# White boxed CTA card #}
-        <div class="relative z-10 w-full max-w-xs rounded-2xl px-8 py-10 flex flex-col items-center text-center"
+        <div class="auth-support-card relative z-10 w-full max-w-sm rounded-2xl px-8 py-10 flex flex-col items-center text-center"
              style="background: rgba(255,255,255,.97); box-shadow: 0 20px 60px rgba(0,0,0,.18);">
 
             {# Headset / support icon #}
@@ -63,13 +64,13 @@
 
         </div>
 
-    </div>
+    </aside>
 
     {# ══════════════════════════════════════════════════════════════
        RIGHT PANEL — signup form
        ══════════════════════════════════════════════════════════════ #}
-    <div class="w-full lg:w-[70%] flex items-start justify-center px-6 sm:px-14 py-12 overflow-y-auto login-right-panel">
-        <div class="w-full max-w-2xl">
+    <section class="auth-form-panel w-full lg:w-[66%] flex items-start justify-center px-5 sm:px-10 lg:px-14 py-10 overflow-y-auto login-right-panel">
+        <div class="auth-form-card auth-signup-card w-full max-w-2xl">
 
             {# Mobile logo #}
             <div class="lg:hidden mb-8 flex justify-center">
@@ -80,7 +81,8 @@
                 {% endif %}
             </div>
 
-            <h1 class="text-3xl font-extrabold text-gray-900 mb-1">Create Account</h1>
+            <span class="auth-eyebrow">Start with MeroServer</span>
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-1">Create your account</h1>
             <p class="text-sm text-gray-400 mb-6">
                 Already have an account?
                 <a href="{{ 'login'|url }}"
@@ -134,7 +136,7 @@
             </div>
             {% endif %}
 
-            <form method="POST" id="signup-form" novalidate class="space-y-6">
+            <form method="POST" id="signup-form" novalidate class="auth-form auth-signup-form space-y-6">
 
                 {# Antispam honeypot — hidden bait field; server rejects signup if filled #}
                 {% set _hp = antispam_honeypot() %}
@@ -502,7 +504,7 @@
 
                 {# Submit #}
                 <button type="submit"
-                        class="w-full h-12 px-4 rounded-xl text-base font-bold flex items-center justify-center transition-all hover:opacity-90 active:scale-[.99]"
+                        class="auth-primary-btn w-full h-12 px-4 rounded-xl text-base font-bold flex items-center justify-center"
                         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.38); letter-spacing:.01em;">
                     Create Account
                 </button>
@@ -519,7 +521,7 @@
             </div>
 
         </div>
-    </div>
+    </section>
 
 </div>
 {% endblock %}
@@ -551,19 +553,53 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function setError(el, msg) {
         clearError(el);
+        var errorId = (el.id || el.name || 'field') + '-error';
+        el.setAttribute('aria-invalid', 'true');
+        el.setAttribute('aria-describedby', errorId);
         el.classList.add('border-red-500/60', 'ring-1', 'ring-red-500/40');
         el.classList.remove('border-gray-200');
         var err = document.createElement('p');
+        err.id = errorId;
+        err.setAttribute('role', 'alert');
         err.className = 'field-error text-xs text-red-400 mt-1';
         err.textContent = msg;
         el.parentNode.appendChild(err);
     }
 
     function clearError(el) {
+        el.removeAttribute('aria-invalid');
+        var describedBy = el.getAttribute('aria-describedby');
+        if (describedBy && describedBy.slice(-6) === '-error') {
+            el.removeAttribute('aria-describedby');
+        }
         el.classList.remove('border-red-500/60', 'ring-1', 'ring-red-500/40');
         el.classList.add('border-gray-200');
         var prev = el.parentNode.querySelector('.field-error');
         if (prev) prev.remove();
+    }
+
+    function validateField(el) {
+        clearError(el);
+        if (el.required && ((el.type === 'checkbox' && !el.checked) || (el.type !== 'checkbox' && el.value.trim() === ''))) {
+            setError(el, el.type === 'checkbox' ? 'You must agree to the Terms of Service.' : 'This field is required.');
+            return false;
+        }
+        var rule = rules[el.name];
+        var value = el.type === 'checkbox' ? '' : el.value.trim();
+        if (rule && value) {
+            if ((rule.minLen && value.length < rule.minLen) || (rule.pattern && !rule.pattern.test(value))) {
+                setError(el, rule.msg);
+                return false;
+            }
+        }
+        if (el.name === 'password_confirm') {
+            var password = form.querySelector('[name="password"]');
+            if (password && value && password.value !== value) {
+                setError(el, 'Passwords do not match.');
+                return false;
+            }
+        }
+        return true;
     }
 
     form.addEventListener('input', function (e) {
@@ -571,6 +607,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     form.addEventListener('change', function (e) {
         if (e.target.tagName === 'SELECT' || e.target.type === 'checkbox') clearError(e.target);
+    });
+    form.addEventListener('focusout', function (e) {
+        if (e.target.matches('input, select')) validateField(e.target);
     });
 
     form.addEventListener('submit', function (e) {

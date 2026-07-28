@@ -165,6 +165,253 @@
             </div>
             {% endif %}
 
+            {# ── Server option pickers — fields configured in admin Settings › Server Options ── #}
+            {# NOTE: |json_encode inside x-data="" (HTML attribute) is safe; browser decodes HTML entities before Alpine. #}
+            {% set _srv_fields = guest.serviceserver_options_get %}
+            {% for field in _srv_fields %}
+            {% if field.options is defined and field.options is not empty %}
+
+            {% if field.display is defined and field.display == 'card-grid' %}
+            {# ── Card-grid picker: OS / app tiles with category tab filter ── #}
+            <section class="ord-srv-section-card-divided">
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center ord-srv-icon-wrap">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+                        </svg>
+                    </span>
+                    <div class="flex-1">
+                        <h4 class="text-sm font-bold ord-srv-heading">{{ field.label }}</h4>
+                        {% if field.description is defined and field.description %}
+                        <p class="ord-srv-dimmed text-xs mt-0.5">{{ field.description }}</p>
+                        {% endif %}
+                    </div>
+                    {% if not (field.required is defined and field.required) %}
+                    <span class="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md" style="background:rgba(0,0,0,.05);color:#64748b;">Optional</span>
+                    {% endif %}
+                </div>
+                <div class="p-5"
+                     x-data="{
+                         search: '',
+                         tab: '',
+                         selected: null,
+                         opts: {{ field.options|json_encode }},
+                         tabs() {
+                             const seen = new Set(), result = [];
+                             this.opts.forEach(o => { const g = o.group || ''; if (!seen.has(g)) { seen.add(g); result.push(g); } });
+                             return result;
+                         },
+                         filtered() {
+                             const q = this.search.toLowerCase();
+                             return this.opts.filter(o => {
+                                 const matchTab = !this.tab || (o.group || '') === this.tab;
+                                 const matchSearch = !q || o.label.toLowerCase().includes(q) || (o.meta || '').toLowerCase().includes(q);
+                                 return matchTab && matchSearch;
+                             });
+                         },
+                         select(opt) { this.selected = this.selected && this.selected.value === opt.value ? null : opt; }
+                     }"
+                     x-init="$watch('selected', v => {
+                         document.dispatchEvent(new CustomEvent('srvFieldPriceUpdated', {
+                             detail: { fieldId: '{{ field.id }}', fieldLabel: '{{ field.label|e('js') }}', monthlyPrice: v ? (parseFloat(v.price_monthly) || 0) : 0 }
+                         }));
+                     })">
+                    <div class="relative mb-3">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ord-srv-dimmed pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" x-model="search"
+                               placeholder="Search {{ field.label|lower }}…"
+                               autocomplete="off"
+                               class="ord-os-search w-full pl-9 pr-3 py-2 text-sm rounded-xl border bg-transparent outline-none ord-srv-heading">
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mb-4">
+                        <button type="button" @click="tab = ''"
+                                :class="tab === '' ? 'ord-os-tab-on' : 'ord-os-tab-off'"
+                                class="ord-os-tab">All</button>
+                        <template x-for="t in tabs()" :key="t">
+                            <button type="button" @click="tab = t"
+                                    :class="tab === t ? 'ord-os-tab-on' : 'ord-os-tab-off'"
+                                    class="ord-os-tab" x-text="t"></button>
+                        </template>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <template x-for="opt in filtered()" :key="opt.value">
+                            <div @click="select(opt)"
+                                 class="ord-os-card"
+                                 :class="selected && selected.value === opt.value ? 'ord-os-card-on' : 'ord-os-card-off'">
+                                <div class="ord-os-avatar flex-shrink-0"
+                                     :class="selected && selected.value === opt.value ? 'ord-os-avatar-on' : 'ord-os-avatar-off'"
+                                     x-text="opt.label.charAt(0).toUpperCase()"></div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs font-semibold truncate ord-srv-heading leading-tight" x-text="opt.label"></div>
+                                    <div x-show="opt.meta && !(opt.price_monthly > 0)" class="text-[10px] ord-srv-dimmed truncate leading-tight mt-0.5" x-text="opt.meta"></div>
+                                    <div class="text-[10px] font-semibold truncate leading-tight mt-0.5"
+                                         :class="(opt.price_monthly > 0) ? 'text-amber-500' : 'text-emerald-500'"
+                                         x-text="(opt.price_monthly > 0) ? '+' + $store.fbCurrency.formatMoney(opt.price_monthly) + '/mo' : 'Free'"></div>
+                                </div>
+                                <svg x-show="selected && selected.value === opt.value" x-cloak
+                                     class="w-3.5 h-3.5 flex-shrink-0 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                     style="color:var(--color-primary)">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </template>
+                        <div x-show="filtered().length === 0" class="col-span-full py-8 text-center text-sm ord-srv-dimmed">No options found.</div>
+                    </div>
+                    <div x-show="selected" x-cloak class="mt-3 flex items-center gap-1.5 text-xs font-semibold" style="color:var(--color-primary)">
+                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        <span x-text="selected ? selected.label : ''"></span>
+                        <button type="button" @click="selected = null" class="ml-1 ord-srv-dimmed hover:text-red-400 transition-colors" aria-label="Clear selection">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <input type="hidden" name="config[{{ field.id }}]" :value="selected ? selected.value : ''">
+                    {% if field.required is defined and field.required %}
+                    <p class="text-xs ord-srv-dimmed mt-2">* Required — please select a {{ field.label|lower }}</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            {% else %}
+            {# ── Searchable dropdown picker ── #}
+            <section class="ord-srv-section-card-divided"
+                     x-data="{
+                         open: false,
+                         search: '',
+                         selected: null,
+                         opts: {{ field.options|json_encode }},
+                         grouped() {
+                             const q = this.search.toLowerCase();
+                             const list = q ? this.opts.filter(o => o.label.toLowerCase().includes(q)) : this.opts;
+                             const map = {}, order = [];
+                             list.forEach(o => { const g = o.group || ''; if (!map[g]) { map[g] = []; order.push(g); } map[g].push(o); });
+                             return order.map(g => ({ region: g, options: map[g] }));
+                         },
+                         select(opt) { this.selected = opt; this.open = false; this.search = ''; }
+                     }"
+                     x-init="$watch('selected', v => {
+                         document.dispatchEvent(new CustomEvent('srvFieldPriceUpdated', {
+                             detail: { fieldId: '{{ field.id }}', fieldLabel: '{{ field.label|e('js') }}', monthlyPrice: v ? (parseFloat(v.price_monthly) || 0) : 0 }
+                         }));
+                     })"
+                     :style="open ? 'overflow: visible' : ''"
+                     @click.outside="open = false"
+                     @keydown.escape.window="open = false">
+
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center ord-srv-icon-wrap">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 4a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold ord-srv-heading">{{ field.label }}</h4>
+                        {% if field.description is defined and field.description %}
+                        <p class="ord-srv-dimmed text-xs mt-0.5">{{ field.description }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="p-6">
+                    <div class="relative">
+
+                        {# Trigger button #}
+                        <button type="button"
+                                @click="open = !open; if (open) $nextTick(() => $refs.fieldSearch && $refs.fieldSearch.focus())"
+                                class="ord-loc-trigger w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all"
+                                :class="open
+                                    ? 'border-[color:var(--color-primary)] ring-2 ring-[color:var(--color-primary)]/15'
+                                    : 'ord-loc-trigger-idle'">
+                            <svg class="w-4 h-4 flex-shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                 :style="selected ? 'color:var(--color-primary)' : ''">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 4a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                            </svg>
+                            <span x-show="!selected" class="flex-1 text-sm ord-srv-dimmed italic">Select {{ field.label|lower }}…</span>
+                            <div x-show="selected" x-cloak class="flex-1 flex items-center gap-2 min-w-0">
+                                <span class="text-sm font-semibold ord-srv-heading truncate" x-text="selected ? selected.label : ''"></span>
+                                <span class="text-[10px] font-semibold flex-shrink-0"
+                                      :class="selected && (selected.price_monthly > 0) ? 'text-amber-500' : 'text-emerald-500'"
+                                      x-text="selected ? ((selected.price_monthly > 0) ? '+' + $store.fbCurrency.formatMoney(selected.price_monthly) + '/mo' : 'Free') : ''"></span>
+                            </div>
+                            <svg class="w-4 h-4 ord-srv-dimmed flex-shrink-0 transition-transform duration-200"
+                                 :class="open ? 'rotate-180' : ''"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        {# Dropdown panel #}
+                        <div x-show="open" x-cloak
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-75"
+                             x-transition:leave-start="opacity-100 translate-y-0"
+                             x-transition:leave-end="opacity-0 -translate-y-1"
+                             class="ord-loc-dropdown absolute left-0 right-0 top-full mt-1.5 z-30 rounded-xl border shadow-xl overflow-hidden">
+
+                            {# Search row #}
+                            <div class="flex items-center gap-2.5 px-3.5 py-2.5 border-b ord-loc-search-row">
+                                <svg class="w-4 h-4 flex-shrink-0 ord-srv-dimmed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input x-ref="fieldSearch"
+                                       type="text"
+                                       x-model="search"
+                                       placeholder="Search…"
+                                       autocomplete="off"
+                                       class="flex-1 bg-transparent outline-none text-sm ord-srv-heading placeholder:text-slate-400">
+                            </div>
+
+                            {# Options list — grouped by the `group` field on each option #}
+                            <div class="overflow-y-auto" style="max-height: 17rem;">
+                                <template x-for="grp in grouped()" :key="grp.region">
+                                    <div>
+                                        <div x-show="grp.region"
+                                             class="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest ord-srv-dimmed"
+                                             x-text="grp.region"></div>
+                                        <template x-for="opt in grp.options" :key="opt.value">
+                                            <div @click="select(opt)"
+                                                 class="ord-loc-option flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
+                                                 :class="selected && selected.value === opt.value ? 'ord-loc-option-active' : ''">
+                                                <span class="text-sm font-medium ord-srv-heading" x-text="opt.label"></span>
+                                                <div class="flex items-center gap-1.5 ml-auto flex-shrink-0">
+                                                    <span x-show="opt.badge"
+                                                          class="text-xs font-semibold ord-loc-badge"
+                                                          :class="{
+                                                              'ord-badge-best':    opt.badge === 'Best',
+                                                              'ord-badge-good':    opt.badge === 'Good',
+                                                              'ord-badge-fair':    opt.badge === 'Fair',
+                                                              'ord-badge-distant': opt.badge === 'Distant'
+                                                          }"
+                                                          x-text="opt.badge + (opt.meta ? ' · ' + opt.meta : '')"></span>
+                                                    <span class="text-[10px] font-semibold"
+                                                          :class="(opt.price_monthly > 0) ? 'text-amber-500' : 'text-emerald-500'"
+                                                          x-text="(opt.price_monthly > 0) ? '+' + $store.fbCurrency.formatMoney(opt.price_monthly) + '/mo' : 'Free'"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <div x-show="grouped().length === 0"
+                                     class="px-4 py-8 text-center text-sm ord-srv-dimmed">No options found.</div>
+                            </div>
+                        </div>
+
+                        {# Hidden input — value submitted with cart config as config[field_id] #}
+                        <input type="hidden" name="config[{{ field.id }}]" :value="selected ? selected.value : ''">
+                        {% if field.required is defined and field.required %}
+                        <p class="text-xs ord-srv-dimmed mt-2">* Required — please select a {{ field.label|lower }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
+            {% endif %}
+            {% endfor %}
+
             {# ── Custom configuration card (formbuilder) ── #}
             {% if product.form_id is defined and product.form_id and guest.extension_is_on({ 'mod': 'formbuilder' }) %}
             {% set form = guest.formbuilder_get({ 'id': product.form_id }) %}
@@ -296,6 +543,13 @@
                             {% endif %}
                         </div>
                         {% endfor %}
+
+                        <template x-for="f in Object.entries(srvFieldPrices).filter(e => e[1] > 0).map(e => ({id: e[0], label: srvFieldLabels[e[0]] || e[0], price: e[1]}))" :key="f.id">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-slate-500 ord-srv-muted" x-text="f.label"></span>
+                                <span class="font-semibold text-amber-600" x-text="'+' + formatMoney(f.price * (periodMonthsMap[selectedPeriod] || 1))"></span>
+                            </div>
+                        </template>
 
                         <div x-show="couponDiscount > 0" x-cloak class="flex items-center justify-between text-sm pt-2 border-t border-slate-100">
                             <span class="text-emerald-600">Coupon discount</span>
@@ -941,6 +1195,51 @@
 .fb-radio-checked { border-color: var(--color-primary) !important; background: rgba(var(--color-primary-rgb),0.08) !important; }
 .fb-chk-opt { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1.5px solid rgba(0,0,0,0.08); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s; }
 [data-theme="dark"] .fb-chk-opt { border-color: rgba(255,255,255,0.08); }
+
+/* ── Server option picker dropdown ── */
+.ord-loc-trigger { border-color: rgba(0,0,0,0.12); background: #fff; }
+.ord-loc-trigger-idle:hover { border-color: rgba(0,0,0,0.25); }
+[data-theme="dark"] .ord-loc-trigger { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
+.ord-loc-dropdown { background: #fff; border-color: rgba(0,0,0,0.1); }
+[data-theme="dark"] .ord-loc-dropdown { background: #1e293b; border-color: rgba(255,255,255,0.12); }
+.ord-loc-search-row { border-color: rgba(0,0,0,0.07); background: #f8fafc; }
+[data-theme="dark"] .ord-loc-search-row { border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.04); }
+.ord-loc-option:hover { background: rgba(0,0,0,0.04); }
+[data-theme="dark"] .ord-loc-option:hover { background: rgba(255,255,255,0.06); }
+.ord-loc-option-active { background: rgba(var(--color-primary-rgb),0.08) !important; }
+.ord-srv-icon-wrap { background: rgba(var(--color-primary-rgb),0.08); }
+[data-theme="dark"] .ord-srv-icon-wrap { background: rgba(var(--color-primary-rgb),0.15); }
+/* Badge / quality indicators */
+.ord-loc-badge { border-radius: 0.375rem; padding: 0.2em 0.55em; font-size: 0.7rem; }
+.ord-badge-best    { background: rgba(16,185,129,0.12); color: #059669; }
+.ord-badge-good    { background: rgba(14,165,233,0.12); color: #0284c7; }
+.ord-badge-fair    { background: rgba(245,158,11,0.12); color: #d97706; }
+.ord-badge-distant { background: rgba(100,116,139,0.12); color: #64748b; }
+[data-theme="dark"] .ord-badge-best    { background: rgba(16,185,129,0.2);  color: #34d399; }
+[data-theme="dark"] .ord-badge-good    { background: rgba(14,165,233,0.2);  color: #38bdf8; }
+[data-theme="dark"] .ord-badge-fair    { background: rgba(245,158,11,0.2);  color: #fbbf24; }
+[data-theme="dark"] .ord-badge-distant { background: rgba(100,116,139,0.2); color: #94a3b8; }
+
+/* ── OS / card-grid picker ── */
+.ord-os-tab { font-size: .73rem; font-weight: 600; padding: .28rem .75rem; border-radius: 99px; border: 1.5px solid; cursor: pointer; white-space: nowrap; line-height: 1.5; transition: all .15s; }
+.ord-os-tab-off { border-color: rgba(0,0,0,.12); color: #64748b; background: transparent; }
+.ord-os-tab-off:hover { border-color: rgba(0,0,0,.25); color: #0f172a; }
+[data-theme="dark"] .ord-os-tab-off { border-color: rgba(255,255,255,.12); color: #94a3b8; }
+[data-theme="dark"] .ord-os-tab-off:hover { border-color: rgba(255,255,255,.25); color: #f1f5f9; }
+.ord-os-tab-on { border-color: var(--color-primary); color: var(--color-primary); background: rgba(var(--color-primary-rgb),.1); }
+.ord-os-card { display: flex; align-items: center; gap: .6rem; padding: .55rem .8rem; border-radius: .85rem; border: 1.5px solid; cursor: pointer; transition: all .15s; min-width: 0; }
+.ord-os-card-off { border-color: rgba(0,0,0,.09); background: transparent; }
+.ord-os-card-off:hover { border-color: rgba(0,0,0,.22); background: rgba(0,0,0,.025); }
+[data-theme="dark"] .ord-os-card-off { border-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .ord-os-card-off:hover { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.04); }
+.ord-os-card-on { border-color: var(--color-primary); background: rgba(var(--color-primary-rgb),.08); }
+.ord-os-avatar { width: 2rem; height: 2rem; border-radius: .5rem; display: flex; align-items: center; justify-content: center; font-size: .82rem; font-weight: 700; flex-shrink: 0; }
+.ord-os-avatar-off { background: rgba(0,0,0,.06); color: #475569; }
+.ord-os-avatar-on  { background: rgba(var(--color-primary-rgb),.15); color: var(--color-primary); }
+[data-theme="dark"] .ord-os-avatar-off { background: rgba(255,255,255,.08); color: #94a3b8; }
+.ord-os-search { border-color: rgba(0,0,0,.12); }
+.ord-os-search:focus { border-color: var(--color-primary); }
+[data-theme="dark"] .ord-os-search { border-color: rgba(255,255,255,.12); }
 
 .reveal-up, .reveal-left, .reveal-right {
     opacity: 0;

@@ -13,8 +13,10 @@ namespace Box\Mod\Invoice;
 
 use Box\Mod\Currency\Entity\Currency;
 use Dompdf\Dompdf;
+use Dompdf\Options;
 use FOSSBilling\Environment;
 use FOSSBilling\Http\ResponseFactory;
+use FOSSBilling\i18n;
 use FOSSBilling\InformationException;
 use FOSSBilling\InjectionAwareInterface;
 use FOSSBilling\Tools;
@@ -28,6 +30,7 @@ class Service implements InjectionAwareInterface
 {
     protected ?\Pimple\Container $di = null;
     private Filesystem $filesystem;
+    private ?int $invoiceNumberPadding = null;
 
     public function setDi(\Pimple\Container $di): void
     {
@@ -91,7 +94,14 @@ class Service implements InjectionAwareInterface
 
     public function getSearchQuery($data): array
     {
-        $sql = 'SELECT p.*
+        $select = 'p.*';
+        if (!empty($data['summary'])) {
+            $select .= ',
+                COALESCE(SUM(COALESCE(pi.price, 0) * COALESCE(pi.quantity, 1)), 0) AS list_subtotal,
+                COALESCE(SUM(CASE WHEN pi.taxed = 1 THEN COALESCE(pi.price, 0) * COALESCE(pi.quantity, 1) ELSE 0 END), 0) AS list_taxable_subtotal';
+        }
+
+        $sql = 'SELECT ' . $select . '
             FROM invoice p
             LEFT JOIN invoice_item pi ON (p.id = pi.invoice_id)
             LEFT JOIN client cl ON (cl.id = p.client_id)
@@ -187,7 +197,58 @@ class Service implements InjectionAwareInterface
         return [$sql, $params];
     }
 
-    public function toApiArray(\Model_Invoice $invoice, $deep = true, $identity = null): array
+    /**
+     * Convert an aggregated invoice search result into the fields needed by list views.
+     *
+     * Unlike toApiArray(), this does not load invoice items, orders, products, the client,
+     * company details, or subscription information for every invoice in the result set.
+     */
+    public function toApiSummaryArray(array $row): array
+    {
+        $subtotal = (float) ($row['list_subtotal'] ?? 0);
+        $taxableSubtotal = (float) ($row['list_taxable_subtotal'] ?? 0);
+        $taxRate = (float) ($row['taxrate'] ?? 0);
+        $tax = $taxRate > 0 && $taxableSubtotal !== 0.0 ? round($taxableSubtotal * $taxRate / 100, 2) : 0;
+        $invoiceNumber = is_numeric($row['nr'] ?? null) ? (int) $row['nr'] : (int) $row['id'];
+        $clientId = $row['client_id'] ?? null;
+
+        return [
+            'id' => $row['id'],
+            'hash' => $row['hash'] ?? null,
+            'serie' => $row['serie'],
+            'nr' => $row['nr'],
+            'serie_nr' => $row['serie'] . sprintf('%0' . $this->getInvoiceNumberPadding() . 's', $invoiceNumber),
+            'client_id' => $clientId,
+            'client' => $clientId === null ? null : ['id' => $clientId],
+            'currency' => $row['currency'],
+            'tax' => $tax,
+            'subtotal' => $subtotal,
+            'total' => $subtotal + $tax,
+            'status' => $row['status'],
+            'due_at' => $row['due_at'],
+            'paid_at' => $row['paid_at'] ?? null,
+            'created_at' => $row['created_at'],
+            'updated_at' => $row['updated_at'],
+            'buyer' => [
+                'first_name' => $row['buyer_first_name'],
+                'last_name' => $row['buyer_last_name'],
+                'email' => $row['buyer_email'],
+            ],
+            'approved' => (bool) ($row['approved'] ?? false),
+        ];
+    }
+
+    private function getInvoiceNumberPadding(): int
+    {
+        if ($this->invoiceNumberPadding === null) {
+            $padding = $this->di['mod_service']('system')->getParamValue('invoice_number_padding');
+            $this->invoiceNumberPadding = $padding !== null && $padding !== '' ? (int) $padding : 5;
+        }
+
+        return $this->invoiceNumberPadding;
+    }
+
+    public function toApiArray(\Model_Invoice $invoice, $deep = true, $identity = null, bool $includeClientBillingEmail = false): array
     {
         $this->ensureValidHash($invoice);
         $row = $this->di['db']->toArray($invoice);
@@ -234,9 +295,6 @@ class Service implements InjectionAwareInterface
             $tax = 0;
         }
 
-        $invoice_number_padding = $this->di['mod_service']('system')->getParamValue('invoice_number_padding');
-        $invoice_number_padding = $invoice_number_padding !== null && $invoice_number_padding !== '' ? $invoice_number_padding : 5;
-
         $result = [];
         $result['id'] = $row['id'];
         $result['serie'] = $row['serie'];
@@ -244,7 +302,7 @@ class Service implements InjectionAwareInterface
         $result['client_id'] = $invoice->client_id;
 
         $nr = is_numeric($row['nr']) ? intval($row['nr']) : $result['id'];
-        $result['serie_nr'] = $result['serie'] . sprintf('%0' . $invoice_number_padding . 's', $nr);
+        $result['serie_nr'] = $result['serie'] . sprintf('%0' . $this->getInvoiceNumberPadding() . 's', $nr);
 
         $result['hash'] = $row['hash'];
         $result['hash_expires_at'] = $row['hash_expires_at'] ?? null;
@@ -307,6 +365,9 @@ class Service implements InjectionAwareInterface
         $clientService = $this->di['mod_service']('client');
         if ($client instanceof \Model_Client) {
             $result['client'] = $clientService->toApiArray($client);
+            if ($includeClientBillingEmail) {
+                $result['client']['billing_email'] = $client->billing_email;
+            }
         } else {
             $result['client'] = null;
         }
@@ -388,7 +449,7 @@ class Service implements InjectionAwareInterface
 
         try {
             $invoiceModel = $di['db']->load('Invoice', $params['id'] ?? 0);
-            $invoice = $service->toApiArray($invoiceModel, true);
+            $invoice = $service->toApiArray($invoiceModel, true, null, true);
             if (($invoice['total'] ?? 0) > 0) {
                 $service->sendInvoiceEmail($invoiceModel, $invoice, 'mod_invoice_paid');
             }
@@ -407,7 +468,7 @@ class Service implements InjectionAwareInterface
 
         try {
             $invoiceModel = $di['db']->load('Invoice', $params['id']);
-            $invoice = $service->toApiArray($invoiceModel, true);
+            $invoice = $service->toApiArray($invoiceModel, true, null, true);
             $service->sendInvoiceEmail($invoiceModel, $invoice, 'mod_invoice_created');
         } catch (\Exception $exc) {
             $di['logger']->setChannel('email')->error('Failed to send email for invoice creation', ['exception' => $exc->getMessage()]);
@@ -453,6 +514,7 @@ class Service implements InjectionAwareInterface
             'code' => $templateCode,
             'invoice' => $invoiceData,
         ];
+        $email = $this->withBillingRecipient($email, $invoiceData);
 
         $attachment = $this->getInvoicePdfAttachment($invoice);
         if ($attachment !== null) {
@@ -474,11 +536,12 @@ class Service implements InjectionAwareInterface
                 return;
             }
 
-            $invoice = $service->toApiArray($invoiceModel, true);
+            $invoice = $service->toApiArray($invoiceModel, true, null, true);
             $email = [];
             $email['to_client'] = $invoiceModel->client_id;
             $email['code'] = 'mod_invoice_payment_reminder';
             $email['invoice'] = $invoice;
+            $email = $service->withBillingRecipient($email, $invoice);
             $attachment = $service->getInvoicePdfAttachment($invoiceModel);
             if ($attachment !== null) {
                 $email['attachment'] = $attachment;
@@ -499,9 +562,22 @@ class Service implements InjectionAwareInterface
         $params = $event->getParameters();
         $di = $event->getDi();
         $service = $di['mod_service']('invoice');
+        $claimed = false;
 
         try {
             if (!$service->isInvoiceReminderIntervalEnabled('invoice_reminder_before_due_days', (int) ($params['days_left'] ?? 0), '', $params['reminder_intervals'] ?? null)) {
+                return;
+            }
+
+            // Atomically claim the invoice before sending anything: this is what stops the same
+            // reminder being sent twice when this event is dispatched more than once for the
+            // same invoice (overlapping cron runs, the once-daily batch and the pending-reminder
+            // fallback both firing it, etc).
+            $claimed = (bool) $di['db']->exec(
+                "UPDATE invoice SET reminded_at = NOW(), updated_at = NOW() WHERE id = :id AND status = 'unpaid' AND approved = 1 AND due_at > NOW() AND (reminded_at IS NULL OR DATE(reminded_at) < CURDATE())",
+                [':id' => $params['id'] ?? 0]
+            );
+            if (!$claimed) {
                 return;
             }
 
@@ -510,7 +586,14 @@ class Service implements InjectionAwareInterface
                 $service->sendInvoiceReminder($invoiceModel);
             }
         } catch (\Exception $exc) {
-            $di['logger']->setChannel('email')->error('Failed to send invoice reminder email', ['exception' => $exc->getMessage()]);
+            if ($claimed) {
+                // sendInvoiceReminder()'s downstream send handler (onAfterAdminInvoiceReminderSent)
+                // catches its own failures internally, so any exception reaching here means the
+                // email was never queued. Release the claim so a later cron run retries it instead
+                // of the reminder being silently lost for the day.
+                $di['db']->exec('UPDATE invoice SET reminded_at = NULL WHERE id = :id', [':id' => $params['id'] ?? 0]);
+            }
+            $di['logger']->setChannel('email')->error('Failed to send invoice reminder email', ['id' => $params['id'] ?? null, 'exception' => $exc->getMessage()]);
         }
     }
 
@@ -532,19 +615,42 @@ class Service implements InjectionAwareInterface
         $params = $event->getParameters();
         $di = $event->getDi();
         $service = $di['mod_service']('invoice');
+        $claimed = false;
 
         try {
             if (!$service->isInvoiceReminderIntervalEnabled('invoice_reminder_after_due_days', (int) ($params['days_passed'] ?? 0), '5', $params['reminder_intervals'] ?? null)) {
                 return;
             }
 
+            // Atomically claim the invoice before sending anything: this is what stops the same
+            // reminder being sent twice when this event is dispatched more than once for the
+            // same invoice (overlapping cron runs, the once-daily batch and the pending-reminder
+            // fallback both firing it, etc). The claim UPDATE already persists reminded_at and
+            // updated_at, so there's no need to store the loaded model again once sent below.
+            $claimed = (bool) $di['db']->exec(
+                "UPDATE invoice SET reminded_at = NOW(), updated_at = NOW() WHERE id = :id AND status = 'unpaid' AND approved = 1 AND ((due_at < NOW()) OR (ABS(DATEDIFF(due_at, NOW())) = 0)) AND (reminded_at IS NULL OR DATE(reminded_at) < CURDATE())",
+                [':id' => $params['id'] ?? 0]
+            );
+            if (!$claimed) {
+                return;
+            }
+
             $invoiceModel = $di['db']->load('Invoice', $params['id']);
-            $invoice = $service->toApiArray($invoiceModel, true);
+            if (!$invoiceModel instanceof \Model_Invoice) {
+                return;
+            }
+
+            $invoice = $service->toApiArray($invoiceModel, true, null, true);
+            if (!isset($invoice['client']) || !is_array($invoice['client']) || !isset($invoice['client']['id'])) {
+                throw new \FOSSBilling\Exception('Invoice client data is unavailable.');
+            }
+
             $email = [];
             $email['to_client'] = $invoice['client']['id'];
             $email['code'] = 'mod_invoice_due_after';
             $email['days_passed'] = $params['days_passed'];
             $email['invoice'] = $invoice;
+            $email = $service->withBillingRecipient($email, $invoice);
             $attachment = $service->getInvoicePdfAttachment($invoiceModel);
             if ($attachment !== null) {
                 $email['attachment'] = $attachment;
@@ -553,8 +659,28 @@ class Service implements InjectionAwareInterface
             $emailService = $di['mod_service']('email');
             $emailService->sendTemplate($email);
         } catch (\Exception $exc) {
-            $di['logger']->setChannel('email')->error('Failed to send overdue invoice email', ['exception' => $exc->getMessage()]);
+            if ($claimed) {
+                // Nothing past sendTemplate() can throw, so reaching here with a claim already
+                // made means the email was never confirmed queued. Release the claim so a later
+                // cron run retries this invoice instead of losing the reminder.
+                $di['db']->exec('UPDATE invoice SET reminded_at = NULL WHERE id = :id', [':id' => $params['id'] ?? 0]);
+            }
+            $di['logger']->setChannel('email')->error('Failed to send overdue invoice email', ['id' => $params['id'] ?? null, 'exception' => $exc->getMessage()]);
         }
+    }
+
+    /**
+     * Route invoice notifications to the client's optional billing address while retaining
+     * to_client so templates, timezone handling, and client email history keep working.
+     */
+    public function withBillingRecipient(array $email, array $invoice): array
+    {
+        $billingEmail = trim((string) ($invoice['client']['billing_email'] ?? ''));
+        if ($billingEmail !== '') {
+            $email['to'] = $billingEmail;
+        }
+
+        return $email;
     }
 
     public function markAsPaid(\Model_Invoice $invoice, $charge = true, $execute = false): bool
@@ -853,7 +979,7 @@ class Service implements InjectionAwareInterface
             $this->tryPayWithCredits($invoice);
         }
 
-        $this->di['events_manager']->fire(['event' => 'onAfterAdminInvoiceApprove', 'params' => $this->toApiArray($invoice)]);
+        $this->di['events_manager']->fire(['event' => 'onAfterAdminInvoiceApprove', 'params' => $this->toApiArray($invoice, true, null, true)]);
 
         $this->di['logger']->info("Approved invoice {$invoice->id}.");
 
@@ -878,17 +1004,17 @@ class Service implements InjectionAwareInterface
         }
     }
 
-    public function tryPayWithCredits(\Model_Invoice $invoice)
+    public function tryPayWithCredits(\Model_Invoice $invoice): bool
     {
         if (!$invoice->approved) {
-            return;
+            return false;
         }
         if ($invoice->status == \Model_Invoice::STATUS_PAID) {
             if (DEBUG) {
                 $this->di['logger']->setChannel('billing')->info("Skipping credit payment for already paid invoice {$invoice->id}.");
             }
 
-            return;
+            return false;
         }
 
         $client = $this->di['db']->load('Client', $invoice->client_id);
@@ -932,6 +1058,8 @@ class Service implements InjectionAwareInterface
         if (DEBUG) {
             $this->di['logger']->setChannel('billing')->info("Invoice {$invoice->id} could not be paid with credits. Money in balance {$balance} Required: {$required}.");
         }
+
+        return false;
     }
 
     public function getTotalWithTax(\Model_Invoice $invoice): float
@@ -1392,8 +1520,14 @@ class Service implements InjectionAwareInterface
     public function doBatchRemindersSend(): bool
     {
         $this->di['events_manager']->fire(['event' => 'onBeforeAdminInvoiceSendReminders']);
-        $result = $this->doBatchInvokeDueEvent(['once_per_day' => false]);
-        $this->di['logger']->info('Executed action to send invoice payment reminders.');
+        $result = $this->doBatchInvokeDueEvent(['once_per_day' => true]);
+        if (!$result) {
+            // Pick up invoices that became reminder-eligible after today's due-event batch ran.
+            $result = $this->doBatchInvokePendingReminderEvents();
+        }
+        if ($result) {
+            $this->di['logger']->info('Executed action to send invoice payment reminders.');
+        }
 
         return $result;
     }
@@ -1411,25 +1545,48 @@ class Service implements InjectionAwareInterface
             return false;
         }
 
-        $beforeDueReminderIntervals = $this->parseInvoiceReminderIntervals($ss->getParamValue('invoice_reminder_before_due_days', ''));
-        $afterDueReminderIntervals = $this->parseInvoiceReminderIntervals($ss->getParamValue('invoice_reminder_after_due_days', '5'));
-
-        $before_due_list = $this->di['db']->getAll("SELECT id, DATEDIFF(due_at, NOW()) as days_left FROM invoice WHERE status = 'unpaid' AND approved = 1 AND due_at > NOW()");
-        foreach ($before_due_list as $params) {
-            $params['reminder_intervals'] = $beforeDueReminderIntervals;
-            $this->di['events_manager']->fire(['event' => 'onEventBeforeInvoiceIsDue', 'params' => $params]);
-        }
-
-        $after_due_list = $this->di['db']->getAll("SELECT id, ABS(DATEDIFF(due_at, NOW())) as days_passed FROM invoice WHERE status = 'unpaid' AND approved = 1 AND ((due_at < NOW()) OR (ABS(DATEDIFF(due_at, NOW())) = 0 ))");
-        foreach ($after_due_list as $params) {
-            $params['reminder_intervals'] = $afterDueReminderIntervals;
-            $this->di['events_manager']->fire(['event' => 'onEventAfterInvoiceIsDue', 'params' => $params]);
-        }
+        $this->fireDueReminderEvents();
 
         $ss->setParamValue($key, date('Y-m-d H:i:s'));
         $this->di['logger']->info('Executed action to invoke invoice due event');
 
         return true;
+    }
+
+    protected function doBatchInvokePendingReminderEvents(): bool
+    {
+        $this->fireDueReminderEvents();
+
+        return true;
+    }
+
+    /**
+     * Fires the before/after due-date events for every unpaid, approved invoice in range, same
+     * as before this class started reminder-throttling. Listeners (built-in or third-party
+     * extensions) decide for themselves whether a given invoice is actionable; this method does
+     * not filter by reminder interval so it does not narrow what extensions can observe. The
+     * built-in reminder handlers (onEventBeforeInvoiceIsDue, onEventAfterInvoiceIsDue) are the
+     * ones responsible for matching the configured interval and atomically claiming the invoice
+     * via reminded_at before actually sending anything, which is what keeps overlapping cron
+     * runs and repeated dispatch of this same event from sending duplicate reminders.
+     */
+    private function fireDueReminderEvents(): void
+    {
+        $ss = $this->di['mod_service']('System');
+        $beforeDueReminderIntervals = $this->parseInvoiceReminderIntervals($ss->getParamValue('invoice_reminder_before_due_days', ''));
+        $afterDueReminderIntervals = $this->parseInvoiceReminderIntervals($ss->getParamValue('invoice_reminder_after_due_days', '5'));
+
+        $beforeDueList = $this->di['db']->getAll("SELECT id, DATEDIFF(due_at, NOW()) as days_left FROM invoice WHERE status = 'unpaid' AND approved = 1 AND due_at > NOW()");
+        foreach ($beforeDueList as $params) {
+            $params['reminder_intervals'] = $beforeDueReminderIntervals;
+            $this->di['events_manager']->fire(['event' => 'onEventBeforeInvoiceIsDue', 'params' => $params]);
+        }
+
+        $afterDueList = $this->di['db']->getAll("SELECT id, ABS(DATEDIFF(due_at, NOW())) as days_passed FROM invoice WHERE status = 'unpaid' AND approved = 1 AND ((due_at < NOW()) OR (ABS(DATEDIFF(due_at, NOW())) = 0))");
+        foreach ($afterDueList as $params) {
+            $params['reminder_intervals'] = $afterDueReminderIntervals;
+            $this->di['events_manager']->fire(['event' => 'onEventAfterInvoiceIsDue', 'params' => $params]);
+        }
     }
 
     public function sendInvoiceReminder(\Model_Invoice $invoice): bool
@@ -1644,8 +1801,8 @@ class Service implements InjectionAwareInterface
 
         $pdf = $this->createPdfGenerator();
         $pdf->setPaper($document_format, 'portrait');
+        $pdf->setBasePath(Path::join(__DIR__, 'templates', 'pdf'));
         $options = $pdf->getOptions();
-        $options->setChroot($this->di['request']->server->get('DOCUMENT_ROOT', ''));
 
         $sellerLines = 0;
         $buyerLines = 0;
@@ -1666,6 +1823,7 @@ class Service implements InjectionAwareInterface
             'buyer' => $this->getBuyerData($invoice, $buyerLines),
             'buyer_lines' => $buyerLines,
             'invoice' => $invoice,
+            'locale' => i18n::getActiveLocale($this->di['request'], true, $this->di['cookie_queue']),
         ];
 
         $twigFactory = $this->di['twig_factory'];
@@ -2001,7 +2159,15 @@ class Service implements InjectionAwareInterface
     // Start of PDF related functions
     protected function createPdfGenerator(): Dompdf
     {
-        return new Dompdf();
+        $fontCachePath = Path::join(PATH_CACHE, 'dompdf');
+        $this->filesystem->mkdir($fontCachePath);
+
+        $options = new Options();
+        $options->setFontDir($fontCachePath);
+        $options->setFontCache($fontCachePath);
+        $options->setChroot(PATH_ROOT);
+
+        return new Dompdf($options);
     }
 
     protected function createPdfResponse(string $content, string $fileName): Response

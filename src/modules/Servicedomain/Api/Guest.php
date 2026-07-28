@@ -94,19 +94,7 @@ class Guest extends \FOSSBilling\Api\AbstractApi
             throw new \FOSSBilling\InformationException('Domain availability could not be determined. TLD is not active.');
         }
 
-        // Local patch: registrar/transport failures must not leak adapter
-        // internals to unauthenticated guests — rethrow as a generic message.
-        try {
-            $available = $this->getService()->isDomainAvailable($tld, $sld);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            $this->getDi()['logger']->error('Domain availability check failed for ' . $sld . '.' . $tld->tld . ': ' . $e->getMessage());
-
-            throw new \FOSSBilling\InformationException('Domain availability could not be determined. Please try again later.');
-        }
-
-        if (!$available) {
+        if (!$this->getService()->isDomainAvailable($tld, $sld)) {
             throw new \FOSSBilling\InformationException('Domain is not available.');
         }
 
@@ -131,18 +119,7 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         if (!$tld instanceof \Model_Tld) {
             throw new \FOSSBilling\InformationException('TLD is not active.');
         }
-        // Local patch: same sanitization as check() — see above.
-        try {
-            $transferable = $this->getService()->canBeTransferred($tld, $data['sld']);
-        } catch (\FOSSBilling\InformationException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            $this->getDi()['logger']->error('Domain transfer check failed for ' . $data['sld'] . '.' . $tld->tld . ': ' . $e->getMessage());
-
-            throw new \FOSSBilling\InformationException('Domain transfer eligibility could not be determined. Please try again later.');
-        }
-
-        if (!$transferable) {
+        if (!$this->getService()->canBeTransferred($tld, $data['sld'])) {
             throw new \FOSSBilling\InformationException('Domain cannot be transferred.');
         }
 
