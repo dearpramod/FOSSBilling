@@ -1150,23 +1150,7 @@
 
         <!-- Page content -->
         <main id="main-content" class="flex-1 min-h-0 overflow-y-auto flex flex-col">
-            {% if isDashboardRoute and client %}
-            <section class="ref-dashboard-hero">
-                <div>
-                    <h1>Welcome{% if profile.first_name|default('') %}, {{ profile.first_name }}{% endif %}</h1>
-                </div>
-                <div class="ref-dashboard-hero-actions">
-                    <a href="{{ '/support'|url }}" class="ref-btn ref-btn-light">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 10h8M8 14h5M5 18l-2 3v-5a8 8 0 1114.9 2"/></svg>
-                        Manage support tickets
-                    </a>
-                    <a href="{{ '/order'|url }}" class="ref-btn ref-btn-yellow">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-width="1.8" d="M12 5v14M5 12h14"/></svg>
-                        Place new order
-                    </a>
-                </div>
-            </section>
-            {% endif %}
+            {% block dashboard_hero %}{% endblock %}
             <div class="flex-1 w-full pb-6 px-4 {{ isDashboardRoute ? 'pt-0' : 'py-4 sm:py-5' }} sm:px-8 lg:px-16 {{ isOrderFlowRoute ? 'order-boot-stage' : '' }}">
                 {% if isOrderFlowRoute %}
                 <div id="order-page-skeleton"
