@@ -1003,6 +1003,9 @@
      * the cart can trigger a badge refresh without a full page reload.
      */
     function syncCartBadge() {
+        // Error pages lose their script tags to script_tag's per-request dedupe,
+        // so the API wrapper may be absent here.
+        if (typeof API === 'undefined' || !API || !API.guest) return;
         API.guest.get('cart/get', {}, function (cart) {
             var count = (cart && Array.isArray(cart.items)) ? cart.items.length : 0;
             ['cart-badge-desktop', 'cart-badge-mobile'].forEach(function (id) {

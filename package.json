@@ -10,6 +10,8 @@
     "build-themes": "npm run build-admin_default && npm run build -w huraga",
     "build-huraga": "npm run build -w huraga",
     "build-admin_default": "npm run build -w admin_default",
+    "build-meroserver": "npm --prefix src/themes/meroserver run build",
+    "build-merotheme": "npm --prefix src/themes/meroserver run build",
     "check": "npm run check-types && npm run check-icons",
     "check-types": "tsc --noEmit",
     "check-icons": "node ./frontend/tools/check-icons.mts",
