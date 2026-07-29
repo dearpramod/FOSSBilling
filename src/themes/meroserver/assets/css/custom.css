@@ -7146,3 +7146,459 @@ html[data-theme="dark"] .ref-invoice-totals {
         text-align: left;
     }
 }
+
+/* Invoice mobile layout — card rows avoid clipped tables and horizontal scroll. */
+@media (max-width: 640px) {
+    .ref-invoice-page {
+        gap: 1.25rem;
+    }
+
+    .ref-invoice-hero {
+        min-height: 240px;
+        padding-top: 1.5rem;
+        padding-bottom: 4.75rem;
+    }
+
+    .ref-invoice-hero h1 {
+        font-size: 1.75rem;
+        line-height: 2.15rem;
+    }
+
+    .ref-invoice-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+        margin-top: -4rem;
+    }
+
+    .ref-invoice-stat {
+        min-height: 0;
+        padding: 1rem !important;
+    }
+
+    .ref-invoice-stat:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .ref-invoice-stat > div:first-child {
+        margin-bottom: .65rem;
+        gap: .6rem;
+    }
+
+    .ref-invoice-stat > div:first-child > div {
+        width: 2rem;
+        height: 2rem;
+        border-radius: .6rem;
+    }
+
+    .ref-invoice-stat > div:first-child svg {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    .ref-invoice-stat > div:first-child span {
+        font-size: .75rem;
+        line-height: 1.15;
+    }
+
+    .ref-invoice-stat > .text-2xl {
+        font-size: 1.15rem;
+        line-height: 1.5rem;
+    }
+
+    .ref-invoice-table > div:first-child {
+        padding: .9rem 1rem;
+    }
+
+    .ref-invoice-table-scroll {
+        overflow: visible;
+        padding: .75rem;
+    }
+
+    .ref-invoice-table table,
+    .ref-invoice-table tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .ref-invoice-table thead {
+        display: none;
+    }
+
+    .ref-invoice-table tbody {
+        display: grid;
+        gap: .75rem;
+    }
+
+    .ref-invoice-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .45rem 1rem;
+        padding: .85rem;
+        border: 1px solid #e8ebf2;
+        border-radius: .8rem;
+        background: #fff;
+    }
+
+    .ref-invoice-row:hover {
+        box-shadow: none;
+    }
+
+    .ref-invoice-row td {
+        display: flex !important;
+        min-width: 0;
+        height: auto;
+        padding: 0 !important;
+        text-align: left;
+    }
+
+    .ref-invoice-row td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: .2rem;
+        color: #8a94a8;
+        font-size: .64rem;
+        font-weight: 700;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+    }
+
+    .ref-invoice-row td:nth-child(1),
+    .ref-invoice-row td:nth-child(2),
+    .ref-invoice-row td:nth-child(3),
+    .ref-invoice-row td:nth-child(4) {
+        flex-direction: column;
+    }
+
+    .ref-invoice-row td:nth-child(5) {
+        grid-column: 2;
+        grid-row: 1;
+        justify-content: flex-end;
+        align-self: start;
+    }
+
+    .ref-invoice-row td:nth-child(5)::before {
+        display: none;
+    }
+
+    .ref-invoice-row td:last-child {
+        grid-column: 1 / -1;
+        margin-top: .25rem;
+    }
+
+    .ref-invoice-row td:last-child::before {
+        display: none;
+    }
+
+    .ref-invoice-row td:last-child a {
+        min-height: 44px;
+        width: 100%;
+        justify-content: center;
+        border: 1px solid #e4e8f0;
+        border-radius: .7rem;
+    }
+
+    .ref-invoice-table > div:last-child {
+        align-items: stretch;
+        padding: .9rem 1rem;
+    }
+
+    .ref-invoice-table > div:last-child > div {
+        width: 100%;
+        justify-content: center;
+    }
+
+    html[data-theme="dark"] .ref-invoice-row {
+        border-color: rgba(255,255,255,.08);
+        background: rgba(255,255,255,.025);
+    }
+
+    html[data-theme="dark"] .ref-invoice-row td:last-child a {
+        border-color: rgba(255,255,255,.09);
+    }
+
+    .ref-invoice-detail-hero {
+        min-height: 290px;
+        padding-top: 1.4rem !important;
+        padding-bottom: 4.5rem !important;
+    }
+
+    html body .ref-invoice-detail-hero h1 {
+        overflow-wrap: anywhere;
+        font-size: 1.75rem;
+        line-height: 2.1rem;
+    }
+
+    .ref-invoice-detail-hero > div:first-child > div {
+        gap: .5rem .75rem;
+    }
+
+    .ref-invoice-detail-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .6rem;
+    }
+
+    .ref-invoice-amount {
+        grid-column: 1 / -1;
+    }
+
+    .ref-invoice-detail-actions a {
+        min-height: 44px;
+        padding-inline: .6rem;
+        white-space: nowrap;
+    }
+
+    .ref-invoice-detail-layout {
+        margin-top: -3.25rem;
+    }
+
+    .ref-invoice-payment-rail {
+        order: -1;
+    }
+
+    .ref-invoice-parties {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.25rem;
+        padding: 1.15rem !important;
+    }
+
+    .ref-invoice-parties > div {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .ref-invoice-lines {
+        overflow: hidden;
+    }
+
+    .ref-invoice-lines table,
+    .ref-invoice-lines tbody {
+        display: block;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .ref-invoice-lines thead {
+        display: none;
+    }
+
+    .ref-invoice-lines tbody {
+        display: grid;
+        gap: .75rem;
+        padding: .75rem;
+    }
+
+    .ref-invoice-line {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .75rem;
+        padding: .9rem;
+        border: 1px solid #e8ebf2;
+        border-radius: .8rem;
+    }
+
+    .ref-invoice-line td {
+        display: block;
+        min-width: 0;
+        padding: 0 !important;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+
+    .ref-invoice-line td:first-child {
+        grid-column: 1 / -1;
+        padding-bottom: .7rem !important;
+        border-bottom: 1px solid #eef0f5;
+    }
+
+    .ref-invoice-line td::before,
+    .ref-invoice-transactions td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: .2rem;
+        color: #8a94a8;
+        font-size: .63rem;
+        font-weight: 700;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+    }
+
+    .ref-invoice-totals {
+        padding: .75rem !important;
+    }
+
+    .ref-invoice-totals > div {
+        max-width: none;
+    }
+
+    .ref-invoice-totals > div > div:last-child {
+        align-items: flex-end;
+        gap: 1rem;
+    }
+
+    .ref-invoice-totals > div > div:last-child span {
+        font-size: 1.05rem;
+        text-align: right;
+    }
+
+    .ref-invoice-transactions > div:nth-child(2) {
+        overflow: visible;
+        padding: .75rem;
+    }
+
+    .ref-invoice-transactions table,
+    .ref-invoice-transactions tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .ref-invoice-transactions thead {
+        display: none;
+    }
+
+    .ref-invoice-transactions tbody {
+        display: grid;
+        gap: .75rem;
+    }
+
+    .ref-invoice-transactions tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .7rem 1rem;
+        padding: .85rem;
+        border: 1px solid #e8ebf2;
+        border-radius: .8rem;
+    }
+
+    .ref-invoice-transactions td {
+        display: block;
+        min-width: 0;
+        padding: 0 !important;
+        overflow-wrap: anywhere;
+    }
+
+    .ref-invoice-transactions code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .ref-invoice-detail .flex.items-center.justify-between.gap-4 {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    html[data-theme="dark"] .ref-invoice-line,
+    html[data-theme="dark"] .ref-invoice-transactions tbody tr {
+        border-color: rgba(255,255,255,.08);
+    }
+
+    html[data-theme="dark"] .ref-invoice-line td:first-child {
+        border-color: rgba(255,255,255,.07);
+    }
+}
+
+/* Shared SaaS motion primitives for async submit/create actions. */
+:root {
+    --motion-ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+    --motion-ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+}
+
+.saas-submit-motion {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition:
+        color var(--motion-fast) ease,
+        background-color var(--motion-fast) ease,
+        border-color var(--motion-fast) ease,
+        box-shadow var(--motion-fast) ease,
+        opacity var(--motion-fast) ease,
+        transform var(--motion-base) var(--motion-ease-out-expo);
+}
+
+.saas-submit-motion:not(:disabled):active {
+    transform: scale(.97);
+}
+
+.saas-submit-motion:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow:
+        0 0 0 3px rgba(var(--color-primary-rgb, 82, 113, 255), .2),
+        0 8px 18px rgba(var(--color-primary-rgb, 82, 113, 255), .22);
+}
+
+.saas-submit-motion:disabled {
+    cursor: wait;
+}
+
+.saas-submit-motion[data-state="success"] {
+    background: #159a63 !important;
+    box-shadow: 0 8px 18px rgba(21, 154, 99, .2) !important;
+}
+
+.saas-submit-motion [data-submit-idle],
+.saas-submit-motion [data-submit-loading],
+.saas-submit-motion [data-submit-success] {
+    align-items: center;
+    justify-content: center;
+    animation: saas-button-swap-in var(--motion-fast) var(--motion-ease-out-expo) both;
+}
+
+.saas-submit-motion [data-submit-loading],
+.saas-submit-motion [data-submit-success] {
+    display: none;
+}
+
+.saas-submit-motion[data-state="loading"] [data-submit-idle],
+.saas-submit-motion[data-state="success"] [data-submit-idle] {
+    display: none;
+}
+
+.saas-submit-motion[data-state="loading"] [data-submit-loading],
+.saas-submit-motion[data-state="success"] [data-submit-success] {
+    display: inline-flex;
+}
+
+.saas-check-pop {
+    animation: saas-check-pop var(--motion-slow) var(--motion-ease-spring) both;
+}
+
+@keyframes saas-button-swap-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes saas-check-pop {
+    0% {
+        opacity: 0;
+        transform: scale(.5);
+    }
+    70% {
+        transform: scale(1.15);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .saas-submit-motion,
+    .saas-submit-motion *,
+    .saas-submit-motion *::before,
+    .saas-submit-motion *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+    }
+}

@@ -135,13 +135,13 @@
                 <tbody class="divide-y divide-slate-100 dark:divide-white/[0.04]">
                     {% for item in invoice.lines %}
                     <tr class="ref-invoice-line hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors">
-                        <td class="px-6 py-5">
+                        <td class="px-6 py-5" data-label="Description">
                             <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ item.title }}</p>
                             {% if item.period %}<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ item.period|period_title }}</p>{% endif %}
                         </td>
-                        <td class="px-6 py-5 text-sm text-slate-600 dark:text-slate-400 text-center">{{ item.quantity }}</td>
-                        <td class="px-6 py-5 text-sm text-slate-600 dark:text-slate-400 text-right">{{ item.price|money(invoice.currency) }}</td>
-                        <td class="px-6 py-5 text-sm font-semibold text-slate-900 dark:text-white text-right">{{ (item.price * item.quantity)|money(invoice.currency) }}</td>
+                        <td class="px-6 py-5 text-sm text-slate-600 dark:text-slate-400 text-center" data-label="Qty">{{ item.quantity }}</td>
+                        <td class="px-6 py-5 text-sm text-slate-600 dark:text-slate-400 text-right" data-label="Unit price">{{ item.price|money(invoice.currency) }}</td>
+                        <td class="px-6 py-5 text-sm font-semibold text-slate-900 dark:text-white text-right" data-label="Total">{{ (item.price * item.quantity)|money(invoice.currency) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -184,7 +184,7 @@
         {# Transaction history — processed only, matching admin panel columns #}
         {% set transactions = client.invoice_transaction_get_list({ 'invoice_hash': invoice.hash, 'per_page': 15 }) %}
         {% if transactions.list|length > 0 %}
-        <div class="bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm overflow-hidden">
+        <div class="ref-invoice-transactions bg-white dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/[0.06] shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
                 <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Transaction History</h3>
             </div>
@@ -203,20 +203,20 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-white/[0.04]">
                         {% for tx in transactions.list %}
                         <tr class="hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors">
-                            <td class="px-6 py-3.5">
+                            <td class="px-6 py-3.5" data-label="Transaction">
                                 <span class="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">#{{ tx.id }}</span>
                             </td>
-                            <td class="px-6 py-3.5">
+                            <td class="px-6 py-3.5" data-label="Gateway ID">
                                 {% if tx.txn_id %}
                                     <code class="text-xs px-2 py-0.5 rounded font-mono" style="background: rgba(var(--color-primary-rgb,99,102,241),0.08); color: var(--color-primary);">{{ tx.txn_id }}</code>
                                 {% else %}
                                     <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
                                 {% endif %}
                             </td>
-                            <td class="px-6 py-3.5 text-sm text-slate-600 dark:text-slate-300">{{ tx.type|default('—') }}</td>
-                            <td class="px-6 py-3.5 text-sm text-slate-800 dark:text-slate-200">{{ tx.gateway|default('—') }}</td>
-                            <td class="px-6 py-3.5 text-sm font-semibold text-slate-900 dark:text-white">{{ tx.amount|money(tx.currency) }}</td>
-                            <td class="px-6 py-3.5 text-xs text-slate-500 dark:text-slate-400">{{ tx.created_at|date("M j, Y · g:i A") }}</td>
+                            <td class="px-6 py-3.5 text-sm text-slate-600 dark:text-slate-300" data-label="Type">{{ tx.type|default('—') }}</td>
+                            <td class="px-6 py-3.5 text-sm text-slate-800 dark:text-slate-200" data-label="Gateway">{{ tx.gateway|default('—') }}</td>
+                            <td class="px-6 py-3.5 text-sm font-semibold text-slate-900 dark:text-white" data-label="Amount">{{ tx.amount|money(tx.currency) }}</td>
+                            <td class="px-6 py-3.5 text-xs text-slate-500 dark:text-slate-400" data-label="Date">{{ tx.created_at|date("M j, Y · g:i A") }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

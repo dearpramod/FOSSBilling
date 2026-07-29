@@ -10,6 +10,19 @@ window.Alpine = Alpine;
 
 Alpine.start();
 
+// ── Shared async-action motion state ─────────────────────────────────────────
+// Opt-in with data-submit-motion. Markup supplies idle/loading/success labels,
+// while this helper owns disabled and aria-busy state without replacing content.
+window.MeroMotion = Object.assign(window.MeroMotion || {}, {
+  setSubmitState(button, state) {
+    if (!button) return;
+    const nextState = ['idle', 'loading', 'success'].includes(state) ? state : 'idle';
+    button.dataset.state = nextState;
+    button.disabled = nextState !== 'idle';
+    button.setAttribute('aria-busy', nextState === 'loading' ? 'true' : 'false');
+  },
+});
+
 // ── TomSelect — enhance <select> inputs ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
   /**
