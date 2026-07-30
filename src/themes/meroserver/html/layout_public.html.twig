@@ -92,8 +92,8 @@
         <div style="position:fixed;top:0;left:0;right:0;padding:0.75rem 1rem;background:#f59e0b;color:#1c1917;font-size:0.875rem;z-index:9999;text-align:center;">{{ 'JavaScript is required for the full experience. Please enable JavaScript.'|trans }}</div>
     </noscript>
 
-    {{ 'js/main.js' | public_asset_url | script_tag }}
-    {{ 'js/api.js' | public_asset_url | script_tag }}
+    <script src="{{ 'js/main.js' | public_asset_url }}"></script>
+    <script src="{{ 'js/api.js' | public_asset_url }}"></script>
     <!-- Merotheme bundle: Alpine.js + @alpinejs/collapse + TomSelect (defer: Alpine.start() runs after DOM parsed) -->
     <script defer src="{{ 'build/js/meroserver.js' | asset_url }}"></script>
 

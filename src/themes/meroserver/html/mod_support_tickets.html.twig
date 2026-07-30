@@ -3,6 +3,7 @@
 
 {% block meta_title %}Support Tickets{% endblock %}
 {% block page_header %}Support{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ 'editor/ckeditor.css' | public_asset_url }}">{% endblock %}
 
 {% import "macro_functions.html.twig" as mf %}
 
@@ -354,7 +355,6 @@
 {% endblock %}
 
 {% block js %}
-{{ 'editor/ckeditor.css' | public_asset_url | stylesheet_tag }}
 <script defer src="{{ 'editor/ckeditor.js' | public_asset_url }}"></script>
 <style>
 .ck.ck-editor { border-radius: 0.75rem !important; overflow: hidden; }
