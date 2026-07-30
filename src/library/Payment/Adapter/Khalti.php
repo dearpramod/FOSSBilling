@@ -449,11 +449,11 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                 . 'On the live server this will work automatically once the correct domain is set.</p>';
         }
 
+        // Keep return_url short — Khalti enforces a 255-char limit and returns HTTP 500
+        // (empty body) when exceeded. invoice_hash is NOT included here; it is injected
+        // into $_GET inside processTransaction() after the payment intent is resolved.
         $restoreToken = FOSSBilling\Tools::createSessionRestoreToken(session_id());
-        $returnUrl = ($this->config['notify_url'] ?? '')
-            . '&redirect=1'
-            . '&invoice_hash=' . urlencode($invoice->hash)
-            . '&restore_token=' . urlencode($restoreToken);
+        $returnUrl = ($this->config['notify_url'] ?? '') . '&redirect=1&restore_token=' . urlencode($restoreToken);
 
         $invoiceTitle = $this->buildInvoiceTitle($invoice);
         $customerInfo = $this->buildCustomerInfo($invoice);
