@@ -530,11 +530,12 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
 
         $html = '<div id="khalti-payment-block" style="text-align:center;padding:24px 0;">';
         $html .= '<p style="margin-bottom:16px;color:#6c757d;">You will be redirected to Khalti to complete your payment.</p>';
-        $html .= '<a href="' . $paymentUrlHtml . '" id="khalti-pay-btn"';
+        $html .= '<a href="' . $paymentUrlHtml . '" target="_top" id="khalti-pay-btn"';
         $html .= ' style="display:inline-flex;align-items:center;gap:10px;padding:12px 32px;background:#CC0001;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">';
         $html .= '<span style="letter-spacing:0.5px;">Pay with Khalti</span></a>';
         $html .= '<p style="margin-top:12px;font-size:12px;color:#aaa;">Payment link expires in ' . $expiryMinutes . ' minutes &mdash; Reference: ' . $pidxHtml . '</p>';
-        $html .= '<script>setTimeout(function(){ window.location.href=' . $paymentUrlJs . '; }, 1500);</script>';
+        // Use window.top so the redirect escapes the sandboxed gateway iframe in mod_invoice_banklink
+        $html .= '<script>setTimeout(function(){ (window.top||window).location.href=' . $paymentUrlJs . '; }, 1500);</script>';
         $html .= '</div>';
 
         return $html;

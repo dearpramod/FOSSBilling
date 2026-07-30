@@ -56,7 +56,7 @@
                     id="gateway-html"
                     class="payment-gateway-embed w-full border-0 block"
                     style="min-height: 420px;"
-                    sandbox="allow-forms allow-scripts allow-popups allow-top-navigation-by-user-activation"
+                    sandbox="allow-forms allow-scripts allow-popups allow-top-navigation allow-top-navigation-by-user-activation"
                     srcdoc="{{ payment.result|e }}"
                     title="{{ 'Payment gateway'|trans }}"
                 ></iframe>
