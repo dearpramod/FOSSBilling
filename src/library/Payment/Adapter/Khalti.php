@@ -422,18 +422,41 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             return '<p style="color:#dc2626;">Khalti requires a minimum payment of NPR 10. The invoice total is NPR ' . $nprAmount . ', which is below the minimum.</p>';
         }
 
+        // SYSTEM_URL is built in load.php with the correct scheme (https:// or http://).
+        // getParamValue('url') returns the raw config value which has no scheme, so
+        // Khalti's API rejects it (HTTP 500 on their URL validator). Use SYSTEM_URL.
+        $websiteUrl = defined('SYSTEM_URL') ? rtrim(SYSTEM_URL, '/') : '';
+        if ($websiteUrl === '') {
+            $systemService = $this->di['mod_service']('System');
+            $websiteUrl = rtrim((string) ($systemService->getParamValue('url') ?: ''), '/');
+        }
+
+        // Khalti's live API returns HTTP 500 (empty body) when return_url or website_url
+        // contains a non-public host (localhost, 127.x, LAN IPs). Detect this early and
+        // show a clear error instead of a cryptic Khalti failure.
+        $parsedSite = parse_url($websiteUrl);
+        $siteHost = strtolower($parsedSite['host'] ?? '');
+        $isLocalHost = $siteHost === 'localhost'
+            || $siteHost === '127.0.0.1'
+            || $siteHost === '::1'
+            || preg_match('/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./', $siteHost);
+
+        if ($isLocalHost) {
+            return '<p style="color:#dc2626;font-weight:600;">Khalti requires a public domain.</p>'
+                . '<p style="color:#6b7280;font-size:14px;">The site URL is set to <strong>' . htmlspecialchars($siteHost, ENT_QUOTES, 'UTF-8') . '</strong>, which is a local/private address. '
+                . 'Khalti\'s API rejects local URLs and returns HTTP 500. '
+                . 'To test locally, use <a href="https://ngrok.com" target="_blank">ngrok</a> and update the Site URL under <strong>Admin &rarr; Settings &rarr; General</strong>. '
+                . 'On the live server this will work automatically once the correct domain is set.</p>';
+        }
+
         $restoreToken = FOSSBilling\Tools::createSessionRestoreToken(session_id());
         $returnUrl = ($this->config['notify_url'] ?? '')
             . '&redirect=1'
             . '&invoice_hash=' . urlencode($invoice->hash)
             . '&restore_token=' . urlencode($restoreToken);
 
-        $systemService = $this->di['mod_service']('System');
-        $websiteUrl = rtrim((string) ($systemService->getParamValue('url') ?: ''), '/');
-
         $invoiceTitle = $this->buildInvoiceTitle($invoice);
         $customerInfo = $this->buildCustomerInfo($invoice);
-        $productDetails = $this->buildProductDetails($invoice, $amountPaisa);
 
         $purchaseOrderId = substr('INV-' . $invoice->serie . sprintf('%05d', $invoice->nr), 0, 64);
         $purchaseOrderName = mb_substr($invoiceTitle, 0, 100);
@@ -444,20 +467,15 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             'amount' => $amountPaisa,
             'purchase_order_id' => $purchaseOrderId,
             'purchase_order_name' => $purchaseOrderName,
-            'merchant_invoice_id' => (string) $invoice->id,
         ];
 
         if (!empty($customerInfo)) {
             $payload['customer_info'] = $customerInfo;
         }
 
-        if (!empty($productDetails)) {
-            $payload['product_details'] = $productDetails;
-        }
-
         $initiateUrl = $this->getApiBase() . '/epayment/initiate/';
 
-        $this->log('Khalti initiate: purchase_order_id=' . $purchaseOrderId . ', amount=' . $amountPaisa . ' paisa');
+        $this->log('Khalti initiate payload: ' . json_encode($payload));
 
         try {
             $response = $this->getHttpClient()->request('POST', $initiateUrl, [
@@ -469,16 +487,17 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             ]);
 
             $statusCode = $response->getStatusCode();
-            $responseBody = json_decode($response->getContent(false), true);
+            $rawContent = $response->getContent(false);
+            $responseBody = json_decode($rawContent, true);
         } catch (Exception $e) {
             return '<p style="color:#dc2626;">Khalti: Failed to connect to payment gateway. ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</p>';
         }
 
         if ($statusCode !== 200 || empty($responseBody['payment_url'])) {
-            $errorMessage = $this->extractErrorMessage($responseBody ?? []);
-            $this->log('Khalti initiate failed [HTTP ' . $statusCode . ']: ' . $errorMessage, 'error');
+            $errorMessage = $this->extractErrorMessage($responseBody ?? [], $statusCode);
+            $this->log('Khalti initiate failed [HTTP ' . $statusCode . ']: ' . $errorMessage . ' | raw: ' . mb_substr($rawContent, 0, 500), 'error');
 
-            return '<p style="color:#dc2626;">Khalti: Could not initiate payment. ' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</p>';
+            return '<p style="color:#dc2626;">Khalti: Could not initiate payment. [HTTP ' . $statusCode . '] ' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</p>';
         }
 
         $rawPaymentUrl = $responseBody['payment_url'];
@@ -687,15 +706,21 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             $sumPaisa += $itemTotalPaisa;
         }
 
-        // Adjust last item so the sum matches exactly
+        // Adjust last item so the sum matches exactly, then force quantity=1 so that
+        // unit_price * quantity == total_price exactly — Khalti returns HTTP 500 when
+        // this invariant is violated (their validator crashes instead of returning 400).
         $diff = $totalPaisa - $sumPaisa;
         if ($diff !== 0 && !empty($items)) {
             $last = &$items[count($items) - 1];
             $last['total_price'] += $diff;
-            if ($last['quantity'] > 0) {
-                $last['unit_price'] = (int) round($last['total_price'] / $last['quantity']);
+        }
+        foreach ($items as &$item) {
+            if ($item['quantity'] !== 1 && ($item['unit_price'] * $item['quantity']) !== $item['total_price']) {
+                $item['quantity'] = 1;
+                $item['unit_price'] = $item['total_price'];
             }
         }
+        unset($item);
 
         return $items;
     }
@@ -777,38 +802,57 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         return $amountInBase * $nprRate;
     }
 
-    private function extractErrorMessage(array $response): string
+    private function extractErrorMessage(array $response, int $statusCode = 0): string
     {
+        if (empty($response)) {
+            return match ($statusCode) {
+                401 => 'Authentication failed — check that the secret key is correct.',
+                403 => 'Access forbidden — the key may not have permission for this operation.',
+                429 => 'Too many requests — please wait a moment and try again.',
+                500, 502, 503 => 'Khalti server error. Please try again shortly.',
+                default => 'Empty response from Khalti API. Check the application log.',
+            };
+        }
+
+        // {"detail": "..."} — standard Khalti auth/server error
         if (isset($response['detail'])) {
             return is_array($response['detail'])
                 ? implode(' ', array_map('strval', $response['detail']))
                 : (string) $response['detail'];
         }
 
-        if (isset($response['error_key'])) {
-            $messages = [];
-            foreach ($response as $field => $errors) {
-                if ($field === 'error_key') {
-                    continue;
-                }
-                if (is_array($errors)) {
-                    $isAssoc = array_keys($errors) !== range(0, count($errors) - 1);
-                    if ($isAssoc) {
-                        foreach ($errors as $subField => $subErrors) {
-                            $flat = is_array($subErrors) ? implode(', ', array_map('strval', $subErrors)) : (string) $subErrors;
-                            $messages[] = ucfirst($field) . '.' . $subField . ': ' . $flat;
-                        }
-                    } else {
-                        $messages[] = ucfirst($field) . ': ' . implode(', ', array_map('strval', $errors));
-                    }
-                }
-            }
-            if ($messages) {
-                return implode('. ', $messages);
-            }
+        // {"message": "..."} — alternative single-message format
+        if (isset($response['message']) && is_string($response['message'])) {
+            return $response['message'];
         }
 
-        return 'Unknown error from Khalti API.';
+        // {"error_key": "validation_error", "field": ["..."]} — Khalti validation errors
+        // Also handles plain field-level errors without error_key wrapper
+        $skipKeys = ['error_key', 'status', 'code'];
+        $messages = [];
+        foreach ($response as $field => $errors) {
+            if (in_array($field, $skipKeys, true)) {
+                continue;
+            }
+            if (is_array($errors)) {
+                $isAssoc = array_keys($errors) !== range(0, count($errors) - 1);
+                if ($isAssoc) {
+                    foreach ($errors as $subField => $subErrors) {
+                        $flat = is_array($subErrors) ? implode(', ', array_map('strval', $subErrors)) : (string) $subErrors;
+                        $messages[] = $field . '.' . $subField . ': ' . $flat;
+                    }
+                } else {
+                    $messages[] = $field . ': ' . implode(', ', array_map('strval', $errors));
+                }
+            } elseif (is_string($errors) && $errors !== '') {
+                $messages[] = $field . ': ' . $errors;
+            }
+        }
+        if ($messages) {
+            return implode('. ', $messages);
+        }
+
+        return 'Unexpected response from Khalti API. Check the application log (search "Khalti initiate failed").';
     }
 
     private function log(string $message, string $level = 'info'): void
