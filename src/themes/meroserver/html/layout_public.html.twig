@@ -33,6 +33,9 @@
     'footer_enabled': '1',
     'link_terms': '', 'tos': '', 'link_privacy': '', 'link_cookie': '', 'link_support': '',
     'footer_phone': '', 'footer_email': '', 'footer_address': '',
+    'footer_company_heading': 'Company', 'footer_about_label': 'About Us', 'footer_about_url': '/page/about-us',
+    'footer_contact_label': 'Contact', 'footer_legal_heading': 'Legal',
+    'footer_terms_label': 'Terms of Service', 'footer_privacy_label': 'Privacy Policy', 'footer_cookie_label': 'Cookie Policy',
     'show_resource_usage': '1', 'show_account_management': '1',
     'acct_show_password': '1', 'acct_show_domain': '1',
     'acct_show_username': '1', 'acct_show_cancel': '1',
@@ -231,7 +234,7 @@
 
 <header class="header-bar public-header border-b border-white/[0.06] bg-[#030712]/95 backdrop-blur-md sticky top-0 z-30">
     <nav class="public-nav-shell max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" aria-label="Primary navigation">
-        <div class="flex items-center justify-between h-16">
+        <div class="public-nav-row flex items-center justify-between h-16">
 
             <!-- ── Logo ── -->
             <a href="{{ '/'|url }}" class="flex items-center flex-shrink-0">
@@ -483,9 +486,9 @@
                                     <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
                                     Log in
                                 </a>
-                                <a href="{{ 'signup'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/[0.04] transition-all">
-                                    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
-                                    Create Account
+                                <a href="{{ 'order'|url }}" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/[0.04] transition-all">
+                                    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                                    Launch a VM
                                 </a>
                             </div>
                         {% endif %}
@@ -509,8 +512,8 @@
                 <div class="w-px h-5 bg-white/[0.08] mx-1"></div>
 
                 {# Primary CTA #}
-                <a href="{{ (client ? '/order' : '/signup')|url }}" class="public-header-cta text-sm px-4 py-2 rounded-lg btn-primary-gradient whitespace-nowrap">
-                    {{ client ? 'Get Started' : 'Create account' }}
+                <a href="{{ '/order'|url }}" class="public-header-cta text-sm px-4 py-2 rounded-lg btn-primary-gradient whitespace-nowrap">
+                    Launch a VM
                 </a>
             </div>
 
@@ -554,7 +557,9 @@
         <!-- ── Mobile menu panel ── -->
         <div id="public-mobile-menu"
              x-show="mobileMenuOpen"
+             x-cloak
              @keydown.escape.window="mobileMenuOpen=false"
+             @click="if ($event.target.closest('a')) mobileMenuOpen = false"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 -translate-y-2"
              x-transition:enter-end="opacity-100 translate-y-0"
@@ -876,7 +881,7 @@
                         <span class="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>
                         Log in
                     </a>
-                    <a href="{{ '/signup'|url }}" class="block px-3 py-3 rounded-xl text-sm text-white font-semibold text-center btn-primary-gradient mt-1">Create account</a>
+                    <a href="{{ '/order'|url }}" class="block px-3 py-3 rounded-xl text-sm text-white font-semibold text-center btn-primary-gradient mt-1">Launch a VM</a>
                 {% endif %}
             </div>
         </div>
@@ -894,8 +899,11 @@
 
 <!-- ========== FOOTER ========== -->
 {% if settings.footer_enabled|default('1') != '0' %}
-<footer class="ref-portal-footer">
+{% set footer_path = request_path|default(request.uri|default('/'))|trim('/') %}
+{% set footer_is_homepage = footer_path == '' %}
+<footer class="ref-portal-footer{{ footer_is_homepage ? '' : ' ref-portal-footer-compact' }}">
     <div class="ref-portal-footer-inner">
+        {% if footer_is_homepage %}
         <section class="ref-portal-footer-cta">
             <div>
                 <span>Hosting built for Nepal</span>
@@ -912,20 +920,79 @@
         </section>
 
         <section class="ref-portal-footer-links">
-            <div><h3>Products</h3><a href="{{ '/order/server'|url }}">Nepal VPS Hosting</a><a href="{{ '/order/server'|url }}">Windows VPS</a><a href="{{ '/order'|url }}">Cloud Hosting</a><a href="{{ '/order'|url }}">All Plans</a></div>
-            <div><h3>Resources</h3><a href="{{ '/news'|url }}">News</a><a href="{{ '/support/kb'|url }}">Knowledge Base</a><a href="{{ '/support'|url }}">Network Status</a><a href="{{ '/support'|url }}">Support</a></div>
-            <div><h3>Company</h3><a href="{{ '/page/about-us'|url }}">About Us</a><a href="{{ (settings.link_support|default('/support/contact'))|url }}">Contact</a><a href="{{ '/partnership-program'|url }}">Partners</a>{% if settings.footer_phone|default('') %}<a href="tel:{{ settings.footer_phone|replace({' ': ''}) }}">{{ settings.footer_phone }}</a>{% endif %}{% if settings.footer_email|default('') %}<a href="mailto:{{ settings.footer_email }}">{{ settings.footer_email }}</a>{% endif %}{% if settings.footer_address|default('') %}<span>{{ settings.footer_address }}</span>{% endif %}</div>
-            <div><h3>Legal</h3><a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}">Terms of Service</a><a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">Privacy Policy</a><a href="{{ (settings.link_cookie|default('/page/cookie-policy'))|url }}">Cookie Policy</a></div>
+            <div>
+                <h3>Products</h3>
+                {% set footer_categories = serviceCategories.list|default([])|slice(0, 5) %}
+                {% for category in footer_categories %}
+                    {% set footer_category_slug = category.title|lower|replace({' ': '-', '/': '-'})|trim('-') %}
+                    {% set footer_category_url = category.type == 'domain'
+                        ? '/order/domain-registration'|url
+                        : ('/order/' ~ footer_category_slug)|url %}
+                    <a href="{{ footer_category_url }}">{{ category.title }}</a>
+                {% else %}
+                    <a href="{{ '/order'|url }}">All Products</a>
+                {% endfor %}
+            </div>
+            <div>
+                <h3>Resources</h3>
+                {% if _news_on and settings.nav_news_show|default('1') != '0' %}
+                    <a href="{{ (settings.nav_news_url|default('') ?: '/news')|url }}">{{ settings.nav_news_label|default('') ?: 'News' }}</a>
+                {% endif %}
+                {% if guest.extension_is_on({'mod': 'support'}) %}
+                    <a href="{{ '/support/kb'|url }}">Knowledge Base</a>
+                    <a href="{{ (settings.nav_support_url|default('') ?: '/support')|url }}">{{ settings.nav_support_label|default('') ?: 'Support' }}</a>
+                {% endif %}
+                {% if settings.support_chat_url|default('') %}
+                    <a href="{{ settings.support_chat_url }}" target="_blank" rel="noopener">{{ settings.support_chat_label|default('') ?: 'Live Support' }}</a>
+                {% endif %}
+                <a href="{{ '/order'|url }}">View All Services</a>
+            </div>
+            <div>
+                <h3>{{ settings.footer_company_heading|default('') ?: 'Company' }}</h3>
+                <a href="{{ (settings.footer_about_url|default('') ?: '/page/about-us')|url }}">{{ settings.footer_about_label|default('') ?: 'About Us' }}</a>
+                <a href="{{ (settings.nav_contact_url|default('') ?: settings.link_support|default('') ?: '/support/contact')|url }}">{{ settings.footer_contact_label|default('') ?: 'Contact' }}</a>
+                <a href="{{ '/support'|url }}">Network Status</a>
+                {% if settings.footer_phone|default('') %}<a href="tel:{{ settings.footer_phone|replace({' ': ''}) }}">{{ settings.footer_phone }}</a>{% endif %}
+                {% if settings.footer_email|default('') %}<a href="mailto:{{ settings.footer_email }}">{{ settings.footer_email }}</a>{% endif %}
+                {% if settings.footer_address|default('') %}<span>{{ settings.footer_address }}</span>{% endif %}
+            </div>
+            <div>
+                <h3>{{ settings.footer_legal_heading|default('') ?: 'Legal' }}</h3>
+                <a href="{{ (settings.link_terms|default('') ?: '/page/terms-and-conditions')|url }}">{{ settings.footer_terms_label|default('') ?: 'Terms of Service' }}</a>
+                <a href="{{ (settings.link_privacy|default('') ?: '/page/privacy-policy')|url }}">{{ settings.footer_privacy_label|default('') ?: 'Privacy Policy' }}</a>
+                <a href="{{ (settings.link_cookie|default('') ?: '/page/cookie-policy')|url }}">{{ settings.footer_cookie_label|default('') ?: 'Cookie Policy' }}</a>
+            </div>
+            <div><h3>Program</h3><a href="{{ '/partnership-program'|url }}">Partners</a><a href="{{ '/partnership-program'|url }}">Affiliates</a><a href="{{ '/support'|url }}">Customer Support</a></div>
         </section>
 
-        <section class="ref-portal-payments"><strong>We accept:</strong><span>eSewa</span><span>Khalti</span><span>FonePay</span><span>Bank Transfer</span><span>Visa / Mastercard</span></section>
+        <section class="ref-portal-footer-identity">
+            <a href="{{ '/'|url }}" aria-label="{{ company.name }} home">
+                <img src="{{ settings.logo_url|default(false) ?: 'branding/logo.svg'|public_asset_url }}" alt="{{ company.name }}">
+            </a>
+            <div class="ref-portal-payments"><strong>We accept:</strong><span>eSewa</span><span>Khalti</span><span>FonePay</span><span>Bank Transfer</span><span>Visa / Mastercard</span></div>
+        </section>
+        {% endif %}
 
         <section class="ref-portal-footer-bottom">
-            <a href="{{ '/'|url }}" class="ref-portal-brand">{{ company.name }}</a>
-            <p>&copy; {{ "now"|date("Y") }} {{ company.name }}. Nepal-focused hosting and client services.</p>
-            {% set _has_social = settings.social_facebook|default('') or settings.social_twitter|default('') or settings.social_instagram|default('') %}
-            {% if _has_social %}
-            <div class="ref-portal-social">
+            <div class="ref-portal-language" aria-label="Current language">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>
+                </svg>
+                <span>{{ active_locale starts with 'en' ? 'English' : active_locale|upper }}</span>
+            </div>
+            <div class="ref-portal-copyright">
+                <p>&copy; {{ "now"|date("Y") }} MeroVPS &mdash; A brand of Stable Cluster Pvt Ltd. All Rights Reserved.</p>
+            </div>
+            <div class="ref-portal-footer-meta">
+                <nav aria-label="Legal">
+                    <a href="{{ (settings.link_cookie|default('') ?: '/page/cookie-policy')|url }}">Cookie Preferences</a>
+                    <a href="{{ (settings.link_terms|default('') ?: '/page/terms-and-conditions')|url }}">Terms</a>
+                    <a href="{{ (settings.link_privacy|default('') ?: '/page/privacy-policy')|url }}">Privacy</a>
+                </nav>
+                {% set _has_social = settings.social_facebook|default('') or settings.social_twitter|default('') or settings.social_instagram|default('') %}
+                {% if _has_social %}
+                <div class="ref-portal-social">
                 {% if settings.social_facebook|default('') %}
                 <a href="{{ settings.social_facebook }}" target="_blank" rel="noopener" aria-label="Facebook" class="ref-portal-social-link">
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
@@ -941,9 +1008,9 @@
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
                 </a>
                 {% endif %}
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
-            <nav><a href="{{ (settings.link_cookie|default('/page/cookie-policy'))|url }}">Cookies</a><a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">Privacy</a><a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}">Terms</a></nav>
         </section>
     </div>
 </footer>

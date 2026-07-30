@@ -10,122 +10,210 @@
 <script>window.location.replace('{{ settings.homepage_custom_url|default('')|url }}');</script>
 {% endif %}
 
-{# ═══════════════════════════════════════════════════════════════════
-   HERO — Domain search + TLD pricing (WHMCS-style)
-   ═══════════════════════════════════════════════════════════════════ #}
-{% set tlds = guest.servicedomain_tlds({'allow_register': true}) %}
+{% set home_news_enabled = guest.extension_is_on({'mod': 'news'}) %}
+{% set home_news = home_news_enabled ? guest.news_get_list({'per_page': 3}) : {'list': []} %}
+{% set home_announcements = home_news.list|default([]) %}
+{% set home_category_data = guest.product_category_get_list({'per_page': 50}) %}
+{% set home_categories = home_category_data.list|default([])|filter(category => category.type != 'domain' and category.products|length > 0)|slice(0, 4) %}
 
+{# ═══════════════════════════════════════════════════════════════════
+   HERO — PaaS control plane
+   ═══════════════════════════════════════════════════════════════════ #}
 <div class="ref-home">
 <section class="ref-home-hero">
-    <div class="ref-home-hero-copy">
-        <span class="ref-home-kicker"><i></i>Nepal VPS · Local infrastructure. Global performance.</span>
-        <h1>VPS Hosting<br><em>built for Nepal.</em></h1>
-        <p>Launch fast, secure virtual servers with NVMe storage, full administrative access, low-latency connectivity, and expert support available 24/7.</p>
-        <div class="ref-home-hero-actions">
-            <a href="{{ '/order'|url }}" class="ref-home-primary">Explore VPS plans <span>→</span></a>
-            <a href="{{ (settings.link_support|default('/support/contact'))|url }}" class="ref-home-secondary">Talk to an expert</a>
+    <div class="ref-home-hero-inner">
+        <div class="ref-home-hero-copy" data-reveal="hero-copy">
+            <div class="ref-home-kicker" data-reveal-child
+                 x-data="{ active: 0, paused: false }"
+                 x-init="setInterval(() => { if (!paused) active = (active + 1) % {{ home_announcements|length > 0 ? home_announcements|length : 1 }} }, 5000)"
+                 @mouseenter="paused = true"
+                 @mouseleave="paused = false"
+                 @focusin="paused = true"
+                 @focusout="paused = false">
+                <span>Announcement</span>
+                <div class="ref-home-announcements" aria-label="Latest announcements">
+                    {% for announcement in home_announcements %}
+                    <a href="{{ ('/news/' ~ announcement.slug)|url }}"
+                       x-show="active === {{ loop.index0 }}"
+                       {% if not loop.first %}x-cloak{% endif %}
+                       x-transition:enter="ref-announcement-enter"
+                       x-transition:enter-start="ref-announcement-enter-start"
+                       x-transition:enter-end="ref-announcement-enter-end"
+                       x-transition:leave="ref-announcement-leave"
+                       x-transition:leave-start="ref-announcement-leave-start"
+                       x-transition:leave-end="ref-announcement-leave-end">
+                        <strong>{{ announcement.title }}</strong>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                            <path d="M5 12h14M13 6l6 6-6 6"/>
+                        </svg>
+                    </a>
+                    {% else %}
+                    <a href="{{ home_news_enabled ? '/news'|url : '/order'|url }}">
+                        <strong>Local infrastructure. Global performance.</strong>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                            <path d="M5 12h14M13 6l6 6-6 6"/>
+                        </svg>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <h1 data-reveal-child>Your cloud platform, built for Nepal</h1>
+            <p data-reveal-child>Deploy applications, databases, and managed VPS infrastructure from one control plane—with Git-based delivery, automatic SSL, live observability, and expert support available 24/7.</p>
+            <div class="ref-home-hero-actions" data-reveal-child>
+                <a href="{{ '/order'|url }}" class="ref-home-primary">
+                    Start deploying
+                    <span aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M5 12h14M13 6l6 6-6 6"/>
+                        </svg>
+                    </span>
+                </a>
+            </div>
+            <div class="ref-home-trust" data-reveal-child>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="12" r="8.5"/>
+                    <path d="m8.5 12 2.2 2.2 4.8-5"/>
+                </svg>
+                <span>Instant setup</span><i>·</i><span>Transparent NPR pricing</span><i>·</i><span>Local support</span>
+            </div>
         </div>
-        <div class="ref-home-trust">
-            <span>✓ Instant setup</span><span>✓ Transparent NPR pricing</span><span>✓ Local support</span>
-        </div>
-    </div>
-    <div class="ref-home-console" aria-label="MeroVPS server deployment preview">
-        <div class="ref-home-console-bar"><span></span><span></span><span></span><b>deploy.sh — MeroVPS</b><i>Connected</i></div>
-        <div class="ref-home-console-body">
-            <p><span>promod@merovps</span> : ~/projects $ merovps deploy</p>
-            <p><b>✓</b> Server provisioned <small>Kathmandu · 4s</small></p>
-            <p><b>✓</b> Ubuntu 24.04 installed <small>12s</small></p>
-            <p><b>✓</b> SSL certificate issued <small>8s</small></p>
-            <p><b>✓</b> Firewall + backups enabled <small>6s</small></p>
-            <div><span>Deployment complete</span><strong>38 seconds</strong></div>
+
+        <div class="ref-home-console-stage" data-reveal="console">
+            <svg class="ref-home-deploy-map" viewBox="0 0 680 500" fill="none" aria-hidden="true" focusable="false">
+                <defs>
+                    <linearGradient id="mero-home-deploy-line" x1="34" y1="432" x2="646" y2="62" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#5271ff"/>
+                        <stop offset=".55" stop-color="#17a7d4"/>
+                        <stop offset="1" stop-color="#20b978"/>
+                    </linearGradient>
+                </defs>
+                <path class="ref-home-deploy-path" pathLength="1" d="M34 432 C124 426 115 318 205 322 S302 393 366 286 492 139 646 62" stroke="url(#mero-home-deploy-line)" stroke-width="2"/>
+                <circle class="ref-home-deploy-node" cx="34" cy="432" r="6"/>
+                <circle class="ref-home-deploy-node" cx="366" cy="286" r="6"/>
+                <circle class="ref-home-deploy-node" cx="646" cy="62" r="6"/>
+            </svg>
+            <span class="ref-home-float-chip ref-home-float-chip-git" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 6h5a5 5 0 0 1 5 5v-3"/></svg>
+                Git deployed
+            </span>
+            <span class="ref-home-float-chip ref-home-float-chip-region" aria-hidden="true">
+                <i></i>Kathmandu region
+            </span>
+            <div class="ref-home-account-console" aria-label="MeroVPS account console preview">
+            <div class="ref-home-account-topbar">
+                <div>
+                    <span class="ref-home-account-mark">M</span>
+                    <p><strong>Mero Cloud Platform</strong><small>console.merovps.com</small></p>
+                </div>
+                <span class="ref-home-account-live"><i></i> All systems operational</span>
+            </div>
+            <div class="ref-home-account-body">
+                <aside aria-hidden="true">
+                    <span class="is-active"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/></svg></span>
+                    <span><svg viewBox="0 0 24 24"><path d="M4 18h16M7 15V9m5 6V5m5 10v-3"/></svg></span>
+                    <span><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.8 3.4 8 8 9 4.6-1 8-4.2 8-9V7l-8-4Z"/></svg></span>
+                    <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg></span>
+                </aside>
+                <div class="ref-home-account-main">
+                    <div class="ref-home-account-heading">
+                        <p><small>Production workspace</small><strong>Applications overview</strong></p>
+                        <button type="button" aria-label="Deploy a new application">+ Deploy app</button>
+                    </div>
+                    <div class="ref-home-account-metrics">
+                        <div><small>Live services</small><strong>06</strong><span class="is-good">All healthy</span></div>
+                        <div><small>Deploy success</small><strong>99.8%</strong><span><i style="width:88%"></i></span></div>
+                        <div><small>Requests today</small><strong>84.2K</strong><span><i style="width:62%"></i></span></div>
+                    </div>
+                    <div class="ref-home-server-card">
+                        <div class="ref-home-server-title">
+                            <span><i></i><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/></svg></span>
+                            <p><strong>mero-storefront</strong><small>Production · Kathmandu region</small></p>
+                            <b>Healthy</b>
+                        </div>
+                        <div class="ref-home-server-details">
+                            <span><small>Runtime</small><strong>Node.js 22</strong></span>
+                            <span><small>Last deployment</small><strong>main@8f2a1c · 2m</strong></span>
+                            <span><small>Instances</small><strong>3 replicas · Auto</strong></span>
+                        </div>
+                        <div class="ref-home-server-chart" aria-hidden="true">
+                            <svg viewBox="0 0 520 70" preserveAspectRatio="none">
+                                <path pathLength="1" d="M0 58 C40 57,48 43,82 46 S130 62,166 44 218 19,250 34 302 61,342 41 390 19,424 33 475 46,520 18"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ref-home-account-foot"><span><i></i> Git connected · SSL active · Autoscaling on</span><b>Live metrics</b></div>
+                </div>
+            </div>
+            </div>
         </div>
     </div>
 </section>
 
 <section class="ref-home-products">
-    <a href="{{ '/order'|url }}"><span>Linux VPS</span><strong>Fast NVMe compute</strong><b>From NPR 1,200/mo</b><i>→</i></a>
-    <a href="{{ '/order'|url }}"><span>Windows VPS</span><strong>Secure RDP access</strong><b>From NPR 2,499/mo</b><i>→</i></a>
-    <a href="{{ '/order'|url }}"><span>Managed VPS</span><strong>cPanel and expert care</strong><b>Fully managed</b><i>→</i></a>
-</section>
-
-<section class="ref-home-hardware">
-    <span>Infrastructure designed for performance</span>
-    <div><b>NVMe</b><b>AMD EPYC</b><b>Cloudflare</b><b>24/7 Monitoring</b><b>99.9% Uptime</b></div>
-</section>
-
-<section class="ref-home-domain relative overflow-hidden pt-16 sm:pt-24 pb-14 sm:pb-20">
-    {# Ambient glow #}
-    <div class="absolute inset-0 pointer-events-none overflow-hidden">
-        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full blur-[140px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.12) 0%, transparent 70%);"></div>
-    </div>
-
-    <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-
-        <span class="ref-home-section-label">Domains</span>
-        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mb-4">
-            Find your perfect <em class="italic" style="color: var(--color-primary);">domain.</em>
-        </h2>
-        <p class="ref-home-domain-intro">Search, register, and manage your domain alongside your hosting.</p>
-
-        {# Domain search bar with TLD selector #}
-        <div class="max-w-3xl mx-auto mb-10 relative z-10" x-data="{ q: '', tld: '.com', showTlds: false }">
-            <div class="rounded-2xl border border-white/[0.10] bg-white/[0.04] backdrop-blur-sm p-2">
-                <form @submit.prevent="if(q.trim().length >= 2) window.location.href='{{ '/order/domain-registration'|url }}' + '?register_sld=' + encodeURIComponent(q.trim().replace(/\.[a-z]+$/i, '')) + '&register_tld=' + encodeURIComponent(tld);"
-                      class="flex items-center gap-2">
-                    <label for="hero-domain-input" class="sr-only">Search for a domain name</label>
-                    <input id="hero-domain-input" type="text" x-model="q" x-ref="domainInput" placeholder="Enter your desired domain name" autocomplete="off" spellcheck="false" inputmode="url"
-                           class="flex-1 bg-transparent px-4 py-3.5 text-white placeholder-gray-500 outline-none text-sm sm:text-base min-w-0" />
-
-                    {# TLD dropdown #}
-                    <div class="relative flex-shrink-0" @click.outside="showTlds = false">
-                        <button type="button" @click="showTlds = !showTlds"
-                                class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.10] transition-colors">
-                            <span x-text="tld">.com</span>
-                            <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-200" :class="showTlds ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                        </button>
-                        <div x-show="showTlds" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
-                             class="absolute right-0 mt-2 w-36 rounded-xl border border-white/[0.08] bg-gray-900/95 backdrop-blur-xl shadow-2xl py-1 z-50 max-h-52 overflow-y-auto">
-                            {% for t in tlds %}
-                            <button type="button" @click="tld = '{{ t.tld }}'; showTlds = false"
-                                    class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-colors"
-                                    :class="tld === '{{ t.tld }}' ? 'text-white bg-indigo-500/10' : ''">
-                                {{ t.tld }}
-                            </button>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <button type="submit" :disabled="q.trim().length < 2"
-                            aria-label="Search for domain"
-                            class="px-6 sm:px-8 py-3.5 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-40 flex-shrink-0"
-                            style="background: linear-gradient(135deg, var(--color-primary), rgb(var(--brand-600)));">
-                        Search
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        {# TLD pricing cards #}
-        {% if tlds|length > 0 %}
-        <div class="max-w-3xl mx-auto mb-8">
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {% for t in tlds|slice(0, 5) %}
-                <div class="rounded-xl bg-white/[0.03] border border-white/[0.07] px-3 py-4 text-center hover:border-indigo-500/25 hover:bg-white/[0.06] transition-all cursor-default">
-                    <p class="text-lg font-bold text-white mb-1">{{ t.tld }}</p>
-                    <p class="text-[11px] text-gray-500 mb-0.5">Starting price</p>
-                    <p class="text-sm font-bold" style="color: var(--color-primary);">{{ t.price_registration|money_convert }}</p>
-                </div>
+    {% for category in home_categories %}
+        {% set category_slug = category.title|lower|replace({' ': '-', '/': '-'})|trim('-') %}
+        {% set category_href = ('/order/' ~ category_slug)|url %}
+        {% set product_starting_prices = category.products
+            |map(product => product.price_starting_from|default(0))
+            |filter(price => price > 0) %}
+        {% set lowest_category_price = product_starting_prices|length > 0 ? min(product_starting_prices) : null %}
+        {% for product in category.products %}
+            {% set product_starting_price = product.price_starting_from|default(0) %}
+            {% if product_starting_price > 0 and (lowest_category_price is null or product_starting_price < lowest_category_price) %}
+                {% set lowest_category_price = product_starting_price %}
+            {% endif %}
+            {% if product.pricing.recurrent is defined %}
+                {% for period, price_option in product.pricing.recurrent %}
+                    {% if price_option.enabled|default(false) and price_option.price|default(0) > 0 and (lowest_category_price is null or price_option.price < lowest_category_price) %}
+                        {% set lowest_category_price = price_option.price %}
+                    {% endif %}
                 {% endfor %}
-            </div>
-        </div>
+            {% endif %}
+            {% if product.pricing.once is defined and product.pricing.once.enabled|default(false) and product.pricing.once.price|default(0) > 0 and (lowest_category_price is null or product.pricing.once.price < lowest_category_price) %}
+                {% set lowest_category_price = product.pricing.once.price %}
+            {% endif %}
+        {% endfor %}
+        {% if category.type == 'server' %}
+            {% set category_badge = 'Cloud compute' %}
+        {% elseif category.type == 'hosting' %}
+            {% set category_badge = 'Managed hosting' %}
+        {% elseif category.type == 'custom' %}
+            {% set category_badge = 'Application platform' %}
+        {% elseif category.type == 'license' %}
+            {% set category_badge = 'Software licensing' %}
+        {% elseif category.type == 'downloadable' %}
+            {% set category_badge = 'Digital product' %}
+        {% else %}
+            {% set category_badge = 'Available now' %}
         {% endif %}
+        <a href="{{ category_href }}" data-reveal="up" style="--reveal-index: {{ loop.index0 }}">
+            <strong>{{ category.title }}</strong><i aria-hidden="true">→</i>
+            <span>
+                {% if lowest_category_price is not null %}
+                    Starts at <b>{{ lowest_category_price|money_convert }}</b>
+                {% else %}
+                    <b>View pricing</b>
+                {% endif %}
+            </span>
+            <small class="{{ cycle(['is-green', 'is-blue', 'is-cyan', 'is-orange'], loop.index0) }}">{{ category_badge }}</small>
+        </a>
+    {% else %}
+        <a href="{{ '/order'|url }}" data-reveal="up">
+            <strong>Explore cloud products</strong><i aria-hidden="true">→</i>
+            <span><b>View pricing</b></span>
+            <small class="is-blue">Available now</small>
+        </a>
+    {% endfor %}
+</section>
 
-        {# Transfer link #}
-        <p class="text-sm text-gray-500">
-            Already bought a domain?
-            <a href="{{ '/order/domain-transfer'|url }}" class="font-semibold hover:underline transition-colors" style="color: var(--color-primary);">Transfer it?</a>
-        </p>
+<section class="ref-home-hardware" data-reveal="up">
+    <span data-reveal-child>Everything you need to ship and scale</span>
+    <div>
+        <b data-reveal-child style="--reveal-index: 0"><i>01</i> Deploy from Git</b>
+        <b data-reveal-child style="--reveal-index: 1"><i>02</i> Managed runtimes</b>
+        <b data-reveal-child style="--reveal-index: 2"><i>03</i> Autoscale services</b>
+        <b data-reveal-child style="--reveal-index: 3"><i>04</i> Observe in real time</b>
+        <b data-reveal-child style="--reveal-index: 4"><i>05</i> Secure by default</b>
     </div>
 </section>
 
@@ -138,8 +226,8 @@
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full blur-[160px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.08) 0%, transparent 70%);"></div>
     </div>
 
-    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-12">
+    <div class="ref-home-container relative">
+        <div class="text-center mb-12" data-reveal="up">
             <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">
                 Speed. <em class="italic">Reliability.</em> Efficiency.
             </h2>
@@ -185,8 +273,9 @@
             ] %}
 
             {% for card in cards %}
-            <div class="rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6 flex flex-col transition-all hover:border-{{ card.color }}-500/25 hover:bg-white/[0.05] hover:-translate-y-0.5 group">
-                <div class="w-11 h-11 rounded-xl bg-{{ card.color }}-500/10 border border-{{ card.color }}-500/20 flex items-center justify-center mb-5">
+            <div class="ref-home-feature-card rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6 flex flex-col transition-all hover:border-{{ card.color }}-500/25 hover:bg-white/[0.05] hover:-translate-y-0.5 group"
+                 data-reveal="up" style="--reveal-index: {{ loop.index0 }}">
+                <div class="ref-home-feature-icon w-11 h-11 rounded-xl bg-{{ card.color }}-500/10 border border-{{ card.color }}-500/20 flex items-center justify-center mb-5">
                     <svg class="w-5 h-5 text-{{ card.color }}-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ card.icon|raw }}</svg>
                 </div>
 
@@ -207,19 +296,21 @@
    CTA BANNER
    ═══════════════════════════════════════════════════════════════════ #}
 <section class="ref-home-final-cta py-16 border-t border-white/5 pub-cta-section">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="pub-cta-card relative rounded-2xl overflow-hidden border border-indigo-500/15 p-10 sm:p-14 text-center" style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.08) 0%, rgba(var(--color-secondary-rgb),0.04) 100%);">
-            <div class="absolute inset-0 pointer-events-none">
+    <div class="ref-home-container">
+        <div class="pub-cta-card ref-home-cta-motion relative rounded-2xl overflow-hidden border border-indigo-500/15 p-10 sm:p-14 text-center"
+             data-reveal="scale"
+             style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.08) 0%, rgba(var(--color-secondary-rgb),0.04) 100%);">
+            <div class="ref-home-cta-glow absolute inset-0 pointer-events-none">
                 <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full blur-[100px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.14) 0%, transparent 70%);"></div>
             </div>
             <div class="relative">
                 <h2 class="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3">Ready to Get Started?</h2>
                 <p class="text-gray-400 text-sm mb-6 max-w-md mx-auto">Deploy in under 60 seconds. No credit card required for free-tier plans.</p>
                 <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
-                    <a href="{{ 'signup'|url }}"
+                    <a href="{{ 'order'|url }}"
                        class="px-7 py-3 rounded-xl text-white font-semibold text-sm inline-flex items-center gap-2 transition-all"
                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 6px 24px rgba(var(--color-primary-rgb),0.3);">
-                        Create Account
+                        Launch a VM
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </a>
                     <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
@@ -257,10 +348,10 @@
    FAQ — Two-column layout
    ═══════════════════════════════════════════════════════════════════ #}
 <section class="ref-home-faq py-20 border-t border-white/5" x-data="{ open: null }">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="ref-home-container">
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-16">
             {# Left column — heading + CTA #}
-            <div class="lg:col-span-2">
+            <div class="lg:col-span-2" data-reveal="up">
                 <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-gray-400 mb-6">
                     <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                     Up To <span class="font-bold text-amber-400">70%</span> Off Managed Cloud Hosting
@@ -283,7 +374,7 @@
             </div>
 
             {# Right column — accordion #}
-            <div class="lg:col-span-3">
+            <div class="lg:col-span-3" data-reveal="up" style="--reveal-index: 1">
                 {% set faqs = [
                     {'q': 'Is MeroVPS a Nepali company?', 'a': 'Yes. MeroVPS is a Nepal-based hosting provider offering local data center proximity, NPR billing, and dedicated support tailored for Nepali businesses and developers.'},
                     {'q': 'What features do I get with web hosting?', 'a': 'All plans include NVMe SSD storage, free SSL certificates, one-click app installer, daily backups, cPanel access, and unlimited bandwidth on select plans.'},
@@ -295,8 +386,10 @@
 
                 <div class="divide-y divide-white/[0.06]">
                     {% for i, faq in faqs %}
-                    <div>
+                    <div class="ref-home-faq-item" :class="{ 'is-open': open === {{ i }} }">
                         <button @click="open = (open === {{ i }}) ? null : {{ i }}"
+                                :aria-expanded="open === {{ i }}"
+                                aria-controls="home-faq-answer-{{ i }}"
                                 class="w-full flex items-center justify-between py-5 text-left group">
                             <span class="text-base font-medium text-white pr-6 group-hover:text-indigo-300 transition-colors">{{ faq.q }}</span>
                             <svg class="w-5 h-5 text-gray-500 flex-shrink-0 transition-transform duration-200"
@@ -305,10 +398,9 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </button>
-                        <div x-show="open === {{ i }}"
-                             x-transition:enter="transition ease-out duration-150"
-                             x-transition:enter-start="opacity-0 -translate-y-1"
-                             x-transition:enter-end="opacity-100 translate-y-0"
+                        <div id="home-faq-answer-{{ i }}"
+                             x-show="open === {{ i }}"
+                             x-collapse.duration.240ms
                              x-cloak
                              class="pb-5">
                             <p class="text-sm text-gray-400 leading-relaxed">{{ faq.a }}</p>

@@ -66,7 +66,7 @@
                     <span></span>
                     {% endif %}
                     <a href="{{ '/news'|url }}/{{ featured.slug }}"
-                       class="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--color-primary)] hover:underline">
+                       class="ref-minimal-link ref-news-featured-link inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--color-primary)]">
                         {{ 'Read Full Update'|trans }}
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -90,7 +90,7 @@
                     <span class="text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 dark:text-slate-500">{{ post.updated_at|date('M j, Y') }}</span>
                 </div>
                 <h3 class="text-[18px] leading-7 tracking-[-0.01em] font-semibold text-slate-900 dark:text-white mb-3">
-                    <a href="{{ '/news'|url }}/{{ post.slug }}" class="hover:underline">{{ post.title }}</a>
+                    <a href="{{ '/news'|url }}/{{ post.slug }}" class="ref-minimal-link">{{ post.title }}</a>
                 </h3>
                 <p class="text-sm leading-5 text-slate-500 dark:text-slate-400 flex-1">
                     {% if post.excerpt %}
@@ -107,7 +107,7 @@
                     <span></span>
                     {% endif %}
                     <a href="{{ '/news'|url }}/{{ post.slug }}"
-                       class="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.09] transition-colors">
+                       class="ref-news-more-link px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-slate-300">
                         {{ 'Read More'|trans }}
                     </a>
                 </div>

@@ -5,9 +5,12 @@
 
 {% import "macro_functions.html.twig" as mf %}
 
+{% set email_validation_required = guest.client_is_email_validation_required %}
+
 {% block dashboard_hero %}
 {% set dashboard = client.index_get_dashboard %}
 {% set profile = dashboard.profile %}
+{% set is_unverified = email_validation_required and not profile.email_approved %}
 <section class="ref-dashboard-hero">
     <div>
         <h1>Welcome{% if profile.first_name|default('') %}, {{ profile.first_name }}{% endif %}</h1>
@@ -20,10 +23,12 @@
             <span class="ref-hero-badge">{{ dashboard.tickets.on_hold }}</span>
             {% endif %}
         </a>
-        <a href="{{ '/order'|url }}" class="ref-btn ref-btn-yellow">
+        {% if is_unverified %}<div class="sb-lock-wrap">{% endif %}
+        <a href="{{ '/order'|url }}" class="ref-btn ref-btn-yellow{% if is_unverified %} opacity-40 pointer-events-none{% endif %}"{% if is_unverified %} aria-disabled="true"{% endif %}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-width="1.8" d="M12 5v14M5 12h14"/></svg>
             Place new order
         </a>
+        {% if is_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
     </div>
 </section>
 {% endblock %}
@@ -34,9 +39,6 @@
     {% set profile = dashboard.profile %}
     {% set client_currency = profile.currency|default(guest.cart_get_currency.code) %}
     {% set bal = dashboard.balance %}
-    {# Cache once — used by the email verification todo row below #}
-    {% set email_validation_required = guest.client_is_email_validation_required %}
-
     {# === REFERENCE-ALIGNED DASHBOARD === #}
     {% set active_orders = client.order_get_list({'per_page': 6, 'hide_addons': 1, 'status': 'active'}) %}
     {% set unpaid_count = dashboard.invoices.unpaid|default(0) %}
@@ -51,6 +53,7 @@
     {% set acct_done    = (todo_email ? 1 : 0) + (todo_payment ? 1 : 0) + (todo_address ? 1 : 0) + (todo_phone ? 1 : 0) %}
     {% set prod_done    = todo_order ? 1 : 0 %}
     {% set open_tickets = dashboard.tickets.open|default(0) %}
+    {% set is_unverified = not todo_email %}
 
     <div class="ref-dashboard">
         <section class="ref-service-summary" aria-label="Service overview">
@@ -67,7 +70,9 @@
                              : item.icon == 'invoice' ? '/invoice'|url
                              : item.icon == 'ticket' ? '/support'|url
                              : '/order/service'|url %}
-            <a href="{{ item_href }}" class="ref-summary-item">
+            {% set _lock_item = is_unverified and item.icon not in ['invoice', 'ticket'] %}
+            {% if _lock_item %}<div class="sb-lock-wrap">{% endif %}
+            <a href="{{ item_href }}" class="ref-summary-item{% if _lock_item %} opacity-40 pointer-events-none{% endif %}"{% if _lock_item %} aria-disabled="true"{% endif %}>
                 <span class="ref-summary-icon">
                     {% if item.icon == 'globe' %}
                     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.2 2.5 3.3 5.5 3.3 9S14.2 18.5 12 21M12 3c-2.2 2.5-3.3 5.5-3.3 9S9.8 18.5 12 21"/></svg>
@@ -86,6 +91,7 @@
                 <span class="ref-summary-label">{{ item.label }}</span>
                 <strong>{{ item.count }}</strong>
             </a>
+            {% if _lock_item %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
             {% endfor %}
         </section>
 
@@ -168,7 +174,7 @@
         <section class="ref-panel ref-products">
             <div class="ref-panel-title">
                 <h2>Products &amp; Services</h2>
-                <a href="{{ '/order/service'|url }}">View all</a>
+                {% if is_unverified %}<span class="sb-lock-wrap" style="position:relative;display:inline-block">{% endif %}<a href="{{ '/order/service'|url }}"{% if is_unverified %} class="opacity-40 pointer-events-none" aria-disabled="true"{% endif %}>View all</a>{% if is_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></span>{% endif %}
             </div>
             <div class="ref-product-group">
                 <div class="ref-product-group-title">
@@ -179,16 +185,18 @@
                     <div class="ref-product-row">
                         <div><strong>{{ order.title }}</strong><small>{{ order.service_type|replace({'service': ''})|title }}{% if order.period %} · {{ order.period|period_title }}{% endif %}</small></div>
                         <span class="ref-status"><i></i> Active</span>
-                        <div class="ref-product-actions">
+                        {% if is_unverified %}<div class="sb-lock-wrap">{% endif %}
+                        <div class="ref-product-actions{% if is_unverified %} opacity-40 pointer-events-none{% endif %}">
                             <a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-yellow">Login to Control Panel</a>
                             <a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-light">Manage</a>
                         </div>
+                        {% if is_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
                     </div>
                     {% endfor %}
                 {% else %}
                     <div class="ref-product-empty">
                         <p>No active products yet.</p>
-                        <a href="{{ '/order'|url }}" class="ref-btn ref-btn-yellow">Place new order</a>
+                        {% if is_unverified %}<div class="sb-lock-wrap" style="display:inline-block;position:relative">{% endif %}<a href="{{ '/order'|url }}" class="ref-btn ref-btn-yellow{% if is_unverified %} opacity-40 pointer-events-none{% endif %}"{% if is_unverified %} aria-disabled="true"{% endif %}>Place new order</a>{% if is_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
                     </div>
                 {% endif %}
             </div>

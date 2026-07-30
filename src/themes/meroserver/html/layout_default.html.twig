@@ -233,6 +233,7 @@
 
 {# ── Notification data (addon — no core PHP changes) ── #}
 {% set _partnership_on = guest.extension_is_on({'mod': 'partnership'}) %}
+{% set _sidebar_unverified = client and guest.client_is_email_validation_required and not profile.email_approved|default(false) %}
 {% set _news_on = guest.extension_is_on({'mod': 'news'}) %}
 {% set _supportpin_on = client and guest.extension_is_on({'mod': 'supportpin'}) %}
 {% set _notif_news = _news_on ? guest.news_get_list({'per_page': 3}) : {'list': [], 'total': 0} %}
@@ -331,20 +332,24 @@
 
             {# ===== My Services (simple link) ===== #}
             {% if settings.nav_services|default('1') != '0' %}
+            {% if _sidebar_unverified %}<div class="sb-lock-wrap">{% endif %}
             <a href="{{ '/order/service'|url }}" title="My Services"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'order/service' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
-               :class="sidebarCollapsed ? 'justify-center px-2' : ''">
+                      {% if 'order/service' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}
+                      {% if _sidebar_unverified %} opacity-40 pointer-events-none{% endif %}"
+               :class="sidebarCollapsed ? 'justify-center px-2' : ''"{% if _sidebar_unverified %} aria-disabled="true"{% endif %}>
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 10h14a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h.01M8 17h.01"/>
                 </svg>
                 <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">My Services</span>
             </a>
+            {% if _sidebar_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
             {% endif %}
 
             {# ===== Order Services (collapsible group) ===== #}
             {% if settings.nav_order|default('1') != '0' %}
+            {% if _sidebar_unverified %}<div class="sb-lock-wrap">{% endif %}
             {# Collapsed sidebar: single icon link #}
             <a x-show="sidebarCollapsed"
                x-transition:enter="transition ease-out duration-200"
@@ -355,8 +360,9 @@
                x-transition:leave-end="opacity-0 scale-95"
                href="{{ '/order'|url }}" title="Order Services"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if orderServicesActive %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
-               :class="sidebarCollapsed ? 'justify-center px-2' : ''">
+                      {% if orderServicesActive %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}
+                      {% if _sidebar_unverified %} opacity-40 pointer-events-none{% endif %}"
+               :class="sidebarCollapsed ? 'justify-center px-2' : ''"{% if _sidebar_unverified %} aria-disabled="true" title="Verify your email to place orders"{% endif %}>
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -370,7 +376,8 @@
                  x-transition:enter-end="opacity-100 translate-x-0"
                  x-transition:leave="transition ease-in duration-150"
                  x-transition:leave-start="opacity-100 translate-x-0"
-                 x-transition:leave-end="opacity-0 -translate-x-1">
+                 x-transition:leave-end="opacity-0 -translate-x-1"
+                 {% if _sidebar_unverified %}class="opacity-40 pointer-events-none" aria-disabled="true"{% endif %}>
                 <button @click="orderServicesOpen = !orderServicesOpen"
                         :aria-expanded="orderServicesOpen.toString()"
                         aria-controls="sidebar-order-services"
@@ -437,6 +444,7 @@
                 </div>{# /sidebar-nav-accordion #}
             </div>
 
+            {% if _sidebar_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
             {% endif %}{# /nav_order #}
 
             {% if settings.nav_support|default('1') != '0' %}
@@ -514,15 +522,18 @@
                 <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">Profile</span>
             </a>
             {% if _partnership_on and client %}
+            {% if _sidebar_unverified %}<div class="sb-lock-wrap">{% endif %}
             <a href="{{ '/partnership-program'|url }}" title="Partnership Program"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'partnership-program' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
-               :class="sidebarCollapsed ? 'justify-center px-2' : ''">
+                      {% if 'partnership-program' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}
+                      {% if _sidebar_unverified %} opacity-40 pointer-events-none{% endif %}"
+               :class="sidebarCollapsed ? 'justify-center px-2' : ''"{% if _sidebar_unverified %} aria-disabled="true"{% endif %}>
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2h-2m-5-12V6a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2h5a2 2 0 002-2v-2m0-8H9m4 0V7m0 1h4"/>
                 </svg>
                 <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">Partnership Program</span>
             </a>
+            {% if _sidebar_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
             {% endif %}
             {% endif %}
 
@@ -1236,7 +1247,7 @@
                                 <strong>{{ company.name }}</strong>
                             {% endif %}
                         </a>
-                        <span>&copy; {{ "now"|date("Y") }} {{ company.name }}. All rights reserved.</span>
+                        <span>&copy; {{ "now"|date("Y") }} {{ company.name }} &mdash; A brand of Stable Cluster Pvt Ltd.</span>
                     </div>
                     <nav class="ref-compact-footer-nav" aria-label="Footer navigation">
                         <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">Privacy</a>

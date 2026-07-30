@@ -22,39 +22,64 @@
          style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
 
         {# Orb — top left #}
-        <div class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full pointer-events-none"
+        <div class="auth-login-orb auth-login-orb-top absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full pointer-events-none"
              style="background: radial-gradient(circle, rgba(255,255,255,.15), transparent 60%);"></div>
         {# Orb — bottom right #}
-        <div class="absolute -bottom-24 -right-24 w-80 h-80 rounded-full pointer-events-none"
+        <div class="auth-login-orb auth-login-orb-bottom absolute -bottom-24 -right-24 w-80 h-80 rounded-full pointer-events-none"
              style="background: radial-gradient(circle, rgba(255,255,255,.10), transparent 60%);"></div>
         {# Dot-grid texture #}
         <div class="absolute inset-0 pointer-events-none"
              style="opacity:.05; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 24px 24px;"></div>
 
-        <div class="relative z-10 flex flex-col h-full px-14 py-14">
+        <svg class="auth-login-network absolute inset-0 w-full h-full pointer-events-none"
+             viewBox="0 0 720 820" fill="none" aria-hidden="true" focusable="false">
+            <path pathLength="1" d="M-20 650 C120 590 145 680 270 570 S455 370 742 420" stroke="url(#auth-login-line)" stroke-width="1.5"/>
+            <path pathLength="1" d="M88 86 C205 150 208 260 340 272 S536 196 684 92" stroke="url(#auth-login-line)" stroke-width="1"/>
+            <circle cx="270" cy="570" r="5"/>
+            <circle cx="340" cy="272" r="5"/>
+            <circle cx="616" cy="414" r="5"/>
+            <defs>
+                <linearGradient id="auth-login-line" x1="40" y1="690" x2="680" y2="90" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#5271ff" stop-opacity=".1"/>
+                    <stop offset=".5" stop-color="#7dd3fc" stop-opacity=".55"/>
+                    <stop offset="1" stop-color="#c7d2fe" stop-opacity=".08"/>
+                </linearGradient>
+            </defs>
+        </svg>
+
+        <div class="auth-login-content relative z-10 flex flex-col h-full px-14 py-14">
 
             {% if posts|length > 0 %}
             {# ── News carousel — flex-1 + justify-center centres content in remaining height ── #}
-            <div class="flex-1 flex flex-col justify-center"
-                 x-data="{ cur: 0, tot: {{ posts|length }} }"
-                 x-init="tot > 1 && setInterval(function(){ cur = (cur + 1) % tot; }, 6000);">
+            <div class="auth-login-news-shell flex-1 flex flex-col justify-center"
+                 x-data="{ cur: 0, tot: {{ posts|length }}, paused: false }"
+                 x-init="tot > 1 && setInterval(function(){ if (!paused) cur = (cur + 1) % tot; }, 6000);"
+                 @mouseenter="paused = true"
+                 @mouseleave="paused = false"
+                 @focusin="paused = true"
+                 @focusout="paused = false">
 
                 {# "What's new" animated pill #}
                 <div class="inline-flex items-center gap-2.5 mb-8 self-start">
                     <span class="relative flex h-2.5 w-2.5">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-50"></span>
+                        <span class="auth-news-pulse absolute inline-flex h-full w-full rounded-full bg-white opacity-50"></span>
                         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
                     </span>
                     <span class="text-[11px] font-bold uppercase tracking-[.18em] text-white/70">What&rsquo;s new</span>
                 </div>
 
                 {# Slides share a fixed-height stage to avoid layout shift. #}
-                <div style="position:relative;height:340px;overflow:hidden;">
+                <div class="auth-news-stage">
                 {% for post in posts %}
-                <div style="position:absolute;inset:0;transition:opacity .28s ease,transform .28s ease;{% if not loop.first %}opacity:0;transform:translateY(10px);pointer-events:none;{% else %}opacity:1;transform:translateY(0);{% endif %}"
-                     :style="{ opacity: cur === {{ loop.index0 }} ? 1 : 0,
-                               transform: cur === {{ loop.index0 }} ? 'translateY(0)' : 'translateY(10px)',
-                               pointerEvents: cur === {{ loop.index0 }} ? 'auto' : 'none' }">
+                <article class="auth-news-slide"
+                     x-show="cur === {{ loop.index0 }}"
+                     {% if not loop.first %}x-cloak{% endif %}
+                     x-transition:enter="auth-news-enter"
+                     x-transition:enter-start="auth-news-enter-start"
+                     x-transition:enter-end="auth-news-enter-end"
+                     x-transition:leave="auth-news-leave"
+                     x-transition:leave-start="auth-news-leave-start"
+                     x-transition:leave-end="auth-news-leave-end">
                     <p class="text-xs font-semibold text-white/55 mb-3 tracking-[.10em] uppercase">
                         {{ post.created_at|date('M d, Y') }}
                     </p>
@@ -73,7 +98,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
                         </svg>
                     </a>
-                </div>
+                </article>
                 {% endfor %}
                 </div>{# /slides #}
 
@@ -82,6 +107,7 @@
                 <div class="flex items-center gap-2.5 mt-8">
                     {% for i in 0..(posts|length - 1) %}
                     <button @click="cur = {{ i }}"
+                            :aria-current="cur === {{ i }} ? 'true' : 'false'"
                             :style="cur === {{ i }}
                                 ? 'width:22px;height:8px;background:rgba(255,255,255,1);border-radius:9999px;'
                                 : 'width:8px;height:8px;background:rgba(255,255,255,0.38);border-radius:9999px;'"
@@ -146,7 +172,7 @@
        RIGHT PANEL — clean white login form
        ══════════════════════════════════════════════════════════════ #}
     <section class="auth-form-panel w-full lg:w-[56%] flex items-center justify-center px-5 sm:px-10 lg:px-16 py-10 login-right-panel">
-        <div class="auth-form-card w-full max-w-[420px]">
+        <div class="auth-form-card auth-login-card w-full max-w-[420px]">
 
             {# Mobile-only logo #}
             <div class="flex justify-start mb-10 lg:hidden">
@@ -158,9 +184,9 @@
             </div>
 
             {# Heading #}
-            <span class="auth-eyebrow">Secure client access</span>
-            <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight mb-2">Welcome back</h1>
-            <p class="text-sm text-gray-400 mb-8">
+            <span class="auth-eyebrow auth-login-reveal" style="--auth-reveal-index:0">Secure client access</span>
+            <h1 class="auth-login-reveal text-4xl font-extrabold text-gray-900 tracking-tight mb-2" style="--auth-reveal-index:1">Welcome back</h1>
+            <p class="auth-login-reveal text-sm text-gray-400 mb-8" style="--auth-reveal-index:2">
                 {% if settings.login_show_register|default('1') != '0' %}
                 New to {{ company.name }}?
                 <a href="{{ 'signup'|url }}"
@@ -233,7 +259,7 @@
             }
             </script>
 
-            <form id="login-form" class="auth-form space-y-5" x-data="loginFormData()" @submit.prevent="doLogin()" novalidate>
+            <form id="login-form" class="auth-form auth-login-reveal space-y-5" style="--auth-reveal-index:3" x-data="loginFormData()" @submit.prevent="doLogin()" novalidate>
 
                 {# Email #}
                 <div>
@@ -344,7 +370,7 @@
             </form>
 
             {% if social.google_enabled|default(false) %}
-            <div class="mt-6">
+            <div class="auth-login-reveal mt-6" style="--auth-reveal-index:4">
                 <div class="relative flex items-center">
                     <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
                     <span class="mx-3 text-xs font-medium text-gray-400 flex-shrink">or</span>
@@ -368,7 +394,7 @@
             {% endif %}
 
             {# Trust badge #}
-            <div class="mt-8 pt-6 border-t flex items-center justify-center gap-2" style="border-color:#f0f0f0;">
+            <div class="auth-login-reveal mt-8 pt-6 border-t flex items-center justify-center gap-2" style="--auth-reveal-index:5;border-color:#f0f0f0;">
                 <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>

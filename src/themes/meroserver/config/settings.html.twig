@@ -34,6 +34,9 @@
     'footer_enabled': '1',
     'link_terms': '', 'tos': '', 'link_privacy': '', 'link_cookie': '', 'link_support': '',
     'footer_phone': '', 'footer_email': '', 'footer_address': '',
+    'footer_company_heading': 'Company', 'footer_about_label': 'About Us', 'footer_about_url': '/page/about-us',
+    'footer_contact_label': 'Contact', 'footer_legal_heading': 'Legal',
+    'footer_terms_label': 'Terms of Service', 'footer_privacy_label': 'Privacy Policy', 'footer_cookie_label': 'Cookie Policy',
     'show_resource_usage': '1', 'show_account_management': '1',
     'acct_show_password': '1', 'acct_show_domain': '1',
     'acct_show_username': '1', 'acct_show_cancel': '1',
@@ -404,6 +407,26 @@
     <p class="text-muted small mb-3">{{ 'Displayed in the footer Contact column. Falls back to the company profile values if left blank.'|trans }}</p>
     <div class="row g-3">
       <div class="col-md-4">
+        <label class="form-label" for="footer_company_heading">{{ 'Company column heading'|trans }}</label>
+        <input type="text" class="form-control" name="footer_company_heading" id="footer_company_heading"
+               value="{{ settings.footer_company_heading }}" placeholder="Company">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="footer_about_label">{{ 'About link label'|trans }}</label>
+        <input type="text" class="form-control" name="footer_about_label" id="footer_about_label"
+               value="{{ settings.footer_about_label }}" placeholder="About Us">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="footer_about_url">{{ 'About page URL'|trans }}</label>
+        <input type="text" class="form-control" name="footer_about_url" id="footer_about_url"
+               value="{{ settings.footer_about_url }}" placeholder="/page/about-us">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="footer_contact_label">{{ 'Contact link label'|trans }}</label>
+        <input type="text" class="form-control" name="footer_contact_label" id="footer_contact_label"
+               value="{{ settings.footer_contact_label }}" placeholder="Contact">
+      </div>
+      <div class="col-md-4">
         <label class="form-label" for="footer_phone">{{ 'Phone number'|trans }}</label>
         <input type="text" class="form-control" name="footer_phone" id="footer_phone"
                value="{{ settings.footer_phone }}" placeholder="+977-9800000000">
@@ -417,6 +440,38 @@
         <label class="form-label" for="footer_address">{{ 'Physical address'|trans }}</label>
         <input type="text" class="form-control" name="footer_address" id="footer_address"
                value="{{ settings.footer_address }}" placeholder="123 Main St, Kathmandu">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Footer Legal Labels ── #}
+<section id="s-footerlegal">
+<h4>{{ 'Footer Legal Labels'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Customize the Legal footer column labels. URLs are configured in Site Links above.'|trans }}</p>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label" for="footer_legal_heading">{{ 'Column heading'|trans }}</label>
+        <input type="text" class="form-control" name="footer_legal_heading" id="footer_legal_heading"
+               value="{{ settings.footer_legal_heading }}" placeholder="Legal">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="footer_terms_label">{{ 'Terms label'|trans }}</label>
+        <input type="text" class="form-control" name="footer_terms_label" id="footer_terms_label"
+               value="{{ settings.footer_terms_label }}" placeholder="Terms of Service">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="footer_privacy_label">{{ 'Privacy label'|trans }}</label>
+        <input type="text" class="form-control" name="footer_privacy_label" id="footer_privacy_label"
+               value="{{ settings.footer_privacy_label }}" placeholder="Privacy Policy">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="footer_cookie_label">{{ 'Cookie label'|trans }}</label>
+        <input type="text" class="form-control" name="footer_cookie_label" id="footer_cookie_label"
+               value="{{ settings.footer_cookie_label }}" placeholder="Cookie Policy">
       </div>
     </div>
   </div>

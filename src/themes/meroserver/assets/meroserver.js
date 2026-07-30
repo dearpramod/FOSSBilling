@@ -25,6 +25,40 @@ window.MeroMotion = Object.assign(window.MeroMotion || {}, {
 
 // ── TomSelect — enhance <select> inputs ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
+  // Homepage viewport reveals are progressive enhancement: content remains
+  // visible when JavaScript is unavailable or reduced motion is requested.
+  function initHomepageReveals() {
+    const elements = Array.from(document.querySelectorAll('.ref-home [data-reveal]'));
+    if (!elements.length) return;
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion || !('IntersectionObserver' in window)) {
+      elements.forEach(function (element) {
+        element.classList.add('is-revealed');
+      });
+      return;
+    }
+
+    document.documentElement.classList.add('has-home-reveal');
+
+    const observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-revealed');
+        observer.unobserve(entry.target);
+      });
+    }, {
+      rootMargin: '0px 0px -10% 0px',
+      threshold: 0.12,
+    });
+
+    elements.forEach(function (element) {
+      observer.observe(element);
+    });
+  }
+
+  initHomepageReveals();
+
   /**
    * Global error handler for unhandled Promise rejections.
    * Delegates to FOSSBilling.message() provided by fossbilling.js.
