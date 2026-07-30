@@ -637,10 +637,32 @@ class Service implements \FOSSBilling\InjectionAwareInterface
      */
     private function applySaasEmailLayout(string $content, ?string $brandName = null): string
     {
+        $company = [];
+        try {
+            $company = $this->di['mod_service']('system')->getCompany();
+        } catch (\Throwable) {
+        }
+
         $brand = trim((string) $brandName);
+        if ($brand === '') {
+            $brand = trim((string) ($company['name'] ?? ''));
+        }
         $brand = $brand !== '' ? $brand : 'MeroVPS';
         $safeBrand = htmlspecialchars($brand, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $brandInitial = htmlspecialchars(strtoupper(substr($brand, 0, 1)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $addressParts = array_filter([
+            trim((string) ($company['address_1'] ?? '')),
+            trim((string) ($company['address_2'] ?? '')),
+            trim((string) ($company['address_3'] ?? '')),
+        ], fn (string $p): bool => $p !== '');
+        $addressHtml = $addressParts !== []
+            ? '<br>' . implode(', ', array_map(
+                fn (string $p): string => htmlspecialchars($p, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $addressParts
+            ))
+            : '';
+
         $logoUrl = $this->resolveEmailLogoUrl();
         $logoMarkup = $logoUrl !== null
             ? sprintf(
@@ -715,8 +737,8 @@ class Service implements \FOSSBilling\InjectionAwareInterface
                     </tr>
                     <tr>
                         <td align="center" style="padding:22px 24px 0;color:#7d899b;font-size:12px;line-height:18px;">
-                            This transactional notification was sent by {$safeBrand}.<br>
-                            Please keep it for your records.
+                            <strong style="color:#56637a;font-size:13px;">{$safeBrand}</strong>{$addressHtml}<br>
+                            This transactional notification was sent for your records.
                         </td>
                     </tr>
                 </table>
