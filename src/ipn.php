@@ -83,8 +83,12 @@ try {
 }
 
 // redirect to invoice if gateways requires
-if ($request->query->has('redirect') && $request->query->has('invoice_hash')) {
-    $invoiceHash = $request->query->get('invoice_hash');
+// Also check $_GET directly — some payment adapters (e.g. Khalti) set
+// $_GET['invoice_hash'] inside processTransaction() after the Symfony Request
+// was already constructed from globals, so $request->query won't see that mutation.
+$resolvedInvoiceHash = $request->query->get('invoice_hash') ?? ($_GET['invoice_hash'] ?? null);
+if ($request->query->has('redirect') && $resolvedInvoiceHash !== null) {
+    $invoiceHash = $resolvedInvoiceHash;
     $hash = preg_replace('/[^a-zA-Z0-9]/', '', is_string($invoiceHash) ? $invoiceHash : '');
 
     // Forward restore_token so the client portal can restore the session
@@ -96,8 +100,19 @@ if ($request->query->has('redirect') && $request->query->has('invoice_hash')) {
     }
 
     // Surface a status hint so the invoice template can show cancel/error feedback.
-    // 'ok' is set only when the transaction was fully processed; otherwise 'cancel'.
-    $redirectParams['status'] = isset($output) && $output ? 'ok' : 'cancel';
+    // 'ok' only when the transaction reached 'processed' status; 'cancel' otherwise.
+    // Checking the actual transaction record is necessary because createAndProcess()
+    // always returns the transaction ID (truthy) even when the payment was cancelled
+    // or failed — the $output alone cannot distinguish success from failure.
+    $txProcessed = false;
+    if (isset($output) && is_int($output) && $output > 0) {
+        try {
+            $txRecord = $di['db']->load('Transaction', $output);
+            $txProcessed = $txRecord && $txRecord->status === 'processed';
+        } catch (\Throwable) {
+        }
+    }
+    $redirectParams['status'] = $txProcessed ? 'ok' : 'cancel';
 
     $url = $di['url']->link('invoice/' . $hash, $redirectParams);
     emitResponse((new ResponseFactory())->redirect($url));
