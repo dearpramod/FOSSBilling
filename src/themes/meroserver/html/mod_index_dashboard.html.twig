@@ -240,7 +240,9 @@
             {% set cards = [
                 {
                     'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>',
-                    'color': 'indigo',
+                    'hover_border': 'hover:border-indigo-500/25',
+                    'icon_bg': 'bg-indigo-500/10', 'icon_border': 'border-indigo-500/20', 'icon_color': 'text-indigo-400',
+                    'link_color': 'text-indigo-400', 'link_hover': 'hover:text-indigo-300',
                     'title': 'All Products',
                     'desc': 'Web hosting, VPS, and domains — browse everything in one place.',
                     'link': '/order'|url,
@@ -248,7 +250,9 @@
                 },
                 {
                     'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>',
-                    'color': 'violet',
+                    'hover_border': 'hover:border-violet-500/25',
+                    'icon_bg': 'bg-violet-500/10', 'icon_border': 'border-violet-500/20', 'icon_color': 'text-violet-400',
+                    'link_color': 'text-violet-400', 'link_hover': 'hover:text-violet-300',
                     'title': 'Domain Names',
                     'desc': 'Register or transfer your perfect domain with instant activation.',
                     'link': '/order/domain-registration'|url,
@@ -256,7 +260,9 @@
                 },
                 {
                     'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>',
-                    'color': 'emerald',
+                    'hover_border': 'hover:border-emerald-500/25',
+                    'icon_bg': 'bg-emerald-500/10', 'icon_border': 'border-emerald-500/20', 'icon_color': 'text-emerald-400',
+                    'link_color': 'text-emerald-400', 'link_hover': 'hover:text-emerald-300',
                     'title': 'News & Updates',
                     'desc': 'Stay informed with product releases, maintenance, and company news.',
                     'link': '/news'|url,
@@ -264,7 +270,9 @@
                 },
                 {
                     'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>',
-                    'color': 'amber',
+                    'hover_border': 'hover:border-amber-500/25',
+                    'icon_bg': 'bg-amber-500/10', 'icon_border': 'border-amber-500/20', 'icon_color': 'text-amber-400',
+                    'link_color': 'text-amber-400', 'link_hover': 'hover:text-amber-300',
                     'title': 'Knowledgebase',
                     'desc': 'Step-by-step guides, tutorials, and how-tos to help you get started.',
                     'link': '/support/kb'|url,
@@ -273,16 +281,16 @@
             ] %}
 
             {% for card in cards %}
-            <div class="ref-home-feature-card rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6 flex flex-col transition-all hover:border-{{ card.color }}-500/25 hover:bg-white/[0.05] hover:-translate-y-0.5 group"
+            <div class="ref-home-feature-card rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6 flex flex-col transition-all {{ card.hover_border }} hover:bg-white/[0.05] hover:-translate-y-0.5 group"
                  data-reveal="up" style="--reveal-index: {{ loop.index0 }}">
-                <div class="ref-home-feature-icon w-11 h-11 rounded-xl bg-{{ card.color }}-500/10 border border-{{ card.color }}-500/20 flex items-center justify-center mb-5">
-                    <svg class="w-5 h-5 text-{{ card.color }}-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ card.icon|raw }}</svg>
+                <div class="ref-home-feature-icon w-11 h-11 rounded-xl {{ card.icon_bg }} border {{ card.icon_border }} flex items-center justify-center mb-5">
+                    <svg class="w-5 h-5 {{ card.icon_color }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ card.icon|raw }}</svg>
                 </div>
 
                 <h3 class="text-base font-bold text-white mb-2">{{ card.title }}</h3>
                 <p class="text-sm text-gray-500 leading-relaxed flex-1 mb-5">{{ card.desc }}</p>
 
-                <a href="{{ card.link }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-{{ card.color }}-400 hover:text-{{ card.color }}-300 transition-colors group/link">
+                <a href="{{ card.link }}" class="inline-flex items-center gap-1.5 text-sm font-semibold {{ card.link_color }} {{ card.link_hover }} transition-colors group/link">
                     {{ card.link_text }}
                     <svg class="w-3.5 h-3.5 group-hover/link:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
                 </a>
