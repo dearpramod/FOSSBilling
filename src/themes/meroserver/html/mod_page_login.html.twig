@@ -183,15 +183,6 @@
     <section class="auth-form-panel w-full lg:w-[56%] flex items-center justify-center px-5 sm:px-10 lg:px-16 py-10 login-right-panel">
         <div class="auth-form-card auth-login-card w-full max-w-[420px]">
 
-            {# Mobile-only logo #}
-            <div class="flex justify-start mb-10 lg:hidden">
-                {% if brand_logo %}
-                    <img src="{{ brand_logo }}" alt="{{ company.name }}" class="h-9 w-auto">
-                {% else %}
-                    <span class="text-gray-900 font-extrabold text-2xl">{{ company.name }}</span>
-                {% endif %}
-            </div>
-
             {# Heading #}
             <span class="auth-eyebrow auth-login-reveal" style="--auth-reveal-index:0">Secure client access</span>
             <h1 class="auth-login-reveal text-4xl font-extrabold text-gray-900 tracking-tight mb-2" style="--auth-reveal-index:1">Welcome back</h1>

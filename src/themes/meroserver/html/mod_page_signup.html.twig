@@ -90,15 +90,6 @@
     <section class="auth-form-panel w-full lg:w-[66%] flex items-start justify-center px-5 sm:px-10 lg:px-14 py-10 overflow-y-auto login-right-panel">
         <div class="auth-form-card auth-signup-card w-full max-w-2xl">
 
-            {# Mobile logo #}
-            <div class="lg:hidden mb-8 flex justify-center">
-                {% if brand_logo %}
-                    <img src="{{ brand_logo }}" alt="{{ company.name }}" class="h-9 w-auto">
-                {% else %}
-                    <span class="text-xl font-bold" style="color: var(--color-primary);">{{ company.name }}</span>
-                {% endif %}
-            </div>
-
             <span class="auth-eyebrow">Start with {{ company.name }}</span>
             <h1 class="text-3xl font-extrabold text-gray-900 mb-1">Create your account</h1>
             <p class="text-sm text-gray-400 mb-6">

@@ -10436,11 +10436,31 @@ html[data-theme="dark"] .auth-login-page .ref-portal-footer { background: #0a0c1
     .auth-login-page .auth-login-card { max-width: 520px; }
 }
 @media (max-width: 639px) {
-    .auth-login-page .auth-form-panel { align-items: flex-start; padding: 2rem 1.25rem 3rem; }
-    .auth-login-page .auth-form-card h1 { font-size: 2.35rem !important; }
+    .public-auth-page { overflow-x: clip; }
+    .public-auth-page .public-nav-shell { padding-inline: 1rem; }
+    .public-auth-page .public-header .logo-img { max-width: 8.5rem; height: 2rem; }
+    .public-auth-page #cart-link-mobile,
+    .public-auth-page .public-mobile-menu-toggle { display: none; }
+    .public-auth-page .auth-page-shell,
+    .public-auth-page .auth-form-panel,
+    .public-auth-page .auth-form-card { width: 100%; min-width: 0; max-width: 100%; }
+    .auth-login-page .auth-form-panel { align-items: flex-start; min-height: auto; padding: 1.5rem 1.25rem 2.5rem; }
+    .auth-login-page .auth-form-card h1 { font-size: clamp(2rem,10vw,2.35rem) !important; line-height: 1.05 !important; }
+    .auth-login-page .auth-eyebrow { margin-bottom: .8rem; padding: .4rem .65rem; font-size: .65rem; }
     .auth-login-page .auth-login-options { align-items: flex-start; flex-direction: column; gap: .75rem; }
     .auth-login-page .auth-login-actions { grid-template-columns: 1fr; }
-    .auth-login-page .auth-login-card > p { margin-bottom: 2rem !important; }
+    .auth-login-page .auth-login-card > p {
+        max-width: 100%;
+        margin-bottom: 1.5rem !important;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+    .auth-login-page .auth-form { gap: 1rem; }
+    .auth-login-page .auth-form input:not([type="checkbox"]):not([type="hidden"]),
+    .auth-login-page .auth-input,
+    .auth-login-page .auth-primary-btn,
+    .auth-login-page .auth-google-container,
+    .auth-login-page .auth-google-btn { min-height: 3.25rem; height: auto; }
 }
 
 /* Registration 2026 — companion layout to the login experience. */
@@ -10587,10 +10607,12 @@ html[data-theme="dark"] .auth-signup-page .auth-google-btn { color: #e5e7eb; bor
     .auth-signup-page .auth-signup-card { max-width: 760px; }
 }
 @media (max-width: 639px) {
-    .auth-signup-page .auth-form-panel { padding: 2rem 1.25rem 3rem; }
-    .auth-signup-page .auth-form-card h1 { font-size: 2.35rem !important; }
-    .auth-signup-page .auth-signup-card > p { margin-bottom: 2rem !important; }
+    .auth-signup-page .auth-form-panel { padding: 1.5rem 1.25rem 2.5rem; overflow-x: clip; }
+    .auth-signup-page .auth-form-card h1 { font-size: clamp(2rem,10vw,2.35rem) !important; line-height: 1.05 !important; }
+    .auth-signup-page .auth-eyebrow { margin-bottom: .8rem; padding: .4rem .65rem; font-size: .65rem; }
+    .auth-signup-page .auth-signup-card > p { max-width: 100%; margin-bottom: 1.5rem !important; overflow-wrap: anywhere; white-space: normal; }
     .auth-signup-page .auth-signup-social { padding: .8rem; }
+    .auth-signup-page .auth-signup-form { gap: 1.25rem; }
 }
 
 /* Motion polish — shared, purposeful SaaS feedback. */
@@ -11000,8 +11022,12 @@ html[data-theme="dark"] .ord-server-page .ord-why-surface,
 html[data-theme="dark"] .ord-custom-page .ord-why-surface { border-color: rgba(166,151,255,.12); background: linear-gradient(135deg,rgba(103,87,232,.11),rgba(42,90,128,.08),rgba(124,72,47,.07)) !important; }
 html[data-theme="dark"] .ord-domain-page .ord-domain-hero { border-color: rgba(166,151,255,.13); background: linear-gradient(135deg,#111426,#111b2d 55%,#18131d); }
 
-@media (max-width: 1100px) {
-    .ord-hosting-plan-grid { grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); }
+@media (max-width: 1279px) {
+    .ord-hosting-plan-grid { grid-template-columns: repeat(var(--hosting-plan-columns-compact,3),minmax(0,1fr)); }
+    .ord-hosting-plan-grid.is-scrollable .ord-hosting-plan-card { flex-basis: calc((100% - 2.5rem) / 3); }
+}
+@media (max-width: 899px) {
+    .ord-hosting-plan-grid { grid-template-columns: repeat(var(--hosting-plan-columns-tablet,2),minmax(0,1fr)); }
     .ord-hosting-plan-grid.is-scrollable .ord-hosting-plan-card { flex-basis: calc((100% - 1.25rem) / 2); }
 }
 @media (max-width: 639px) {

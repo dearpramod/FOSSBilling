@@ -489,7 +489,7 @@
                 </button>
                 {% endif %}
 
-                <div class="ord-hosting-plan-grid{% if cat_products|length > 4 %} is-scrollable{% endif %}"{% if cat_products|length > 4 %} x-ref="scroller"{% endif %}>
+                <div class="ord-hosting-plan-grid{% if cat_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(cat_products|length, 4) }}; --hosting-plan-columns-compact: {{ min(cat_products|length, 3) }}; --hosting-plan-columns-tablet: {{ min(cat_products|length, 2) }}"{% if cat_products|length > 4 %} x-ref="scroller"{% endif %}>
                 {% for i, p in cat_products %}
                 {% set pricing_json = p.pricing|json_encode %}
                 {% set desc_features = p.description|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim|split('|||')|filter(l => l|trim != '') %}
@@ -857,7 +857,7 @@
                 </button>
                 {% endif %}
 
-                <div x-ref="scroller" class="ord-hosting-plan-grid{% if _server_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(_server_products|length, 4) }}">
+                <div x-ref="scroller" class="ord-hosting-plan-grid{% if _server_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(_server_products|length, 4) }}; --hosting-plan-columns-compact: {{ min(_server_products|length, 3) }}; --hosting-plan-columns-tablet: {{ min(_server_products|length, 2) }}">
                 {% for i, p in _server_products %}
                 {% set desc_features = p.description|replace({'<br>': '|||', '<br/>': '|||', '<br />': '|||', '</p>': '|||', '</li>': '|||'})|striptags|trim|split('|||')|filter(l => l|trim != '') %}
                 {% if desc_features|length <= 1 and p.description %}
@@ -1420,7 +1420,7 @@
                 </button>
                 {% endif %}
 
-                <div x-ref="scroller" class="ord-hosting-plan-grid{% if cat_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(cat_products|length, 4) }}">
+                <div x-ref="scroller" class="ord-hosting-plan-grid{% if cat_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(cat_products|length, 4) }}; --hosting-plan-columns-compact: {{ min(cat_products|length, 3) }}; --hosting-plan-columns-tablet: {{ min(cat_products|length, 2) }}">
                 {% for i, p in cat_products %}
                 {% set _cust_pricing_json = p.pricing|json_encode %}
                 {# ── Feature extraction (handles HTML, bullets, checkmarks) ── #}
@@ -1613,7 +1613,7 @@
             <button type="button" @click="scrollBy(-1)" x-show="canPrev" class="ord-hosting-scroll-btn is-prev" style="display:none" aria-label="Previous plans"><span class="material-symbols-outlined">chevron_left</span></button>
             <button type="button" @click="scrollBy(1)" x-show="canNext" class="ord-hosting-scroll-btn is-next" aria-label="Next plans"><span class="material-symbols-outlined">chevron_right</span></button>
             {% endif %}
-            <div x-ref="scroller" class="ord-hosting-plan-grid{% if cat_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(cat_products|length, 4) }}">
+            <div x-ref="scroller" class="ord-hosting-plan-grid{% if cat_products|length > 4 %} is-scrollable{% endif %}" style="--hosting-plan-columns: {{ min(cat_products|length, 4) }}; --hosting-plan-columns-compact: {{ min(cat_products|length, 3) }}; --hosting-plan-columns-tablet: {{ min(cat_products|length, 2) }}">
             {% for p in cat_products %}
             {% set desc_short = p.description|striptags|trim|slice(0, 160) %}
             <a href="{{ ('/order/' ~ p.slug)|url }}"
