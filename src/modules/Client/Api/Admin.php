@@ -344,11 +344,21 @@ class Admin extends \FOSSBilling\Api\AbstractApi
             'custom_6', 'custom_7', 'custom_8', 'custom_9', 'custom_10',
             'custom_11', 'custom_12', 'custom_13', 'custom_14', 'custom_15',
             'custom_16', 'custom_17', 'custom_18', 'custom_19', 'custom_20',
-            'client_group_id', 'company_number', 'type', 'lang', 'timezone',
+            'company_number', 'type', 'lang', 'timezone',
         ];
 
         foreach ($allowedFields as $field) {
             $client->{$field} = $data[$field] ?? $client->{$field};
+        }
+
+        // Client group: the edit form and the API (toApiArray) use `group_id`, but the
+        // stored column is `client_group_id`. Accept either name and handle it explicitly
+        // (not via the whitelist loop above, whose `?? ` would treat a cleared value as
+        // "unchanged") so selecting a group persists AND the "Select Group" placeholder
+        // (0/'') clears it. Without this, saving the group was silently ignored.
+        if (array_key_exists('group_id', $data) || array_key_exists('client_group_id', $data)) {
+            $rawGroup = array_key_exists('client_group_id', $data) ? $data['client_group_id'] : $data['group_id'];
+            $client->client_group_id = !empty($rawGroup) ? (int) $rawGroup : null;
         }
         if (array_key_exists('billing_email', $data)) {
             $client->billing_email = $data['billing_email'];
