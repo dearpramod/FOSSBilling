@@ -215,10 +215,10 @@
 {% set currentCurrency = cart.currency %}
 {% if client %}
     {% set profile = client.profile_get %}
-    {# Auto-sync cart currency to client's billing currency #}
+    {# Cart currency is synced server-side at login (Cart\Service::onAfterClientLogin);
+       here we only reflect it in the displayed currency label — no render-time mutation. #}
     {% set _clientCurrency = profile.currency|default(null) %}
     {% if _clientCurrency and currentCurrency.code != _clientCurrency %}
-        {% set _sync = guest.cart_set_currency({'currency': _clientCurrency}) %}
         {% set currentCurrency = {'code': _clientCurrency} %}
     {% endif %}
 {% endif %}
@@ -543,7 +543,7 @@
                         :aria-expanded="mobileMenuOpen.toString()"
                         aria-controls="public-mobile-menu"
                         aria-label="Toggle navigation menu"
-                        class="p-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5">
+                        class="public-mobile-menu-toggle p-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5">
                     <svg x-show="!mobileMenuOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>

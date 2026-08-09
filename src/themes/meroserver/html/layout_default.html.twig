@@ -222,11 +222,12 @@
 {% set currencies = guest.currency_get_pairs %}
 {% set currentCurrency = cart.currency %}
 
-{# Auto-sync cart currency to client's billing currency (immutable after registration) #}
+{# The actual cart currency is synced to the client's billing currency server-side at
+   login (Cart\Service::onAfterClientLogin) — never mutate the cart during a GET render.
+   Here we only reflect it in the displayed currency label. #}
 {% if client %}
     {% set _clientCurrency = profile.currency|default(null) %}
     {% if _clientCurrency and currentCurrency.code != _clientCurrency %}
-        {% set _sync = guest.cart_set_currency({'currency': _clientCurrency}) %}
         {% set currentCurrency = {'code': _clientCurrency} %}
     {% endif %}
 {% endif %}

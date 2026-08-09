@@ -37,6 +37,36 @@ class Service implements InjectionAwareInterface
         ];
     }
 
+    /**
+     * Sync the session cart's currency to the client's billing currency once, at login.
+     *
+     * Handles the case where a cart was built while logged out (guest/default currency)
+     * and the client then signs in with a different currency. Doing it here — instead of
+     * in a `{% set guest.cart_set_currency(...) %}` on every layout render — keeps GET
+     * page views side-effect-free (mirrors upstream, which does no render-time cart
+     * mutation). `getCurrencyByClientId()` always resolves (falls back to default).
+     */
+    public static function onAfterClientLogin(\Box_Event $event): void
+    {
+        $di = $event->getDi();
+        $clientId = (int) ($event->getParameters()['id'] ?? 0);
+        if ($clientId <= 0) {
+            return;
+        }
+
+        try {
+            $cartService = $di['mod_service']('cart');
+            $currency = $di['mod_service']('currency')->getCurrencyByClientId($clientId);
+            $cart = $cartService->getSessionCart();
+
+            if ((int) $cart->currency_id !== $currency->getId()) {
+                $cartService->changeCartCurrency($cart, $currency);
+            }
+        } catch (\Throwable $e) {
+            $di['logger']->error('Cart currency sync on login failed: ' . $e->getMessage());
+        }
+    }
+
     public function getSearchQuery($data): array
     {
         $sql = '
@@ -893,6 +923,7 @@ class Service implements InjectionAwareInterface
                                 'price' => $optionPrice,
                                 'price_monthly' => $monthlyPrice,
                             ];
+
                             break;
                         }
                     }
