@@ -28,7 +28,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      */
     public function product_pricing_get_list(array $data): array
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         return $this->getService()->getProductPricingList($data);
     }
@@ -36,16 +36,12 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Create a partner product pricing rule.
      *
-     *
      * @optional string period          Billing period code (1M, 3M, 6M, 1Y, 2Y, 3Y). Omit for all periods.
      */
     #[RequiredParams(['client_group_id' => 'Client group ID is required', 'product_id' => 'Product ID is required', 'price' => 'Price is required'])]
-    #[\Symfony\Contracts\Service\Attribute\Required]
-    #[\Symfony\Contracts\Service\Attribute\Required]
-    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_pricing_create(array $data): int
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         if ((float) $data['price'] < 0) {
             throw new \FOSSBilling\InformationException('Price must be zero or greater');
@@ -65,15 +61,12 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Update a partner product pricing rule.
      *
-     *
      * @optional string period New billing period code.
      */
     #[RequiredParams(['id' => 'Rule ID is required', 'price' => 'Price is required'])]
-    #[\Symfony\Contracts\Service\Attribute\Required]
-    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_pricing_update(array $data): bool
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         if ((float) $data['price'] < 0) {
             throw new \FOSSBilling\InformationException('Price must be zero or greater');
@@ -94,10 +87,9 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      * Delete a partner product pricing rule.
      */
     #[RequiredParams(['id' => 'Rule ID is required'])]
-    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_pricing_delete(array $data): bool
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         return $this->getService()->deleteProductPricing((int) $data['id']);
     }
@@ -113,7 +105,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      */
     public function tld_pricing_get_list(array $data): array
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         return $this->getService()->getTldPricingList($data);
     }
@@ -121,17 +113,14 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Create or update a partner TLD pricing rule.
      *
-     *
      * @optional float  price_registration Registration price.
      * @optional float  price_renew        Renewal price.
      * @optional float  price_transfer     Transfer price.
      */
     #[RequiredParams(['client_group_id' => 'Client group ID is required', 'tld' => 'TLD is required'])]
-    #[\Symfony\Contracts\Service\Attribute\Required]
-    #[\Symfony\Contracts\Service\Attribute\Required]
     public function tld_pricing_create(array $data): int
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         foreach (['price_registration', 'price_renew', 'price_transfer'] as $field) {
             if (isset($data[$field]) && (float) $data[$field] < 0) {
@@ -156,16 +145,14 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Update a partner TLD pricing rule.
      *
-     *
      * @optional float price_registration Registration price.
      * @optional float price_renew        Renewal price.
      * @optional float price_transfer     Transfer price.
      */
     #[RequiredParams(['id' => 'Rule ID is required'])]
-    #[\Symfony\Contracts\Service\Attribute\Required]
     public function tld_pricing_update(array $data): bool
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         foreach (['price_registration', 'price_renew', 'price_transfer'] as $field) {
             if (isset($data[$field]) && (float) $data[$field] < 0) {
@@ -180,23 +167,10 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      * Delete a partner TLD pricing rule.
      */
     #[RequiredParams(['id' => 'Rule ID is required'])]
-    #[\Symfony\Contracts\Service\Attribute\Required]
     public function tld_pricing_delete(array $data): bool
     {
-        $this->_checkManagePermission();
+        $this->checkPermissions('partnership', 'manage_settings');
 
         return $this->getService()->deleteTldPricing((int) $data['id']);
-    }
-
-    /* ================================================================
-     *  Private helpers
-     * ================================================================ */
-
-    private function _checkManagePermission(): void
-    {
-        $this->di['mod_service']('Staff')->checkPermissionsAndThrowException(
-            'partnership',
-            'manage_settings'
-        );
     }
 }
