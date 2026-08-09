@@ -46,10 +46,12 @@ html[data-theme="dark"] .mchat-badge{box-shadow:0 0 0 2px #0b1120;}
   background:linear-gradient(135deg,var(--color-primary,#3b5bff),var(--color-secondary,#2f45c9));
   box-shadow:0 10px 26px rgba(47,69,201,.42);transition:transform .15s ease,box-shadow .15s ease;}
 #mchat-launcher:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(47,69,201,.5);}
+#mchat-launcher:focus-visible{outline:3px solid rgba(82,113,255,.3);outline-offset:4px;}
 #mchat-launcher svg{width:26px;height:26px;transition:transform .2s ease;}
 #mchat-launcher .mchat-ic-close{display:none;}
 #mchat-root.mchat-open #mchat-launcher .mchat-ic-open{display:none;}
 #mchat-root.mchat-open #mchat-launcher .mchat-ic-close{display:block;}
+#mchat-root.mchat-tawk-open #mchat-launcher{opacity:0;transform:translateY(8px) scale(.9);pointer-events:none;}
 html[data-theme="dark"] #mchat-panel{background:#0f172a;box-shadow:0 20px 48px rgba(0,0,0,.5);}
 html[data-theme="dark"] .mchat-body{background:#0b1120;}
 html[data-theme="dark"] .mchat-row{background:#111c33;border-color:rgba(255,255,255,.06);}
@@ -57,7 +59,8 @@ html[data-theme="dark"] .mchat-row:hover{background:#16233f;}
 html[data-theme="dark"] .mchat-txt b{color:#f1f5f9;}
 html[data-theme="dark"] .mchat-txt span{color:#94a3b8;}
 html[data-theme="dark"] .mchat-chev{color:#475569;}
-@media (max-width:480px){#mchat-root{right:16px;bottom:16px;}}
+@media (max-width:480px){#mchat-root{right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));}#mchat-panel{width:min(360px,calc(100vw - 32px));max-height:calc(100vh - 120px);overflow-y:auto;}}
+@media (prefers-reduced-motion:reduce){#mchat-panel,#mchat-launcher,#mchat-launcher svg,.mchat-row{transition-duration:.01ms!important;transform:none!important;}}
 </style>
 
 <script>
@@ -151,6 +154,11 @@ html[data-theme="dark"] .mchat-chev{color:#475569;}
                 var api = window.Tawk_API = window.Tawk_API || {};
                 window.Tawk_LoadStart = new Date();
 
+                // Tawk customStyle officially supports zIndex only and must be set
+                // before the embed downloads. Keep it directly below our launcher;
+                // the launcher is hidden while the Tawk conversation is maximized.
+                api.customStyle = { zIndex: '99997 !important' };
+
                 // Identity prefill: non-secure uses the pre-load visitor object; secure mode
                 // (server-computed HMAC hash present) uses setAttributes() after load.
                 if (c.visitor_email && !secure){
@@ -168,9 +176,13 @@ html[data-theme="dark"] .mchat-chev{color:#475569;}
                     } catch(err){}
                 };
                 api.onStatusChange = function(status){ applyStatus(status); };
-                api.onChatMinimized = function(){ try { api.hideWidget(); } catch(err){} };
-                api.onChatHidden = function(){ try { api.hideWidget(); } catch(err){} };
-                api.onChatMaximized = function(){ applyUnread(0); };
+                function restoreModuleLauncher(){
+                    root.classList.remove('mchat-tawk-open');
+                    try { api.hideWidget(); } catch(err){}
+                }
+                api.onChatMinimized = restoreModuleLauncher;
+                api.onChatHidden = restoreModuleLauncher;
+                api.onChatMaximized = function(){ root.classList.add('mchat-tawk-open'); applyUnread(0); };
                 api.onUnreadCountChanged = function(count){ applyUnread(count); };
 
                 var s = document.createElement('script');
@@ -178,12 +190,18 @@ html[data-theme="dark"] .mchat-chev{color:#475569;}
                 s.src = 'https://embed.tawk.to/' + live.getAttribute('data-tawk-property') + '/' + live.getAttribute('data-tawk-widget');
                 s.charset = 'UTF-8';
                 s.setAttribute('crossorigin', '*');
+                s.onerror = function(){
+                    tawkLoaded = false;
+                    pendingMaximize = false;
+                    root.classList.remove('mchat-tawk-open');
+                };
                 document.head.appendChild(s);
             }
 
             live.addEventListener('click', function(e){
                 e.preventDefault();
                 setOpen(false);
+                root.classList.add('mchat-tawk-open');
                 if (tawkLoaded && window.Tawk_API && typeof window.Tawk_API.maximize === 'function'){
                     window.Tawk_API.maximize();
                 } else {
