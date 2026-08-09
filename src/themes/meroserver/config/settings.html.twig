@@ -37,6 +37,7 @@
     'portal_footer_terms_show': '1', 'portal_footer_terms_label': '',
     'portal_footer_support_show': '1', 'portal_footer_support_label': '',
     'footer_phone': '', 'footer_email': '', 'footer_address': '',
+    'footer_tagline': '',
     'footer_company_heading': 'Company', 'footer_about_label': 'About Us', 'footer_about_url': '/page/about-us',
     'footer_contact_label': 'Contact', 'footer_legal_heading': 'Legal',
     'footer_terms_label': 'Terms of Service', 'footer_privacy_label': 'Privacy Policy', 'footer_cookie_label': 'Cookie Policy',
@@ -511,6 +512,12 @@
   <div class="card-body">
     <p class="text-muted small mb-3">{{ 'Displayed in the footer Contact column. Falls back to the company profile values if left blank.'|trans }}</p>
     <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label" for="footer_tagline">{{ 'Copyright tagline'|trans }}</label>
+        <input type="text" class="form-control" name="footer_tagline" id="footer_tagline"
+               value="{{ settings.footer_tagline }}" placeholder="A brand of Stable Cluster Pvt Ltd.">
+        <div class="form-text">{{ 'Shown after the company name in the footer copyright line (e.g. "© 2026 Company — <tagline>"). Leave blank to use the default.'|trans }}</div>
+      </div>
       <div class="col-md-4">
         <label class="form-label" for="footer_company_heading">{{ 'Company column heading'|trans }}</label>
         <input type="text" class="form-control" name="footer_company_heading" id="footer_company_heading"

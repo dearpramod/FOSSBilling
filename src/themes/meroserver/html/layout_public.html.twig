@@ -982,7 +982,7 @@
                 <span>{{ active_locale starts with 'en' ? 'English' : active_locale|upper }}</span>
             </div>
             <div class="ref-portal-copyright">
-                <p>&copy; {{ "now"|date("Y") }} MeroVPS &mdash; A brand of Stable Cluster Pvt Ltd. All Rights Reserved.</p>
+                <p>&copy; {{ "now"|date("Y") }} {{ company.name }}{% set _brand_tagline = settings.footer_tagline|default('') ?: 'A brand of Stable Cluster Pvt Ltd.' %}{% if _brand_tagline %} &mdash; {{ _brand_tagline }}{% endif %} All Rights Reserved.</p>
             </div>
             <div class="ref-portal-footer-meta">
                 <nav aria-label="Legal">
