@@ -1,6 +1,7 @@
 {% extends "layout_public.html.twig" %}
 
 {% set company      = guest.system_company %}
+{% set brand_logo   = settings.logo_url|default(company.logo_url|default('')) %}
 {% set social       = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
 {% set news_enabled = guest.extension_is_on({'type': 'mod', 'id': 'news'}) %}
 {% set news         = news_enabled ? guest.news_get_list({'per_page': 5}) : {} %}
@@ -16,7 +17,7 @@
 <div class="auth-page-shell auth-login-shell flex flex-1">
 
     {# ══════════════════════════════════════════════════════════════
-       LEFT PANEL — full-width brand panel, white text, news slider
+       PROMO PANEL — displayed on the right at desktop widths
        ══════════════════════════════════════════════════════════════ #}
     <aside class="auth-aside auth-login-aside hidden lg:flex lg:w-[44%] relative overflow-hidden flex-col login-left-panel"
          style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
@@ -48,6 +49,14 @@
         </svg>
 
         <div class="auth-login-content relative z-10 flex flex-col h-full px-14 py-14">
+            <div class="auth-panel-brand">
+                {% if brand_logo %}
+                    <img src="{{ brand_logo }}" alt="{{ company.name }}">
+                {% else %}
+                    <span>{{ company.name }}</span>
+                {% endif %}
+                <small>Client portal</small>
+            </div>
 
             {% if posts|length > 0 %}
             {# ── News carousel — flex-1 + justify-center centres content in remaining height ── #}
@@ -176,8 +185,8 @@
 
             {# Mobile-only logo #}
             <div class="flex justify-start mb-10 lg:hidden">
-                {% if settings.logo_url|default(false) %}
-                    <img src="{{ settings.logo_url }}" alt="{{ company.name }}" class="h-9 w-auto">
+                {% if brand_logo %}
+                    <img src="{{ brand_logo }}" alt="{{ company.name }}" class="h-9 w-auto">
                 {% else %}
                     <span class="text-gray-900 font-extrabold text-2xl">{{ company.name }}</span>
                 {% endif %}
@@ -302,19 +311,22 @@
                             </svg>
                         </button>
                     </div>
-                    {% if settings.login_show_reset|default('1') != '0' %}
-                    <a href="{{ 'password-reset'|url }}"
-                       class="inline-block mt-2 text-sm font-semibold hover:underline underline-offset-2 transition-colors"
-                       style="color: var(--color-primary);">Forgot password?</a>
-                    {% endif %}
                 </div>
 
-                {# Remember me #}
-                <div class="flex items-center gap-2.5">
-                    <input id="remember" type="checkbox" name="remember" value="1"
-                           class="w-4 h-4 rounded border-gray-300 cursor-pointer"
-                           style="accent-color: var(--color-primary);">
-                    <label for="remember" class="text-sm text-gray-500 cursor-pointer select-none">Keep me signed in</label>
+                {# Remember me and password recovery #}
+                <div class="auth-login-options flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-2.5">
+                        <input id="remember" type="checkbox" name="remember" value="1"
+                               class="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                               style="accent-color: var(--color-primary);">
+                        <label for="remember" class="text-sm text-gray-500 cursor-pointer select-none">Keep me signed in</label>
+                    </div>
+                    {% if settings.login_show_reset|default('1') != '0' %}
+                    <a href="{{ 'password-reset'|url }}"
+                       class="auth-login-reset text-sm font-semibold hover:underline underline-offset-2 transition-colors">
+                        Forgot password?
+                    </a>
+                    {% endif %}
                 </div>
 
                 {# Captcha (Antispam module) #}
@@ -349,49 +361,42 @@
                      class="px-4 py-3 rounded-xl text-sm font-medium"
                      style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;"></div>
 
-                {# Submit #}
-                <button type="submit"
-                        :disabled="submitting"
-                        :aria-busy="submitting.toString()"
-                        class="auth-primary-btn w-full h-12 px-4 rounded-xl text-base font-bold flex items-center justify-center gap-2"
-                        style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.38); letter-spacing:.01em;">
-                    <span x-show="!submitting">Login</span>
-                    <template x-if="submitting">
-                        <span class="flex items-center gap-2">
-                            <svg class="animate-spin w-4 h-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                {# Social + primary action — shared height and visual rhythm #}
+                <div class="auth-login-actions{% if not social.google_enabled|default(false) %} auth-login-actions-single{% endif %}">
+                    {% if social.google_enabled|default(false) %}
+                    <div id="google-gsi-container" class="auth-google-container">
+                        <a id="google-fallback-btn"
+                           href="{{ 'sociallogin/google'|url }}"
+                           class="auth-google-btn">
+                            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
                             </svg>
-                            Logging in&hellip;
-                        </span>
-                    </template>
-                </button>
+                            <span>Google</span>
+                        </a>
+                    </div>
+                    {% endif %}
+
+                    <button type="submit"
+                            :disabled="submitting"
+                            :aria-busy="submitting.toString()"
+                            class="auth-primary-btn px-4 text-base font-bold flex items-center justify-center gap-2">
+                        <span x-show="!submitting">Sign in to dashboard</span>
+                        <template x-if="submitting">
+                            <span class="flex items-center gap-2">
+                                <svg class="animate-spin w-4 h-4 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                Signing in&hellip;
+                            </span>
+                        </template>
+                    </button>
+                </div>
 
             </form>
-
-            {% if social.google_enabled|default(false) %}
-            <div class="auth-login-reveal mt-6" style="--auth-reveal-index:4">
-                <div class="relative flex items-center">
-                    <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
-                    <span class="mx-3 text-xs font-medium text-gray-400 flex-shrink">or</span>
-                    <div class="flex-grow border-t" style="border-color:#ebebeb;"></div>
-                </div>
-                <div id="google-gsi-container" class="mt-4 flex justify-center min-h-[44px]">
-                    <a id="google-fallback-btn"
-                       href="{{ 'sociallogin/google'|url }}"
-                       class="w-full py-3 px-4 rounded-xl border bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all"
-                       style="display:flex;align-items:center;justify-content:center;gap:0.625rem;border-color:#e0e0e0;box-shadow:0 1px 4px rgba(0,0,0,.06);">
-                        <svg style="width:1.125rem;height:1.125rem;flex-shrink:0;" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                        </svg>
-                        Continue with Google
-                    </a>
-                </div>
-            </div>
-            {% endif %}
 
             {# Trust badge #}
             <div class="auth-login-reveal mt-8 pt-6 border-t flex items-center justify-center gap-2" style="--auth-reveal-index:5;border-color:#f0f0f0;">
@@ -444,9 +449,8 @@
         });
     }
 
-    // Dynamically load the GSI library.
-    // On success: hide the fallback anchor and render the personalized button.
-    // On failure or timeout: the fallback anchor remains visible.
+    // Dynamically load GSI for One Tap. The branded route button remains in
+    // the form so its dimensions stay aligned with the primary action.
     var fallback  = document.getElementById('google-fallback-btn');
     var container = document.getElementById('google-gsi-container');
     var loaded    = false;
@@ -458,8 +462,6 @@
 
     script.onload = function () {
         loaded = true;
-        var width = Math.min(400, container ? container.offsetWidth : 400);
-
         google.accounts.id.initialize({
             client_id:             clientId,
             callback:              handleCredential,
@@ -467,18 +469,6 @@
             cancel_on_tap_outside: true,
             // One Tap context — shown only on sign-in page.
             context:               'signin',
-        });
-
-        // Replace the fallback anchor with Google's branded personalized button.
-        if (fallback) { fallback.style.display = 'none'; }
-
-        google.accounts.id.renderButton(container, {
-            theme:          'outline',
-            size:           'large',
-            width:          width,
-            text:           'signin_with',
-            shape:          'rectangular',
-            logo_alignment: 'left',
         });
 
         // Show the One Tap floating overlay — the WHMCS-style popup.

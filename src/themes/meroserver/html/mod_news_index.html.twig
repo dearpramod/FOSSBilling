@@ -16,16 +16,16 @@
     </nav>
 
     {# ── Page hero ── #}
-    <header class="ref-news-hero">
-        <div>
-            <span class="ref-news-kicker"><i></i> Platform updates</span>
+    <header class="ref-news-hero text-center relative overflow-hidden">
+        <div class="ref-news-hero-copy relative z-10 max-w-2xl mx-auto">
+            <span class="ref-news-kicker"><i></i> {{ 'Platform updates'|trans }}</span>
             <h1>{{ 'News & Announcements'|trans }}</h1>
             <p>{{ 'The latest platform updates, security alerts, maintenance notices, and technical releases.'|trans }}</p>
         </div>
         {% if posts.total|default(0) %}
         <div class="ref-news-total">
             <strong>{{ posts.total }}</strong>
-            <span>published updates</span>
+            <span>{{ 'published updates'|trans }}</span>
         </div>
         {% endif %}
     </header>
@@ -49,13 +49,13 @@
                     <span class="text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 dark:text-slate-500">{{ featured.updated_at|date('M j, Y') }}</span>
                 </div>
                 <h2 class="text-2xl leading-8 tracking-[-0.01em] font-semibold text-slate-900 dark:text-white mb-3">
-                    {{ featured.title }}
+                    <a href="{{ '/news'|url }}/{{ featured.slug }}" class="ref-minimal-link">{{ featured.title }}</a>
                 </h2>
                 <p class="text-sm leading-5 text-slate-500 dark:text-slate-400">
                     {% if featured.excerpt %}
-                        {% set body = featured.excerpt|striptags|trim %}
+                        {% set body = featured.excerpt|striptags|replace({'**': '', '__': '', '## ': '', '# ': '', '&nbsp;': ' '})|trim %}
                     {% else %}
-                        {% set body = featured.content|striptags|trim %}
+                        {% set body = featured.content|striptags|replace({'**': '', '__': '', '## ': '', '# ': '', '&nbsp;': ' '})|trim %}
                     {% endif %}
                     {{ body|slice(0, 280) }}{% if body|length > 280 %}…{% endif %}
                 </p>
@@ -66,7 +66,7 @@
                     <span></span>
                     {% endif %}
                     <a href="{{ '/news'|url }}/{{ featured.slug }}"
-                       class="ref-minimal-link ref-news-featured-link inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--color-primary)]">
+                       class="ref-news-featured-link inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--color-primary)]">
                         {{ 'Read Full Update'|trans }}
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -94,9 +94,9 @@
                 </h3>
                 <p class="text-sm leading-5 text-slate-500 dark:text-slate-400 flex-1">
                     {% if post.excerpt %}
-                        {% set body = post.excerpt|striptags|trim %}
+                        {% set body = post.excerpt|striptags|replace({'**': '', '__': '', '## ': '', '# ': '', '&nbsp;': ' '})|trim %}
                     {% else %}
-                        {% set body = post.content|striptags|trim %}
+                        {% set body = post.content|striptags|replace({'**': '', '__': '', '## ': '', '# ': '', '&nbsp;': ' '})|trim %}
                     {% endif %}
                     {{ body|slice(0, 160) }}{% if body|length > 160 %}…{% endif %}
                 </p>
@@ -107,8 +107,9 @@
                     <span></span>
                     {% endif %}
                     <a href="{{ '/news'|url }}/{{ post.slug }}"
-                       class="ref-news-more-link px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-slate-300">
+                       class="ref-news-more-link px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-white/[0.05] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                         {{ 'Read More'|trans }}
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </a>
                 </div>
             </article>
@@ -123,7 +124,7 @@
             {# Prev #}
             {% if currentPage > 1 %}
             <a href="{{ '/news'|url }}?page={{ currentPage - 1 }}"
-               class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+               aria-label="{{ 'Previous page'|trans }}" class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
@@ -151,6 +152,7 @@
                     <span class="px-1 text-slate-400 dark:text-slate-500 text-sm">…</span>
                     {% endif %}
                     <a href="{{ '/news'|url }}?page={{ p }}"
+                       aria-label="{{ 'Page'|trans }} {{ p }}"{% if isActive %} aria-current="page"{% endif %}
                        class="w-10 h-10 flex items-center justify-center rounded-lg text-sm font-medium transition-all {{ isActive ? 'text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.05]' }}"
                        {% if isActive %}style="background: var(--color-primary);"{% endif %}>
                         {{ p }}
@@ -161,7 +163,7 @@
             {# Next #}
             {% if currentPage < posts.pages %}
             <a href="{{ '/news'|url }}?page={{ currentPage + 1 }}"
-               class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
+               aria-label="{{ 'Next page'|trans }}" class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
