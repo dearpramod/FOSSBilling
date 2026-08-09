@@ -9,20 +9,34 @@
 
 {% block content %}
 {% set current_page = request.page|default(1)|number_format(0,'','') %}
-{% set current_tab  = request.tab|default('active') in ['active','closed','all'] ? request.tab|default('active') : 'active' %}
+{# Default view is "all"; the "active" tab means not-yet-closed = open + on_hold. #}
+{% set current_tab  = request.tab|default('all') in ['active','closed','all'] ? request.tab|default('all') : 'all' %}
 {% set per_page = 6 %}
+{% set active_statuses = ['open', 'on_hold'] %}
 {# Build query params based on tab #}
 {% if current_tab == 'active' %}
-    {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page, 'status': 'open'}) %}
+    {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page, 'status': active_statuses}) %}
 {% elseif current_tab == 'closed' %}
     {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page, 'status': 'closed'}) %}
 {% else %}
     {% set tickets = client.support_ticket_get_list({'per_page': per_page, 'page': current_page}) %}
 {% endif %}
 {% set total_pages = (tickets.total / per_page)|round(0, 'ceil') %}
-{% set open_count   = (current_tab == 'active') ? tickets.total : client.support_ticket_get_list({'per_page': 1, 'status': 'open'}).total|default(0) %}
-{% set closed_count = (current_tab == 'closed') ? tickets.total : client.support_ticket_get_list({'per_page': 1, 'status': 'closed'}).total|default(0) %}
-{% set total_count  = (current_tab == 'all') ? tickets.total : client.support_ticket_get_list({'per_page': 1}).total|default(0) %}
+{# Tab counts: the current tab's total comes free from the list above; only ONE more
+   count query is needed and the third value is derived (there are only three statuses). #}
+{% if current_tab == 'active' %}
+    {% set active_count = tickets.total %}
+    {% set closed_count = client.support_ticket_get_list({'per_page': 1, 'status': 'closed'}).total|default(0) %}
+    {% set total_count  = active_count + closed_count %}
+{% elseif current_tab == 'closed' %}
+    {% set closed_count = tickets.total %}
+    {% set active_count = client.support_ticket_get_list({'per_page': 1, 'status': active_statuses}).total|default(0) %}
+    {% set total_count  = active_count + closed_count %}
+{% else %}
+    {% set total_count  = tickets.total %}
+    {% set active_count = client.support_ticket_get_list({'per_page': 1, 'status': active_statuses}).total|default(0) %}
+    {% set closed_count = total_count - active_count %}
+{% endif %}
 
 <div class="ref-support-page space-y-6" x-data="{ showNewTicket: false, searchQ: '', sortBy: 'updated' }">
 
@@ -50,7 +64,7 @@
         </div>
         <div class="ref-support-stat">
             <span><svg viewBox="0 0 24 24"><path d="M5 18l-2 3v-5a8 8 0 1114.9 2"/><path d="M8 10h8M8 14h5"/></svg> Awaiting Response</span>
-            <strong>{{ open_count }}</strong>
+            <strong>{{ active_count }}</strong>
         </div>
         <div class="ref-support-stat">
             <span><svg viewBox="0 0 24 24"><path d="M4 7h16M5 7l1 13h12l1-13M8 4h8l1 3H7l1-3Z"/><path d="M9 12h6"/></svg> Closed Tickets</span>
@@ -223,8 +237,8 @@
             <a href="?tab=active"
                class="flex-1 py-4 text-sm text-center transition-all {% if current_tab == 'active' %}border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold{% else %}text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-semibold{% endif %}">
                 Active
-                {% if open_count > 0 %}<span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold
-                    {% if current_tab == 'active' %}bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300{% else %}bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400{% endif %}">{{ open_count }}</span>{% endif %}
+                {% if active_count > 0 %}<span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold
+                    {% if current_tab == 'active' %}bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300{% else %}bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400{% endif %}">{{ active_count }}</span>{% endif %}
             </a>
             <a href="?tab=closed"
                class="flex-1 py-4 text-sm text-center transition-all {% if current_tab == 'closed' %}border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold{% else %}text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-semibold{% endif %}">

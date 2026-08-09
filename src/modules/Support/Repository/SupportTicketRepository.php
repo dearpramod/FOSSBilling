@@ -22,7 +22,7 @@ class SupportTicketRepository extends EntityRepository
      *
      * Accepted keys in `$data`:
      *  - `id`                (int)     exact id match
-     *  - `status`            (string)  exact status match
+     *  - `status`            (string|list) exact status match, or a list of statuses (IN)
      *  - `priority`          (int)     exact priority match
      *  - `client_id`         (int)     filter by client
      *  - `auth`              (string)  client or guest author filter
@@ -48,8 +48,15 @@ class SupportTicketRepository extends EntityRepository
         }
 
         if (!empty($data['status'])) {
-            $qb->andWhere('t.status = :status')
-                ->setParameter('status', $data['status']);
+            // Accept a single status ("open") or a list (["open", "on_hold"]) so
+            // callers can group statuses (e.g. an "active" filter = open + on_hold).
+            if (is_array($data['status'])) {
+                $qb->andWhere('t.status IN (:statuses)')
+                    ->setParameter('statuses', array_values($data['status']));
+            } else {
+                $qb->andWhere('t.status = :status')
+                    ->setParameter('status', $data['status']);
+            }
         }
 
         if (isset($data['priority']) && $data['priority'] !== '') {
