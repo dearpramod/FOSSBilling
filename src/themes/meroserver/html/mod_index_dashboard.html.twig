@@ -57,7 +57,7 @@
                     {% endfor %}
                 </div>
             </div>
-            <h1 data-reveal-child>Your cloud platform, built for Nepal</h1>
+            <h1 data-reveal-child>Your cloud platform, <span>built for Nepal.</span></h1>
             <p data-reveal-child>Deploy applications, databases, and managed VPS infrastructure from one control plane—with Git-based delivery, automatic SSL, live observability, and expert support available 24/7.</p>
             <div class="ref-home-hero-actions" data-reveal-child>
                 <a href="{{ '/order'|url }}" class="ref-home-primary">
@@ -67,6 +67,10 @@
                             <path d="M5 12h14M13 6l6 6-6 6"/>
                         </svg>
                     </span>
+                </a>
+                <a href="#mero-how-it-works" class="ref-home-secondary">
+                    See how it works
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                 </a>
             </div>
             <div class="ref-home-trust" data-reveal-child>
@@ -217,6 +221,30 @@
     </div>
 </section>
 
+<section class="ref-home-promise" aria-label="Meroserver platform principles">
+    <div class="ref-home-container">
+        <div class="ref-home-section-heading" data-reveal="up">
+            <span class="ref-home-eyebrow">Why Meroserver?</span>
+            <h2>Infrastructure that stays <em>simple</em> as you scale.</h2>
+            <p>Built for real applications, real traffic, and teams that would rather ship than manage infrastructure.</p>
+        </div>
+        <div class="ref-home-promise-grid">
+            <article data-reveal="up" style="--reveal-index: 0">
+                <span>01</span><h3>Local by design.</h3>
+                <p>NPR billing, Nepal-focused infrastructure, and support that understands your context.</p>
+            </article>
+            <article data-reveal="up" style="--reveal-index: 1">
+                <span>02</span><h3>Transparent by default.</h3>
+                <p>Clear plans, visible usage, and the controls you need without hidden operational complexity.</p>
+            </article>
+            <article data-reveal="up" style="--reveal-index: 2">
+                <span>03</span><h3>People when it matters.</h3>
+                <p>Automation for routine work, backed by experienced humans when you need a hand.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
 {# ═══════════════════════════════════════════════════════════════════
    WHY CHOOSE US — Glass feature cards
    ═══════════════════════════════════════════════════════════════════ #}
@@ -300,6 +328,22 @@
     </div>
 </section>
 
+<section id="mero-how-it-works" class="ref-home-steps">
+    <div class="ref-home-container">
+        <div class="ref-home-section-heading ref-home-section-heading-light" data-reveal="up">
+            <span class="ref-home-eyebrow">Four steps. That’s it.</span>
+            <h2>From idea to online in minutes.</h2>
+            <p>Choose what you need, configure it your way, and let Meroserver handle the infrastructure underneath.</p>
+        </div>
+        <ol class="ref-home-steps-grid">
+            <li data-reveal="up" style="--reveal-index: 0"><b>01</b><span><strong>Choose a service.</strong><small>Hosting, VPS, domains, or your next application.</small></span></li>
+            <li data-reveal="up" style="--reveal-index: 1"><b>02</b><span><strong>Make it yours.</strong><small>Select resources, region, runtime, and billing cycle.</small></span></li>
+            <li data-reveal="up" style="--reveal-index: 2"><b>03</b><span><strong>Deploy securely.</strong><small>Launch with SSL, monitoring, and sensible defaults.</small></span></li>
+            <li data-reveal="up" style="--reveal-index: 3"><b>04</b><span><strong>Grow without friction.</strong><small>Scale resources whenever your traffic demands it.</small></span></li>
+        </ol>
+    </div>
+</section>
+
 {# ═══════════════════════════════════════════════════════════════════
    CTA BANNER
    ═══════════════════════════════════════════════════════════════════ #}
@@ -318,7 +362,7 @@
                     <a href="{{ 'order'|url }}"
                        class="px-7 py-3 rounded-xl text-white font-semibold text-sm inline-flex items-center gap-2 transition-all"
                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 6px 24px rgba(var(--color-primary-rgb),0.3);">
-                        Launch a VM
+                        Start Now
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </a>
                     <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
