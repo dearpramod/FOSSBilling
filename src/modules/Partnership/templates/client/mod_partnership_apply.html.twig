@@ -1,19 +1,49 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+{% set company = guest.system_company %}
 
 {% block meta_title %}{{ 'Partnership Program'|trans }}{% endblock %}
 {% block page_header %}{{ 'Partnership Program'|trans }}{% endblock %}
 
+{% block head %}
+<style>
+.pp-apply-page{margin-top:-1.25rem;font-family:var(--font-brand-sans,Inter,sans-serif)}
+.pp-apply-page h1,.pp-apply-page h2,.pp-apply-page h3{font-family:var(--font-brand-display,Inter,sans-serif)}
+.pp-apply-breadcrumb{height:52px;margin-inline:-4rem;padding-inline:2rem;display:flex;align-items:center;gap:.7rem;border-bottom:1px solid var(--ref-line,#e2e4ec);background:#fff;color:#656879;font-size:.82rem}
+.pp-apply-breadcrumb a{color:#656879;transition:color .18s ease}.pp-apply-breadcrumb a:hover{color:var(--color-primary)}.pp-apply-breadcrumb span{color:#1a1b23;font-weight:600}.pp-apply-breadcrumb svg{width:13px;height:13px}
+.pp-apply-hero{min-height:340px!important;margin-inline:-4rem;padding:3.4rem 4rem 6rem;border:0!important;border-radius:0!important;background-color:#050b1c!important;background-image:linear-gradient(rgba(255,255,255,.032) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.032) 1px,transparent 1px),radial-gradient(70% 150% at 12% 0%,rgba(82,113,255,.34),transparent 62%),radial-gradient(48% 110% at 94% 100%,rgba(87,200,255,.15),transparent 66%)!important;background-size:32px 32px,32px 32px,auto,auto!important}
+.pp-apply-hero h1{color:#fff!important;font-size:clamp(2rem,4vw,3.2rem);letter-spacing:-.045em}.pp-apply-hero p{color:#b8c2d8!important}.pp-apply-hero>a,.pp-apply-hero a{min-height:48px;border-radius:.8rem;transition:transform .18s ease,box-shadow .22s ease,background-color .18s ease}.pp-apply-hero a:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.22)}
+.pp-apply-hero-inner{max-width:82rem;margin-inline:auto;padding-block:2rem!important}.pp-apply-art{width:240px!important;flex:0 0 240px!important}.pp-apply-art>div{width:240px;height:210px;aspect-ratio:auto!important;border-color:rgba(255,255,255,.16)!important;background:rgba(255,255,255,.075)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}.pp-apply-art svg{width:5.5rem;height:5.5rem;color:rgba(199,210,254,.66)!important}
+html[data-theme="light"] .pp-apply-hero h1,html[data-theme="dark"] .pp-apply-hero h1{color:#fff!important;text-shadow:0 2px 18px rgba(0,0,0,.18)}
+html[data-theme="light"] .pp-apply-hero p,html[data-theme="dark"] .pp-apply-hero p{color:#c5cde0!important}
+html[data-theme="light"] .pp-apply-art>div,html[data-theme="dark"] .pp-apply-art>div{border-color:rgba(255,255,255,.16)!important;background:rgba(255,255,255,.075)!important}
+html[data-theme="light"] .pp-apply-art svg,html[data-theme="dark"] .pp-apply-art svg{color:rgba(199,210,254,.72)!important}
+.pp-apply-content{width:min(100%,82rem);margin:-48px auto 0;position:relative;z-index:2}.pp-apply-content>div,.pp-apply-content>section{border-color:rgba(82,113,255,.13)!important;border-radius:18px!important;box-shadow:0 14px 35px rgba(31,42,85,.055)}
+.pp-apply-content .grid>div{transition:border-color .2s ease,box-shadow .22s ease,transform .2s ease}.pp-apply-content .grid>div:hover{border-color:rgba(82,113,255,.25)!important;box-shadow:0 16px 34px rgba(31,42,85,.075);transform:translateY(-2px)}
+#apply-form input:not([type="checkbox"]),#apply-form textarea{min-height:48px;border-radius:.75rem;background:#fbfcff}#apply-form input:focus,#apply-form textarea:focus{border-color:rgba(var(--color-primary-rgb),.55);box-shadow:0 0 0 4px rgba(var(--color-primary-rgb),.12)}#apply-submit-btn{min-height:48px;box-shadow:0 12px 26px rgba(var(--color-primary-rgb),.22)}
+.pp-apply-page :where(a,button,input,textarea):focus-visible{outline:3px solid rgba(var(--color-primary-rgb),.22);outline-offset:2px}
+html[data-theme="dark"] .pp-apply-breadcrumb{background:#0f172a;border-color:rgba(255,255,255,.08)}html[data-theme="dark"] .pp-apply-breadcrumb span{color:#f8fafc}html[data-theme="dark"] #apply-form input:not([type="checkbox"]),html[data-theme="dark"] #apply-form textarea{background:rgba(255,255,255,.04)}
+@media(max-width:900px){.pp-apply-breadcrumb,.pp-apply-hero{margin-inline:-2rem}.pp-apply-hero{padding-inline:2rem}}
+@media(max-width:700px){.pp-apply-page{margin-top:-1rem}.pp-apply-breadcrumb,.pp-apply-hero{margin-inline:-1rem}.pp-apply-breadcrumb{padding-inline:1rem}.pp-apply-hero{min-height:360px!important;padding:2.5rem 1rem 5.5rem}.pp-apply-hero-inner{padding:0!important}.pp-apply-content{margin-top:-52px}}
+@media(prefers-reduced-motion:reduce){.pp-apply-page *{animation-duration:.01ms!important;transition-duration:.01ms!important;transform:none!important}}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-8">
+<div class="pp-apply-page">
+    <nav class="pp-apply-breadcrumb" aria-label="Breadcrumb">
+        <a href="{{ '/dashboard'|url }}">{{ 'Home'|trans }}</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+        <span>{{ 'Partnership Program'|trans }}</span>
+    </nav>
 
     {# ── Hero — matches Stitch "primary-container" solid hero ─────────── #}
-    <section class="relative rounded-xl overflow-hidden bg-primary-container dark:bg-indigo-900 min-h-[320px] flex items-center">
+    <section class="pp-apply-hero relative overflow-hidden min-h-[320px] flex items-center">
         <div class="absolute inset-0 pointer-events-none opacity-20">
             <div class="absolute inset-0 bg-gradient-to-br from-primary dark:from-indigo-500 to-transparent"></div>
         </div>
-        <div class="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 w-full">
+        <div class="pp-apply-hero-inner relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 w-full">
             <div class="flex-1 text-on-primary dark:text-white">
-                <h1 class="text-2xl md:text-3xl font-bold mb-3">{{ 'MeroVPS Partner Program'|trans }}</h1>
+                <h1 class="text-2xl md:text-3xl font-bold mb-3">{{ company.name }} {{ 'Partner Program'|trans }}</h1>
                 <p class="text-sm text-on-primary-container dark:text-indigo-100 max-w-2xl leading-relaxed">
                     {{ 'Scale your agency or hosting business with exclusive volume discounts, priority engineering support, and powerful white-label API access. Join a community of high-growth partners today.'|trans }}
                 </p>
@@ -27,7 +57,7 @@
                     </a>
                 </div>
             </div>
-            <div class="hidden md:block w-1/3 flex-shrink-0">
+            <div class="pp-apply-art hidden md:block flex-shrink-0">
                 <div class="aspect-square rounded-2xl backdrop-blur-sm border border-white/20 flex items-center justify-center" style="background:rgba(255,255,255,0.12)">
                     <svg class="w-28 h-28 text-white/40" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M11 6C11 3.79 9.21 2 7 2S3 3.79 3 6s1.79 4 4 4 4-1.79 4-4zm2 0c0 2.21 1.79 4 4 4s4-1.79 4-4-1.79-4-4-4-4 1.79-4 4zm-2 2.5c-2.67 0-8 1.34-8 4V15h16v-2.5c0-2.66-5.33-4-8-4zm10 0c-.29 0-.62.02-.97.05C21.19 9.89 22 11.02 22 12.5V15h2v-2.5c0-2.66-5.33-4-8-4z"/>
@@ -36,6 +66,8 @@
             </div>
         </div>
     </section>
+
+    <div class="pp-apply-content space-y-8">
 
     {# ── Requirements + Tiers ──────────────────────────────────────────── #}
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -277,6 +309,7 @@
         </div>
     </section>
 
+    </div>
 </div>
 
 {% if has_helpdesk %}
