@@ -16,8 +16,7 @@ namespace Box\Mod\Chat\Api;
 class Guest extends \FOSSBilling\Api\AbstractApi
 {
     /**
-     * Public widget configuration consumed by the client template
-     * (accessed as {{ guest.chat_config }}).
+     * The minimal public channel configuration consumed by the client widget.
      *
      * @return array<string, mixed>
      */

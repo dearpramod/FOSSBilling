@@ -7,8 +7,8 @@ declare(strict_types=1);
  *
  * Renders a floating support launcher on all client-facing pages via the theme
  * widget slot (WidgetProviderInterface) — no theme files are edited. Offers three
- * admin-configurable channels: WhatsApp, phone ("call our agent"), and Tawk.to
- * live chat. Config is stored through the core Extension config store (mod_chat).
+ * WhatsApp, phone, Tawk.to live chat, and a local support-ticket fallback.
+ * Only public channel details are exposed to the browser.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -57,58 +57,23 @@ class Service implements InjectionAwareInterface, WidgetProviderInterface
     }
 
     /**
-     * Default configuration values, overridden by anything saved in the admin.
+     * Tawk identifiers are public embed identifiers, not API secrets.
      *
      * @return array<string, string>
      */
     private function getDefaults(): array
     {
         return [
-            'enabled' => '1',
-            'online' => '1',
-            'title' => 'Support Team',
-            'subtitle' => 'Typically replies in minutes',
-            'greeting' => 'Hi! How can we help? 👋',
             'whatsapp_number' => '',
-            'whatsapp_label' => 'Send us a message',
             'phone_number' => '',
-            'phone_label' => 'Call our agent',
-            'livechat_label' => 'Chat with our team',
             'tawk_property_id' => '',
             'tawk_widget_id' => '',
-            // Secret — used only server-side to compute the secure-mode HMAC.
-            // Never returned to the browser (see getPublicConfig()).
-            'tawk_api_key' => '',
         ];
     }
 
     /**
-     * The currently logged-in client, or null — read straight from the session so
-     * this is safe to call from the guest endpoint (unlike $di['loggedin_client'],
-     * which redirects browsers when no client is logged in).
-     */
-    private function getLoggedInClient(): ?\Model_Client
-    {
-        try {
-            $clientId = $this->di['session']->get('client_id');
-            if (!$clientId) {
-                return null;
-            }
-
-            $client = $this->di['db']->load('Client', (int) $clientId);
-            if ($client instanceof \Model_Client && $client->status === \Model_Client::ACTIVE) {
-                return $client;
-            }
-        } catch (\Throwable) {
-            // fall through
-        }
-
-        return null;
-    }
-
-    /**
-     * Public-safe widget configuration for the client template. Every value here
-     * is already exposed in the rendered page, so there is nothing secret to leak.
+     * Return only the public values needed to open the configured channels. No
+     * presentation preferences, session, or client data cross this boundary.
      *
      * @return array<string, mixed>
      */
@@ -117,64 +82,24 @@ class Service implements InjectionAwareInterface, WidgetProviderInterface
         $saved = $this->di['mod_config']('chat');
         $cfg = array_merge($this->getDefaults(), is_array($saved) ? $saved : []);
 
-        $enabled = (bool) ($cfg['enabled'] !== '0' && $cfg['enabled']);
-        $online = (bool) ($cfg['online'] !== '0' && $cfg['online']);
-
         $whatsappDigits = preg_replace('/[^0-9]/', '', (string) $cfg['whatsapp_number']) ?? '';
-        $phoneNumber = trim((string) $cfg['phone_number']);
+        $validWhatsapp = preg_match('/^[1-9][0-9]{6,14}$/D', $whatsappDigits) === 1;
+
+        $phoneDial = preg_replace('/[^0-9+*#]/', '', (string) $cfg['phone_number']) ?? '';
+        $validPhone = preg_match('/^\+?[0-9][0-9*#]{5,19}$/D', $phoneDial) === 1;
+
         $tawkProperty = trim((string) $cfg['tawk_property_id']);
         $tawkWidget = trim((string) $cfg['tawk_widget_id']);
 
-        $hasWhatsapp = $whatsappDigits !== '';
-        $hasPhone = $phoneNumber !== '';
-        $hasLivechat = $tawkProperty !== '' && $tawkWidget !== '';
-
-        // Prefill the Tawk visitor with the logged-in client's identity so agents
-        // see who they're talking to. If a Tawk API key is configured, compute the
-        // secure-mode HMAC here — the key itself is never sent to the browser.
-        $visitorName = '';
-        $visitorEmail = '';
-        $visitorHash = '';
-        $apiKey = trim((string) $cfg['tawk_api_key']);
-        if ($hasLivechat) {
-            $client = $this->getLoggedInClient();
-            if ($client instanceof \Model_Client) {
-                $visitorName = trim(trim((string) $client->first_name) . ' ' . trim((string) $client->last_name));
-                $visitorEmail = trim((string) $client->email);
-                if ($apiKey !== '' && $visitorEmail !== '') {
-                    $visitorHash = hash_hmac('sha256', $visitorEmail, $apiKey);
-                }
-            }
-        }
-
+        // These values form part of a third-party script URL, so accept only the
+        // identifier characters used by Tawk. Invalid values disable live chat.
+        $validProperty = preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $tawkProperty) === 1;
+        $validWidget = preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $tawkWidget) === 1;
         return [
-            'enabled' => $enabled,
-            'online' => $online,
-            'title' => (string) $cfg['title'],
-            'subtitle' => (string) $cfg['subtitle'],
-            'greeting' => (string) $cfg['greeting'],
-
-            'has_whatsapp' => $hasWhatsapp,
-            'whatsapp_url' => $hasWhatsapp ? 'https://wa.me/' . $whatsappDigits : '',
-            'whatsapp_label' => (string) $cfg['whatsapp_label'],
-
-            'has_phone' => $hasPhone,
-            'phone_number' => $phoneNumber,
-            'phone_label' => (string) $cfg['phone_label'],
-
-            'has_livechat' => $hasLivechat,
-            'tawk_property_id' => $tawkProperty,
-            'tawk_widget_id' => $tawkWidget,
-            'livechat_label' => (string) $cfg['livechat_label'],
-
-            // Visitor identity for the Tawk JS API (empty for guests). `visitor_hash`
-            // is set only when a Tawk API key is configured (secure mode). The API key
-            // itself is intentionally NOT included here.
-            'visitor_name' => $visitorName,
-            'visitor_email' => $visitorEmail,
-            'visitor_hash' => $visitorHash,
-
-            'should_render' => $enabled && ($hasWhatsapp || $hasPhone || $hasLivechat),
+            'tawk_property_id' => $validProperty ? $tawkProperty : '',
+            'tawk_widget_id' => $validWidget ? $tawkWidget : '',
+            'phone_number' => $validPhone ? $phoneDial : '',
+            'whatsapp_url' => $validWhatsapp ? 'https://wa.me/' . $whatsappDigits : '',
         ];
     }
 }
