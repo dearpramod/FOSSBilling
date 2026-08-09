@@ -1,0 +1,206 @@
+{#
+  MeroPanel Chat widget — rendered via the theme widget slot (client.theme.body.end).
+  render_widgets() renders this with an EMPTY context and `guest` is not a Twig global
+  in the client environment, so the config is fetched from the module's own guest
+  endpoint (/api/guest/chat/config) and the widget builds itself client-side. This keeps
+  the module fully self-contained: no theme edits, no core edits, works on every page.
+#}
+{% verbatim %}
+<style>
+/* ---- MeroPanel Chat widget (self-contained, theme-independent) ---- */
+#mchat-root{position:fixed;right:24px;bottom:24px;z-index:99998;font-family:"Inter",ui-sans-serif,system-ui,-apple-system,sans-serif;}
+#mchat-panel{position:absolute;right:0;bottom:76px;width:360px;max-width:calc(100vw - 32px);
+  background:#ffffff;border-radius:20px;overflow:hidden;
+  box-shadow:0 20px 48px rgba(15,23,42,.24),0 4px 12px rgba(15,23,42,.10);
+  opacity:0;transform:translateY(12px) scale(.98);pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease;transform-origin:bottom right;}
+#mchat-root.mchat-open #mchat-panel{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+.mchat-head{position:relative;padding:22px 20px 20px;color:#fff;overflow:hidden;
+  background:linear-gradient(135deg,var(--color-primary,#3b5bff),var(--color-secondary,#2f45c9));}
+.mchat-head-orb{position:absolute;top:-30px;right:-20px;width:96px;height:96px;border-radius:50%;
+  background:rgba(255,255,255,.14);}
+.mchat-head h4{margin:0;font-size:15px;font-weight:700;line-height:1.2;}
+.mchat-head .mchat-sub{margin:2px 0 0;font-size:12px;opacity:.8;}
+.mchat-head .mchat-greet{margin:16px 0 0;font-size:17px;font-weight:700;position:relative;}
+.mchat-online{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;font-weight:500;position:relative;}
+.mchat-online i{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 0 3px rgba(52,211,153,.25);}
+.mchat-online.mchat-away i{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.25);}
+.mchat-online.mchat-offline i{background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.25);}
+.mchat-badge{position:absolute;top:-2px;right:-2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;line-height:1;display:none;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff;}
+.mchat-badge.mchat-show{display:flex;}
+html[data-theme="dark"] .mchat-badge{box-shadow:0 0 0 2px #0b1120;}
+.mchat-body{padding:14px;display:flex;flex-direction:column;gap:10px;background:#f4f6fb;}
+.mchat-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;
+  background:#fff;border:1px solid #eef1f6;text-decoration:none;transition:background .15s,box-shadow .15s,transform .05s;cursor:pointer;}
+.mchat-row:hover{background:#f9fafc;box-shadow:0 4px 14px rgba(15,23,42,.06);}
+.mchat-row:active{transform:scale(.99);}
+.mchat-ico{width:44px;height:44px;border-radius:12px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;}
+.mchat-ico svg{width:22px;height:22px;}
+.mchat-ico.wa{background:#25d366;} .mchat-ico.call{background:#3b5bff;} .mchat-ico.live{background:#f97316;}
+.mchat-txt{flex:1 1 auto;min-width:0;}
+.mchat-txt b{display:block;font-size:14px;font-weight:600;color:#0f172a;line-height:1.2;}
+.mchat-txt span{display:block;font-size:12px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mchat-chev{color:#cbd5e1;flex:0 0 auto;}
+#mchat-launcher{position:relative;width:60px;height:60px;border:0;border-radius:50%;cursor:pointer;margin-left:auto;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+  background:linear-gradient(135deg,var(--color-primary,#3b5bff),var(--color-secondary,#2f45c9));
+  box-shadow:0 10px 26px rgba(47,69,201,.42);transition:transform .15s ease,box-shadow .15s ease;}
+#mchat-launcher:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(47,69,201,.5);}
+#mchat-launcher svg{width:26px;height:26px;transition:transform .2s ease;}
+#mchat-launcher .mchat-ic-close{display:none;}
+#mchat-root.mchat-open #mchat-launcher .mchat-ic-open{display:none;}
+#mchat-root.mchat-open #mchat-launcher .mchat-ic-close{display:block;}
+html[data-theme="dark"] #mchat-panel{background:#0f172a;box-shadow:0 20px 48px rgba(0,0,0,.5);}
+html[data-theme="dark"] .mchat-body{background:#0b1120;}
+html[data-theme="dark"] .mchat-row{background:#111c33;border-color:rgba(255,255,255,.06);}
+html[data-theme="dark"] .mchat-row:hover{background:#16233f;}
+html[data-theme="dark"] .mchat-txt b{color:#f1f5f9;}
+html[data-theme="dark"] .mchat-txt span{color:#94a3b8;}
+html[data-theme="dark"] .mchat-chev{color:#475569;}
+@media (max-width:480px){#mchat-root{right:16px;bottom:16px;}}
+</style>
+
+<script>
+(function(){
+    if (window.__mchatInit) { return; }
+    window.__mchatInit = true;
+
+    var CHEV = '<svg class="mchat-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>';
+    var IC = {
+        wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.32 4.95L2 22l5.28-1.38a9.86 9.86 0 0 0 4.76 1.21h.01c5.46 0 9.9-4.44 9.9-9.9 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm0 1.8c2.16 0 4.19.84 5.72 2.37a8.06 8.06 0 0 1 2.37 5.73c0 4.46-3.63 8.09-8.1 8.09a8.1 8.1 0 0 1-4.12-1.13l-.3-.18-3.13.82.83-3.05-.19-.31a8.03 8.03 0 0 1-1.24-4.31c0-4.46 3.63-8.1 8.1-8.1Zm-2.6 4.03c-.13 0-.35.05-.53.25-.18.2-.7.68-.7 1.66 0 .98.72 1.93.82 2.06.1.13 1.4 2.24 3.46 3.05 1.72.68 2.07.54 2.44.5.37-.03 1.2-.49 1.36-.96.17-.47.17-.87.12-.96-.05-.08-.18-.13-.38-.23-.2-.1-1.2-.59-1.38-.66-.18-.07-.32-.1-.46.1-.13.2-.53.66-.65.8-.12.13-.24.15-.44.05-.2-.1-.85-.31-1.62-1-.6-.53-1-1.19-1.12-1.39-.12-.2-.01-.31.09-.41.09-.09.2-.24.3-.36.1-.12.13-.2.2-.34.06-.13.03-.25-.02-.35-.05-.1-.44-1.1-.62-1.5-.16-.4-.32-.34-.44-.34l-.38-.01Z"/></svg>',
+        call: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>',
+        live: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+    };
+    function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+
+    function build(c){
+        if (!c || !c.should_render) { return; }
+
+        var rows = '';
+        if (c.has_whatsapp){
+            rows += '<a class="mchat-row" href="' + esc(c.whatsapp_url) + '" target="_blank" rel="noopener noreferrer">'
+                 + '<span class="mchat-ico wa">' + IC.wa + '</span>'
+                 + '<div class="mchat-txt"><b>WhatsApp</b><span>' + esc(c.whatsapp_label) + '</span></div>' + CHEV + '</a>';
+        }
+        if (c.has_phone){
+            rows += '<a class="mchat-row" href="tel:' + esc(c.phone_number) + '">'
+                 + '<span class="mchat-ico call">' + IC.call + '</span>'
+                 + '<div class="mchat-txt"><b>' + esc(c.phone_label) + '</b><span>' + esc(c.phone_number) + '</span></div>' + CHEV + '</a>';
+        }
+        if (c.has_livechat){
+            rows += '<a class="mchat-row" id="mchat-live" href="#" role="button"'
+                 + ' data-tawk-property="' + esc(c.tawk_property_id) + '" data-tawk-widget="' + esc(c.tawk_widget_id) + '">'
+                 + '<span class="mchat-ico live">' + IC.live + '</span>'
+                 + '<div class="mchat-txt"><b>Live Chat</b><span>' + esc(c.livechat_label) + '</span></div>' + CHEV + '</a>';
+        }
+
+        var online = c.online ? '<span class="mchat-online" id="mchat-status"><i></i> <span class="mchat-status-txt">We\'re online</span></span>' : '';
+        var sub = c.subtitle ? '<p class="mchat-sub">' + esc(c.subtitle) + '</p>' : '';
+        var greet = c.greeting ? '<p class="mchat-greet">' + esc(c.greeting) + '</p>' : '';
+
+        var root = document.createElement('div');
+        root.id = 'mchat-root';
+        root.innerHTML =
+            '<div id="mchat-panel" role="dialog" aria-label="' + esc(c.title) + '">'
+          +   '<div class="mchat-head"><div class="mchat-head-orb"></div>'
+          +     '<h4>' + esc(c.title) + '</h4>' + sub + greet + online
+          +   '</div>'
+          +   '<div class="mchat-body">' + rows + '</div>'
+          + '</div>'
+          + '<button id="mchat-launcher" type="button" aria-label="Open support chat" aria-expanded="false">'
+          +   '<svg class="mchat-ic-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
+          +   '<svg class="mchat-ic-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+          +   '<span class="mchat-badge" id="mchat-badge"></span>'
+          + '</button>';
+        document.body.appendChild(root);
+
+        var launcher = root.querySelector('#mchat-launcher');
+        function setOpen(open){ root.classList.toggle('mchat-open', open); launcher.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+        launcher.addEventListener('click', function(){ setOpen(!root.classList.contains('mchat-open')); });
+        document.addEventListener('keydown', function(e){ if (e.key === 'Escape'){ setOpen(false); } });
+        document.addEventListener('click', function(e){ if (!root.contains(e.target)){ setOpen(false); } });
+
+        var live = root.querySelector('#mchat-live');
+        if (live){
+            var statusEl = root.querySelector('#mchat-status');
+            var badgeEl = root.querySelector('#mchat-badge');
+            var tawkLoaded = false;
+            var pendingMaximize = false;
+            var secure = !!c.visitor_hash;
+
+            // Reflect Tawk's real online/away/offline status onto our header dot.
+            function applyStatus(status){
+                if (!statusEl) { return; }
+                statusEl.classList.remove('mchat-away', 'mchat-offline');
+                var txt = statusEl.querySelector('.mchat-status-txt');
+                if (status === 'away'){ statusEl.classList.add('mchat-away'); if (txt){ txt.textContent = "We're away"; } }
+                else if (status === 'offline'){ statusEl.classList.add('mchat-offline'); if (txt){ txt.textContent = "We're offline"; } }
+                else if (txt){ txt.textContent = "We're online"; }
+            }
+            // Unread agent messages -> badge on our launcher (while Tawk is minimized/hidden).
+            function applyUnread(count){
+                if (!badgeEl) { return; }
+                var n = parseInt(count, 10) || 0;
+                badgeEl.textContent = n > 9 ? '9+' : String(n);
+                badgeEl.classList.toggle('mchat-show', n > 0);
+            }
+
+            function loadTawk(){
+                if (tawkLoaded){ return; }
+                tawkLoaded = true;
+                var api = window.Tawk_API = window.Tawk_API || {};
+                window.Tawk_LoadStart = new Date();
+
+                // Identity prefill: non-secure uses the pre-load visitor object; secure mode
+                // (server-computed HMAC hash present) uses setAttributes() after load.
+                if (c.visitor_email && !secure){
+                    api.visitor = { name: c.visitor_name || '', email: c.visitor_email };
+                }
+
+                api.onLoad = function(){
+                    try {
+                        api.hideWidget(); // keep OUR launcher as the only launcher
+                        if (secure && typeof api.setAttributes === 'function' && c.visitor_email){
+                            api.setAttributes({ name: c.visitor_name || '', email: c.visitor_email, hash: c.visitor_hash }, function(){});
+                        }
+                        if (typeof api.getStatus === 'function'){ applyStatus(api.getStatus()); }
+                        if (pendingMaximize){ pendingMaximize = false; api.maximize(); }
+                    } catch(err){}
+                };
+                api.onStatusChange = function(status){ applyStatus(status); };
+                api.onChatMinimized = function(){ try { api.hideWidget(); } catch(err){} };
+                api.onChatHidden = function(){ try { api.hideWidget(); } catch(err){} };
+                api.onChatMaximized = function(){ applyUnread(0); };
+                api.onUnreadCountChanged = function(count){ applyUnread(count); };
+
+                var s = document.createElement('script');
+                s.async = true;
+                s.src = 'https://embed.tawk.to/' + live.getAttribute('data-tawk-property') + '/' + live.getAttribute('data-tawk-widget');
+                s.charset = 'UTF-8';
+                s.setAttribute('crossorigin', '*');
+                document.head.appendChild(s);
+            }
+
+            live.addEventListener('click', function(e){
+                e.preventDefault();
+                setOpen(false);
+                if (tawkLoaded && window.Tawk_API && typeof window.Tawk_API.maximize === 'function'){
+                    window.Tawk_API.maximize();
+                } else {
+                    pendingMaximize = true;
+                    loadTawk();
+                }
+            });
+        }
+    }
+
+    function init(){
+        fetch('/api/guest/chat/config', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ build(d && d.result ? d.result : null); })
+            .catch(function(){ /* silently skip if unreachable */ });
+    }
+    if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', init); } else { init(); }
+})();
+</script>
+{% endverbatim %}

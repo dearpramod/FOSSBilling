@@ -1,0 +1,13 @@
+{
+    "id": "chat",
+    "type": "mod",
+    "name": "Chat Widget",
+    "description": "Floating support launcher for client pages with WhatsApp, phone (call our agent), and Tawk.to live chat. All channels are admin-configurable; the widget is injected via the theme widget slot with no theme edits.",
+    "homepage_url": "https://yoho.cloud",
+    "author": "MeroPanel",
+    "author_url": "https://yoho.cloud",
+    "license": "Apache-2.0",
+    "version": "1.0.0",
+    "minimum_fossbilling_version": "0.8.5",
+    "icon_url": "icon.svg"
+}

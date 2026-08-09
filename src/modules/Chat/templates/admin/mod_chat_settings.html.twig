@@ -1,0 +1,119 @@
+{% extends request.ajax ? "layout_blank.html.twig" : "layout_default.html.twig" %}
+
+{% block meta_title %}{{ 'Chat Widget Settings'|trans }}{% endblock %}
+
+{% set active_menu = 'extensions' %}
+
+{% block content %}
+{% set p = admin.extension_config_get({"ext":"mod_chat"}) %}
+<form method="post" action="{{ 'extension/config_save'|api_url }}" {{ fb_api_form({message: 'Chat widget settings updated'|trans}) }}>
+    <input type="hidden" name="ext" value="mod_chat"/>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">{{ 'Chat Widget'|trans }}</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">{{ 'A floating support launcher shown on all client-facing pages. Leave a channel blank to hide that option. The Live Chat option only appears once both Tawk.to IDs are set.'|trans }}</p>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ 'Widget enabled'|trans }}</label>
+                    <select class="form-select" name="enabled">
+                        <option value="1" {{ (p.enabled ?? '1') != '0' ? 'selected' }}>{{ 'Enabled'|trans }}</option>
+                        <option value="0" {{ (p.enabled ?? '1') == '0' ? 'selected' }}>{{ 'Disabled'|trans }}</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ 'Online status'|trans }}</label>
+                    <select class="form-select" name="online">
+                        <option value="1" {{ (p.online ?? '1') != '0' ? 'selected' }}>{{ "Online (show green 'We're online' dot)"|trans }}</option>
+                        <option value="0" {{ (p.online ?? '1') == '0' ? 'selected' }}>{{ 'Hide online dot'|trans }}</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ 'Header title'|trans }}</label>
+                    <input type="text" class="form-control" name="title" value="{{ p.title ?? 'Support Team' }}"/>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ 'Header subtitle'|trans }}</label>
+                    <input type="text" class="form-control" name="subtitle" value="{{ p.subtitle ?? 'Typically replies in minutes' }}"/>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ 'Greeting'|trans }}</label>
+                    <input type="text" class="form-control" name="greeting" value="{{ p.greeting ?? 'Hi! How can we help? 👋' }}"/>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header"><h3 class="card-title">{{ 'WhatsApp'|trans }}</h3></div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ 'WhatsApp number'|trans }}</label>
+                    <input type="text" class="form-control" name="whatsapp_number" value="{{ p.whatsapp_number ?? '' }}" placeholder="+9779800000000"/>
+                    <small class="form-hint">{{ 'Include the country code. Non-digits are stripped for the wa.me link. Leave blank to hide.'|trans }}</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ 'WhatsApp row label'|trans }}</label>
+                    <input type="text" class="form-control" name="whatsapp_label" value="{{ p.whatsapp_label ?? 'Send us a message' }}"/>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header"><h3 class="card-title">{{ 'Call our agent'|trans }}</h3></div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ 'Phone number'|trans }}</label>
+                    <input type="text" class="form-control" name="phone_number" value="{{ p.phone_number ?? '' }}" placeholder="+977-1-4000000"/>
+                    <small class="form-hint">{{ 'Used for a tel: link. Leave blank to hide.'|trans }}</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ 'Phone row label'|trans }}</label>
+                    <input type="text" class="form-control" name="phone_label" value="{{ p.phone_label ?? 'Call our agent' }}"/>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header"><h3 class="card-title">{{ 'Live Chat (Tawk.to)'|trans }}</h3></div>
+        <div class="card-body">
+            <p class="text-muted">{{ 'Find these in your Tawk.to dashboard under Administration → Chat Widget. The embed URL looks like https://embed.tawk.to/PROPERTY_ID/WIDGET_ID.'|trans }}</p>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ 'Tawk.to property ID'|trans }}</label>
+                    <input type="text" class="form-control" name="tawk_property_id" value="{{ p.tawk_property_id ?? '' }}" placeholder="5xxxxxxxxxxxxxxxxxxxxxxx"/>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ 'Tawk.to widget ID'|trans }}</label>
+                    <input type="text" class="form-control" name="tawk_widget_id" value="{{ p.tawk_widget_id ?? '' }}" placeholder="default"/>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ 'Live Chat row label'|trans }}</label>
+                    <input type="text" class="form-control" name="livechat_label" value="{{ p.livechat_label ?? 'Chat with our team' }}"/>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-8 mb-3">
+                    <label class="form-label">{{ 'Tawk.to API key'|trans }} <span class="text-muted">({{ 'optional — Secure Mode'|trans }})</span></label>
+                    <input type="text" class="form-control" name="tawk_api_key" value="{{ p.tawk_api_key ?? '' }}" placeholder="{{ 'Leave blank unless Secure Mode is enabled'|trans }}"/>
+                    <small class="form-hint">{{ 'From Tawk.to → Administration → Property Settings → API Key. When set, the logged-in client identity is verified via an HMAC-SHA256 hash computed on the server; the key is never sent to the browser.'|trans }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 text-end">
+        <button type="submit" class="btn btn-primary">{{ 'Save settings'|trans }}</button>
+    </div>
+</form>
+{% endblock %}
