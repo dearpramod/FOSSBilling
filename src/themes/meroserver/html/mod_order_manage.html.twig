@@ -38,7 +38,7 @@
 
     {# Domain management panel — shown for all domain orders #}
     {% if isDomain %}
-    <div class="flex flex-col lg:flex-row gap-5" x-data="{ tab: 'overview', eppModal: false, renewModal: false, cancelModal: false }" x-init="$watch('tab', function(t){ if (t === 'dns') { contactFetched = false; loadContactDetails(); } })">
+    <div class="flex flex-col lg:flex-row gap-5" x-data="{ tab: 'overview', renewModal: false, cancelModal: false }">
 
         {# ===== SIDEBAR NAV ===== #}
         <aside class="lg:w-52 flex-shrink-0">
@@ -440,12 +440,6 @@
                     {% else %}
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-sm font-semibold text-white">Contact Management</h2>
-                        <button type="button" id="btn-refresh-contacts"
-                                title="Fetch live contact data from the registrar and compare with saved values"
-                                class="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                            Sync WHOIS
-                        </button>
                     </div>
                     <p class="text-sm text-gray-400 mb-4">
                         Domain contact details are displayed publicly in WHOIS lookups. This updates the Registrant, Technical, Billing and Admin contacts. Enable privacy protection to hide your information.
@@ -623,8 +617,7 @@
                         </button>
                     </div>
 
-                    <button id="btn-get-epp"
-                            @click="eppModal = true; initEppModal()"
+                    <button id="btn-get-epp" type="button"
                             class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20"
                             style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
@@ -635,68 +628,6 @@
             </div>
 
         </div>{# /main content #}
-
-        {# ── EPP OTP verification modal (inside Alpine scope so eppModal binding works) ── #}
-        {% if service and isActive %}
-        <div x-show="eppModal" x-cloak
-             @keydown.escape.window="eppModal = false"
-             @epp-modal-close.window="eppModal = false"
-             class="epp-modal-overlay fixed inset-0 z-[60] flex items-center justify-center p-4"
-             style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
-            <div @click.outside="eppModal = false"
-                 class="epp-modal-card w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
-                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
-                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
-                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
-                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                        </svg>
-                        Verify Identity &mdash; EPP Code
-                    </h3>
-                    <button type="button" @click="eppModal = false" class="text-gray-500 hover:text-white transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="px-6 py-5 space-y-4">
-                    <p class="text-sm text-gray-400">
-                        For security, a one-time password (OTP) will be sent to your registered email address.
-                        Enter the 6-digit code below to retrieve the EPP / transfer code for this domain.
-                    </p>
-                    <div class="flex items-center gap-3">
-                        <button id="btn-send-otp"
-                                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                            </svg>
-                            Send OTP to Email
-                        </button>
-                        <span id="epp-otp-countdown-label" class="text-xs text-gray-500 hidden">
-                            Resend in <span id="epp-otp-seconds">60</span>s
-                        </span>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1.5" for="epp-otp-input">6-Digit OTP</label>
-                        <input type="text" id="epp-otp-input"
-                               maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
-                               placeholder="&bull;&bull;&bull;&bull;&bull;&bull;"
-                               disabled
-                               class="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white text-center text-xl font-mono tracking-[0.5em] placeholder-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    </div>
-                    <button id="btn-verify-otp" disabled
-                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 opacity-40 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
-                        Verify &amp; Get EPP Code
-                    </button>
-                </div>
-            </div>
-        </div>
-        {% endif %}
 
         {# ── Domain Renewal modal ── #}
         {% if service and isActive %}
@@ -846,7 +777,8 @@
     {# Non-domain service — optional service partial with renew/cancel modals #}
     {% elseif not isDomain %}
     {% set _has_service_partial = guest.system_template_exists({'file': 'mod_service' ~ order.service_type ~ '_manage.html.twig'}) %}
-    {% set _unpaid_hash = order.unpaid_invoice_id|default(false) ? client.invoice_renewal_invoice({'order_id': order.id}) : null %}
+    {# Pay/renew is a click-time action via invoice/renewal_invoice (mirrors upstream's
+       onRenewalInvoiceCreated) — never generate or fetch an invoice during a GET render. #}
     {% if isActive and order.price > 0 and order.service_type not in ['hosting', 'custom'] %}
     <div x-data="{ renewModal: false, cancelModal: false }">
 
@@ -993,7 +925,7 @@
 
         {# Service partial inside x-data scope — Alpine state available to partial buttons #}
         {% if _has_service_partial %}
-            {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service, 'unpaid_hash': _unpaid_hash}) }}
+            {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service}) }}
         {% endif %}
     </div>{# /x-data: renewModal, cancelModal #}
 
@@ -1012,7 +944,6 @@
     {% set _sc = _statusColor[order.status] ?? {'bg': 'rgba(var(--color-primary-rgb),0.08)', 'border': 'rgba(var(--color-primary-rgb),0.20)', 'icon': 'rgb(var(--brand-400))', 'label': order.status|capitalize} %}
 
     {% if order.status == 'pending_setup' %}
-    {% set _pending_pay_hash = _unpaid_hash %}
     <section class="pending-activation-hero" aria-labelledby="pending-activation-title">
         <div class="pending-activation-main">
             <div class="pending-activation-mark" aria-hidden="true">
@@ -1032,8 +963,8 @@
                     {{ 'The infrastructure is now being assigned and configured. Access details will appear here automatically when setup is complete.'|trans }}
                 </p>
                 <div class="pending-activation-actions">
-                    {% if _pending_pay_hash %}
-                    <a href="{{ 'invoice'|url }}/{{ _pending_pay_hash }}" class="pending-primary-action">
+                    {% if order.unpaid_invoice_id|default(false) %}
+                    <a href="#" data-pay-order="{{ order.id }}" class="pending-primary-action">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                         {{ 'Complete payment'|trans }}
                     </a>
@@ -1105,8 +1036,7 @@
                 {# Action row #}
                 <div class="flex flex-wrap items-center gap-3">
                     {% if order.status in ['pending_setup', 'failed_setup', 'failed_renew'] and order.unpaid_invoice_id|default(false) %}
-                    {% set _pay_hash = _unpaid_hash %}
-                    <a href="{{ 'invoice'|url }}/{{ _pay_hash }}"
+                    <a href="#" data-pay-order="{{ order.id }}"
                        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all"
                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1160,7 +1090,7 @@
          Mirrors the outer include that existed before the 2026-05-13 refactor. #}
     {% if _has_service_partial
         and (not isActive or order.price == 0 or order.service_type in ['hosting', 'custom']) %}
-        {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service, 'unpaid_hash': _unpaid_hash}) }}
+        {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service}) }}
     {% endif %}
 
     {% endif %}{# /not isDomain #}
@@ -1238,216 +1168,9 @@ function setSaveEnabled(prefix, enabled) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * Load contact details from the DATABASE (no registrar API call).
- * Fast read-only — called on every tab activation.
- * Disables all Save buttons and clears sync badges after populating forms.
- */
-function loadContactDetails(force) {
-    if (contactFetched && !force) return;
-    var loading    = document.getElementById('contact-loading');
-    var loadingTxt = document.getElementById('contact-loading-text');
-    var errorEl    = document.getElementById('contact-error');
-    var wrapper    = document.getElementById('contact-form-wrapper');
-    if (!wrapper) return;
-    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-    if (loading) { loading.style.display = 'flex'; }
-    if (loadingTxt) { loadingTxt.textContent = 'Loading contact details\u2026'; }
-    wrapper.style.opacity = '0.4';
-    wrapper.style.pointerEvents = 'none';
-
-    function hideLoading() {
-        if (loading) loading.style.display = 'none';
-        wrapper.style.opacity = '';
-        wrapper.style.pointerEvents = '';
-    }
-
-    // DB-only read — get_whois_info never calls the registrar.
-    API.client.post('servicedomain/get_whois_info', { order_id: orderId }, function (info) {
-        contactFetched = true;
-        Object.keys(CONTACT_ROLE_MAP).forEach(function (role) {
-            var pfx = CONTACT_ROLE_MAP[role];
-            fillContact(pfx, info[role]);
-            setSaveEnabled(pfx, false);
-            setSyncBadge(pfx, null);
-        });
-        hideLoading();
-    }, function (err) {
-        hideLoading();
-        if (errorEl) {
-            errorEl.textContent = (err && err.message) ? err.message : 'Failed to load contact details.';
-            errorEl.style.display = 'flex';
-        }
-    });
-}
-
-/**
- * Fetch live contact data from the REGISTRAR, update the forms,
- * then compare against the current form values (DB state).
- * Enables Save buttons on roles where the registrar data differs.
- */
-function syncWhoisContacts() {
-    var loading    = document.getElementById('contact-loading');
-    var loadingTxt = document.getElementById('contact-loading-text');
-    var errorEl    = document.getElementById('contact-error');
-    var wrapper    = document.getElementById('contact-form-wrapper');
-    var syncBtn    = document.getElementById('btn-refresh-contacts');
-    if (!wrapper) return;
-    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-    if (loading)    { loading.style.display = 'flex'; }
-    if (loadingTxt) { loadingTxt.textContent = 'Fetching live data from registrar\u2026'; }
-    wrapper.style.opacity = '0.4';
-    wrapper.style.pointerEvents = 'none';
-    if (syncBtn) { syncBtn.disabled = true; syncBtn.classList.add('opacity-50'); }
-
-    // Snapshot current form values (DB state) before overwriting.
-    var snapshots = {};
-    Object.keys(CONTACT_ROLE_MAP).forEach(function (role) {
-        snapshots[role] = snapshotContact(CONTACT_ROLE_MAP[role]);
-    });
-
-    function hideLoading() {
-        if (loading) loading.style.display = 'none';
-        wrapper.style.opacity = '';
-        wrapper.style.pointerEvents = '';
-        if (syncBtn) { syncBtn.disabled = false; syncBtn.classList.remove('opacity-50'); }
-    }
-
-    // sync_whois_info fetches from the registrar, saves to DB, returns live values.
-    API.client.post('servicedomain/sync_whois_info', { order_id: orderId }, function (info) {
-        var totalDiffs = 0;
-        Object.keys(CONTACT_ROLE_MAP).forEach(function (role) {
-            var pfx  = CONTACT_ROLE_MAP[role];
-            var live = info[role];
-            fillContact(pfx, live);
-            var diffs = countDiffs(snapshots[role], live);
-            totalDiffs += diffs;
-            setSyncBadge(pfx, diffs);
-            setSaveEnabled(pfx, diffs > 0);
-        });
-        hideLoading();
-        if (totalDiffs === 0) {
-            StablePanel.message('All contacts already match the registrar \u2014 no changes detected.', 'success');
-        } else {
-            StablePanel.message('WHOIS synced. ' + totalDiffs + ' field' + (totalDiffs !== 1 ? 's' : '') + ' updated. Review and save.', 'success');
-        }
-    }, function (err) {
-        hideLoading();
-        if (errorEl) {
-            errorEl.textContent = (err && err.message) ? err.message : 'Failed to sync from registrar.';
-            errorEl.style.display = 'flex';
-        }
-    });
-}
-
-/**
- * Refresh domain protection status from the local DB cache and update the
- * protection tab UI. Reads from DB only — no registrar call is made.
- *
- * The DB is always authoritative here because every mutation action (lock,
- * unlock, privacy/thief toggle) writes its result back to the DB on success,
- * and syncWhois() (cron / activation / renewal) keeps all fields in sync.
- *
- * Call this after a protection toggle completes to ensure the UI reflects
- * the latest DB state without waiting for a page reload.
- */
-function fetchProtectionStatus() {
-    var lockH = document.getElementById('lock-status-heading');
-    var lockD = document.getElementById('lock-status-desc');
-    var ppH   = document.getElementById('pp-status-heading');
-    var ppD   = document.getElementById('pp-status-desc');
-    var tpH   = document.getElementById('tp-status-heading');
-    var tpD   = document.getElementById('tp-status-desc');
-
-    // Snapshot current content so we can restore it on error.
-    var orig = {
-        lockH: lockH ? lockH.innerHTML : '',
-        lockD: lockD ? lockD.textContent : '',
-        ppH:   ppH   ? ppH.textContent  : '',
-        ppD:   ppD   ? ppD.textContent  : '',
-        tpH:   tpH   ? tpH.innerHTML    : '',
-        tpD:   tpD   ? tpD.textContent  : '',
-    };
-
-    var allBtns = ['btn-lock', 'btn-unlock', 'btn-enable-pp', 'btn-disable-pp', 'btn-enable-tp', 'btn-disable-tp']
-        .map(function(id) { return document.getElementById(id); })
-        .filter(Boolean);
-
-    allBtns.forEach(function(b) { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
-    var loading = '<span class="text-gray-400 animate-pulse">Loading…</span>';
-    if (lockH) lockH.innerHTML = loading;
-    if (ppH)   ppH.innerHTML   = loading;
-    if (tpH)   tpH.innerHTML   = loading;
-
-    API.client.post('servicedomain/get_domain_status', { order_id: orderId }, function(result) {
-        allBtns.forEach(function(b) { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
-
-        // Lock
-        if (lockH) lockH.textContent = result.locked ? 'Domain is Locked' : 'Domain is Unlocked';
-        if (lockD) lockD.textContent = result.locked
-            ? 'Your domain is protected from unauthorized transfers.'
-            : 'Your domain can be transferred to another registrar.';
-        var bLock   = document.getElementById('btn-lock');
-        var bUnlock = document.getElementById('btn-unlock');
-        if (bLock)   bLock.style.display   = result.locked ? 'none' : '';
-        if (bUnlock) bUnlock.style.display  = result.locked ? '' : 'none';
-
-        // Privacy
-        if (ppH) ppH.textContent = 'Privacy Protection is ' + result.privacy_status;
-        if (ppD) ppD.textContent = result.privacy
-            ? 'Your WHOIS contact info is hidden from the public.'
-            : 'Your WHOIS contact info is publicly visible.';
-        var bEnPP  = document.getElementById('btn-enable-pp');
-        var bDisPP = document.getElementById('btn-disable-pp');
-        if (bEnPP)  bEnPP.style.display  = result.privacy ? 'none' : '';
-        if (bDisPP) bDisPP.style.display = result.privacy ? '' : 'none';
-
-        // Thief protection
-        var tpColor = result.thief_protected ? 'text-green-400' : 'text-gray-400';
-        if (tpH) {
-            tpH.textContent = '';
-            tpH.appendChild(document.createTextNode('Thief Protection is '));
-            var tpSpan = document.createElement('span');
-            tpSpan.className = tpColor;
-            tpSpan.textContent = result.thief_protection_status;
-            tpH.appendChild(tpSpan);
-        }
-        if (tpD) tpD.textContent = result.thief_protected
-            ? 'Your domain has an extra theft guard enabled. Disable it first if you need to change privacy protection.'
-            : 'No active theft guard on this domain.';
-        var bEnTP  = document.getElementById('btn-enable-tp');
-        var bDisTP = document.getElementById('btn-disable-tp');
-        if (bEnTP)  bEnTP.style.display  = result.thief_protected ? 'none' : '';
-        if (bDisTP) bDisTP.style.display = result.thief_protected ? '' : 'none';
-
-    }, function() {
-        // Restore original state and re-enable controls on failure.
-        allBtns.forEach(function(b) { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); })
-        if (lockH) lockH.innerHTML   = orig.lockH;
-        if (lockD) lockD.textContent = orig.lockD;
-        if (ppH)   ppH.textContent   = orig.ppH;
-        if (ppD)   ppD.textContent   = orig.ppD;
-        if (tpH)   tpH.innerHTML     = orig.tpH;
-        if (tpD)   tpD.textContent   = orig.tpD;
-    });
-}
-
-/**
- * Populate nameserver form inputs from the local DB cache.
- * Inputs already have server-rendered values via Twig; call this only if you
- * need to re-read from the DB after an NS update without a full page reload.
- */
-function fetchNameservers() {
-    var form = document.getElementById('form-nameservers');
-    if (!form) return;
-
-    API.client.post('servicedomain/get_nameservers', { order_id: orderId }, function (result) {
-        ['ns1', 'ns2', 'ns3', 'ns4'].forEach(function (ns) {
-            var el = document.getElementById(ns);
-            if (el && result[ns] !== undefined) { el.value = result[ns]; }
-        });
-    });
-}
+// (removed: loadContactDetails/syncWhoisContacts/fetchProtectionStatus/fetchNameservers —
+//  those called non-existent endpoints; contacts/NS/status now come from the service
+//  API array at render, matching official FOSSBilling.)
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -1629,13 +1352,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Sync WHOIS button — fetch from registrar and compare with DB values.
-    var btnRefreshContacts = document.getElementById('btn-refresh-contacts');
-    if (btnRefreshContacts) {
-        btnRefreshContacts.addEventListener('click', function () {
-            syncWhoisContacts();
-        });
-    }
 
     // WHOIS / Contact forms — one delegated handler for all 4 role forms.
     var contactWrapper = document.getElementById('contact-form-wrapper');
@@ -1744,108 +1460,30 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // EPP Code — OTP-gated retrieval
-    var btnGetEpp          = document.getElementById('btn-get-epp');
-    var eppResult          = document.getElementById('epp-result');
-    var eppCodeEl          = document.getElementById('epp-code');
-    var btnCopyEpp         = document.getElementById('btn-copy-epp');
-    var btnSendOtp         = document.getElementById('btn-send-otp');
-    var btnVerifyOtp       = document.getElementById('btn-verify-otp');
-    var eppOtpInput        = document.getElementById('epp-otp-input');
-    var eppCountdownLabel  = document.getElementById('epp-otp-countdown-label');
-    var eppSecondsEl       = document.getElementById('epp-otp-seconds');
-    var eppCountdownTimer  = null;
+    // EPP / transfer code — official approach: fetch directly via get_transfer_code on click.
+    var btnGetEpp  = document.getElementById('btn-get-epp');
+    var eppResult  = document.getElementById('epp-result');
+    var eppCodeEl  = document.getElementById('epp-code');
+    var btnCopyEpp = document.getElementById('btn-copy-epp');
 
-    /** Reset modal UI to its initial state (called each time the modal opens). */
-    function initEppModal() {
-        if (eppCountdownTimer) { clearInterval(eppCountdownTimer); eppCountdownTimer = null; }
-        if (btnSendOtp) {
-            btnSendOtp.disabled = false;
-            btnSendOtp.classList.remove('opacity-60', 'cursor-not-allowed');
-        }
-        if (btnVerifyOtp) {
-            btnVerifyOtp.disabled = true;
-            btnVerifyOtp.classList.add('opacity-40', 'cursor-not-allowed');
-        }
-        if (eppOtpInput) { eppOtpInput.value = ''; eppOtpInput.disabled = true; }
-        if (eppCountdownLabel) eppCountdownLabel.classList.add('hidden');
-    }
-
-    /** Start the 60-second resend cooldown after an OTP is dispatched. */
-    function startOtpCooldown() {
-        var remaining = 60;
-        if (eppSecondsEl) eppSecondsEl.textContent = remaining;
-        if (eppCountdownLabel) eppCountdownLabel.classList.remove('hidden');
-        if (btnSendOtp) { btnSendOtp.disabled = true; btnSendOtp.classList.add('opacity-60', 'cursor-not-allowed'); }
-        eppCountdownTimer = setInterval(function () {
-            remaining--;
-            if (eppSecondsEl) eppSecondsEl.textContent = remaining;
-            if (remaining <= 0) {
-                clearInterval(eppCountdownTimer);
-                eppCountdownTimer = null;
-                if (eppCountdownLabel) eppCountdownLabel.classList.add('hidden');
-                if (btnSendOtp) { btnSendOtp.disabled = false; btnSendOtp.classList.remove('opacity-60', 'cursor-not-allowed'); }
-            }
-        }, 1000);
-    }
-
-    if (btnSendOtp) {
-        btnSendOtp.addEventListener('click', function () {
-            btnSetLoading(btnSendOtp);
-            API.client.post('servicedomain/send_epp_otp', { order_id: orderId }, function () {
-                btnClearLoading(btnSendOtp);
-                startOtpCooldown();
-                if (eppOtpInput) { eppOtpInput.disabled = false; eppOtpInput.focus(); }
-                StablePanel.message('OTP sent to your registered email address.', 'success');
-            }, function (err) {
-                btnClearLoading(btnSendOtp);
-                StablePanel.message((err && err.message) ? err.message : 'Failed to send OTP. Please try again.', 'error');
-            });
-        });
-    }
-
-    if (eppOtpInput) {
-        eppOtpInput.addEventListener('input', function () {
-            // Strip non-digits and enforce max length.
-            eppOtpInput.value = eppOtpInput.value.replace(/\D/g, '').slice(0, 6);
-            var ready = eppOtpInput.value.length === 6;
-            if (btnVerifyOtp) {
-                btnVerifyOtp.disabled = !ready;
-                if (ready) {
-                    btnVerifyOtp.classList.remove('opacity-40', 'cursor-not-allowed');
-                } else {
-                    btnVerifyOtp.classList.add('opacity-40', 'cursor-not-allowed');
-                }
-            }
-        });
-    }
-
-    if (btnVerifyOtp) {
-        btnVerifyOtp.addEventListener('click', function () {
-            var otp = eppOtpInput ? eppOtpInput.value.trim() : '';
-            if (otp.length !== 6) return;
-            btnSetLoading(btnVerifyOtp);
-            API.client.post('servicedomain/get_transfer_code', { order_id: orderId, otp: otp }, function (result) {
-                btnClearLoading(btnVerifyOtp);
-                // Close the modal.
-                window.dispatchEvent(new Event('epp-modal-close'));
-                if (eppCountdownTimer) { clearInterval(eppCountdownTimer); eppCountdownTimer = null; }
-                // Display the EPP code in the panel.
-                if (eppCodeEl)  eppCodeEl.textContent = result;
-                if (eppResult)  eppResult.style.display = 'flex';
+    if (btnGetEpp) {
+        btnGetEpp.addEventListener('click', function () {
+            btnSetLoading(btnGetEpp);
+            API.client.post('servicedomain/get_transfer_code', { order_id: orderId }, function (result) {
+                btnClearLoading(btnGetEpp);
+                if (eppCodeEl) eppCodeEl.textContent = result;
+                if (eppResult) eppResult.style.display = 'flex';
                 // Lock the trigger button to prevent re-fetching.
-                if (btnGetEpp) {
-                    btnGetEpp.disabled = true;
-                    btnGetEpp.classList.add('opacity-60', 'cursor-not-allowed');
-                    var svgIcon = btnGetEpp.querySelector('svg');
-                    btnGetEpp.innerHTML = '';
-                    if (svgIcon) btnGetEpp.appendChild(svgIcon);
-                    btnGetEpp.insertAdjacentText('beforeend', ' EPP Code Retrieved');
-                }
+                btnGetEpp.disabled = true;
+                btnGetEpp.classList.add('opacity-60', 'cursor-not-allowed');
+                var svgIcon = btnGetEpp.querySelector('svg');
+                btnGetEpp.innerHTML = '';
+                if (svgIcon) btnGetEpp.appendChild(svgIcon);
+                btnGetEpp.insertAdjacentText('beforeend', ' EPP Code Retrieved');
                 StablePanel.message('EPP code retrieved successfully.', 'success');
             }, function (err) {
-                btnClearLoading(btnVerifyOtp);
-                StablePanel.message((err && err.message) ? err.message : 'Invalid OTP. Please try again.', 'error');
+                btnClearLoading(btnGetEpp);
+                StablePanel.message((err && err.message) ? err.message : 'Failed to retrieve EPP code. Please try again.', 'error');
             });
         });
     }
@@ -1986,6 +1624,39 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         bindCancelForm('cancel-request-form-domain',  'cancel-error-domain',  'btn-submit-cancel-domain',  'cancel-already-domain');
         bindCancelForm('cancel-request-form-service', 'cancel-error-service', 'btn-submit-cancel-service', 'cancel-already-service');
+    }());
+
+    // Pay / complete-payment buttons (parent page + included service partials).
+    // Mirrors upstream's onRenewalInvoiceCreated: generate-or-return the order's invoice
+    // on an explicit click, then go to it. invoice/renewal_invoice is idempotent, so if an
+    // unpaid invoice already exists it returns that hash without creating a duplicate.
+    (function () {
+        if (window.__meroPayOrderInit) { return; }
+        window.__meroPayOrderInit = true;
+        var invoiceBase = '{{ 'invoice'|url }}';
+        document.addEventListener('click', function (e) {
+            var el = e.target.closest('[data-pay-order]');
+            if (!el) { return; }
+            e.preventDefault();
+            if (el.dataset.busy === '1') { return; }
+            el.dataset.busy = '1';
+            var restore = el.innerHTML;
+            el.style.pointerEvents = 'none';
+            el.style.opacity = '0.7';
+            API.client.post('invoice/renewal_invoice', { order_id: parseInt(el.getAttribute('data-pay-order'), 10) }, function (hash) {
+                window.location.href = invoiceBase + '/' + hash;
+            }, function (result) {
+                el.dataset.busy = '';
+                el.style.pointerEvents = '';
+                el.style.opacity = '';
+                el.innerHTML = restore;
+                if (typeof StablePanel !== 'undefined' && StablePanel.toast) {
+                    StablePanel.toast((result && result.message) || 'Could not open the invoice. Please try again.', 'error');
+                } else {
+                    alert((result && result.message) || 'Could not open the invoice. Please try again.');
+                }
+            });
+        });
     }());
 
 });

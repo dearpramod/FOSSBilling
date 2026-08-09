@@ -163,8 +163,7 @@
     </div>
 
     {# Unpaid invoice banner #}
-    {% if order.unpaid_invoice_id %}
-    {% set _unpaid_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+    {% if order.unpaid_invoice_id|default(false) %}
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-6 py-3 border-t border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20">
         <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
             <svg class="w-4 h-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,7 +172,7 @@
             </svg>
             Outstanding invoice — your service may be suspended if unpaid.
         </div>
-        <a href="{{ ('invoice/' ~ _unpaid_hash)|url }}"
+        <a href="#" data-pay-order="{{ order.id }}"
            class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -200,8 +199,8 @@
         <p class="text-xs text-red-400/70 leading-relaxed">
             This service has been suspended. Settle any outstanding invoices or contact support to reactivate.
         </p>
-        {% if order.unpaid_invoice_id %}
-        <a href="{{ ('invoice/' ~ _unpaid_hash)|url }}"
+        {% if order.unpaid_invoice_id|default(false) %}
+        <a href="#" data-pay-order="{{ order.id }}"
            class="mt-2 inline-flex items-center gap-1 text-xs font-semibold" style="color: var(--color-primary);">
             View Invoice &rarr;
         </a>
