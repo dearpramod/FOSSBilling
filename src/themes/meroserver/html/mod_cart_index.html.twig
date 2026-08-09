@@ -34,12 +34,42 @@ function cartPage() {
     };
 }
 </script>
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="cartPage()" x-init="init()">
+<style>
+/* Kept with the cart template so this critical empty state is not affected by
+   stale compiled-theme assets after a theme update. */
+.public-cart-page .public-cart-shell{width:min(100%,76rem)}
+.public-cart-page .public-cart-back{min-height:2.75rem;padding:0 .25rem;color:#64748b}
+.public-cart-page .public-cart-back:hover{color:var(--color-primary)}
+.public-cart-page .public-cart-back svg{transition:transform .2s ease}
+.public-cart-page .public-cart-back:hover svg{transform:translateX(-2px)}
+.public-cart-page .public-cart-empty{display:flex;align-items:center;justify-content:center;min-height:clamp(24rem,54svh,32rem);padding:clamp(2.5rem,6vw,4.5rem) 1.5rem}
+.public-cart-page .public-cart-empty-content{width:100%}
+.public-cart-page .public-cart-empty-visual{position:relative;width:6rem;height:6rem;margin:0 auto 1.5rem;display:grid;place-items:center}
+.public-cart-page .public-cart-empty-visual:after{content:"";position:absolute;left:50%;bottom:.25rem;width:3rem;height:.5rem;border-radius:999px;background:rgba(15,23,42,.09);filter:blur(5px);transform:translateX(-50%);animation:cart-empty-shadow 3s ease-in-out infinite}
+.public-cart-page .public-cart-empty-icon{position:relative;z-index:1;width:5rem;height:5rem;margin:0;color:var(--color-primary);animation:cart-empty-basket 3s ease-in-out infinite;transform-origin:50% 70%}
+.public-cart-page .public-cart-empty-icon svg{width:3.75rem;height:3.75rem}
+.public-cart-page .public-cart-empty h1{color:#0f172a!important}
+.public-cart-page .public-cart-empty p{color:#64748b!important}
+.public-cart-page .public-cart-empty-actions{margin-top:1.5rem!important}
+.public-cart-page main .public-cart-primary{display:inline-flex;align-items:center;justify-content:center;min-height:3.25rem;padding:.35rem .4rem .35rem 1.4rem!important;gap:1rem!important;border:1px solid rgba(255,255,255,.14);border-radius:999px!important;color:#fff!important;background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 10px 24px rgba(var(--color-primary-rgb),.23);font-size:.875rem;font-weight:650;line-height:1;white-space:nowrap;transition:box-shadow .2s ease,filter .2s ease,transform .2s ease}
+.public-cart-page main .public-cart-primary svg{display:block;flex:0 0 auto;width:2.45rem;height:2.45rem;padding:.65rem;border-radius:999px;color:var(--color-primary)!important;background:#fff;transition:transform .2s ease}
+.public-cart-page .public-cart-primary:hover{filter:brightness(1.04);box-shadow:0 14px 30px rgba(var(--color-primary-rgb),.29);transform:translateY(-1px)}
+.public-cart-page .public-cart-primary:hover svg{transform:translateX(2px)}
+.public-cart-page .public-cart-primary:active{transform:translateY(0);box-shadow:0 7px 18px rgba(var(--color-primary-rgb),.2)}
+@keyframes cart-empty-basket{0%,100%{transform:translateY(0) rotate(0)}35%{transform:translateY(-6px) rotate(-2deg)}65%{transform:translateY(-6px) rotate(2deg)}}
+@keyframes cart-empty-shadow{0%,100%{opacity:.7;transform:translateX(-50%) scaleX(1)}50%{opacity:.35;transform:translateX(-50%) scaleX(.78)}}
+html[data-theme="dark"] .public-cart-page .public-cart-empty h1{color:#f8fafc!important}
+html[data-theme="dark"] .public-cart-page .public-cart-empty p{color:#94a3b8!important}
+html[data-theme="dark"] .public-cart-page .public-cart-empty-visual:after{background:rgba(0,0,0,.45)}
+@media(max-width:640px){.public-cart-page .public-cart-empty{min-height:auto;padding:3rem 1rem}.public-cart-page .public-cart-empty-actions{width:auto}.public-cart-page .public-cart-empty-actions a{width:auto}}
+@media(prefers-reduced-motion:reduce){.public-cart-page .public-cart-empty-icon,.public-cart-page .public-cart-empty-visual:after{animation:none!important}.public-cart-page .public-cart-primary:hover{transform:none}}
+</style>
+<div class="public-cart-shell max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="cartPage()" x-init="init()">
 
     {# ── Page header ── #}
-    <div class="flex items-center gap-4 mb-8">
+    <div class="flex items-center gap-4 mb-6">
         <a href="{{ '/order'|url }}"
-           class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+           class="public-cart-back inline-flex items-center gap-2 text-sm text-gray-500 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
             </svg>
@@ -47,17 +77,14 @@ function cartPage() {
         </a>
     </div>
 
+    {% if cart.items %}
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-white">
+        <h1 class="text-2xl font-bold text-white tracking-tight">
             Your Cart
             {% set cart_main_count = 0 %}{% for _ci in cart.items %}{% if not (_ci.parent_id|default(false)) %}{% set cart_main_count = cart_main_count + 1 %}{% endif %}{% endfor %}
-            {% if cart.items %}
-                <span class="ml-2 text-base font-normal text-gray-500">({{ cart_main_count }} item{{ cart_main_count != 1 ? 's' : '' }})</span>
-            {% endif %}
+            <span class="ml-2 text-base font-normal text-gray-500">({{ cart_main_count }} item{{ cart_main_count != 1 ? 's' : '' }})</span>
         </h1>
     </div>
-
-    {% if cart.items %}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
@@ -238,23 +265,18 @@ function cartPage() {
                     </div>
                     {% endif %}
 
-                    {# Tax (only for logged-in taxable clients) #}
-                    {% set cart_tax = 0 %}
-                    {% if client and client.client_is_taxable %}
-                        {% set tax_rate = client.invoice_get_tax_rate %}
-                        {% if tax_rate > 0 %}
-                        {% set cart_tax = cart.total * tax_rate / 100 %}
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-400">VAT ({{ tax_rate }}%)</span>
-                            <span class="text-white">{{ cart_tax | money_convert }}</span>
-                        </div>
-                        {% endif %}
+                    {# VAT is added on /order/checkout, not here #}
+                    {% if client and client.client_is_taxable and client.invoice_get_tax_rate > 0 %}
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-400">VAT ({{ client.invoice_get_tax_rate }}%)</span>
+                        <span class="text-gray-400">Added at checkout</span>
+                    </div>
                     {% endif %}
 
                     <div class="pt-3 border-t border-white/[0.05]">
                         <div class="flex justify-between items-center">
                             <span class="text-sm font-semibold text-white">Total</span>
-                            <span class="text-xl font-bold text-indigo-400">{{ (cart.total + cart_tax) | money_convert }}</span>
+                            <span class="text-xl font-bold text-indigo-400">{{ cart.total | money_convert }}</span>
                         </div>
                         <p class="text-xs text-gray-600 mt-1">Billed in {{ currentCurrency.name }}</p>
                     </div>
@@ -321,24 +343,32 @@ function cartPage() {
     {% else %}
 
     {# ── Empty cart ── #}
-    <div class="flex flex-col items-center justify-center py-24 text-center">
-        <div class="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/[0.07] flex items-center justify-center mb-6">
-            <svg class="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+    <section class="public-cart-empty text-center" aria-labelledby="empty-cart-title">
+        <div class="public-cart-empty-content relative z-10 mx-auto flex max-w-xl flex-col items-center">
+            <div class="public-cart-empty-visual" aria-hidden="true">
+                <div class="public-cart-empty-icon flex items-center justify-center">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"
+                              d="M3.5 5.5h2l1.65 9.15a2 2 0 001.97 1.65h8.76a2 2 0 001.97-1.64L21 8H6M9.5 20a1 1 0 110-2 1 1 0 010 2zm8 0a1 1 0 110-2 1 1 0 010 2z"/>
+                    </svg>
+                </div>
+            </div>
+            <h1 id="empty-cart-title" class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Your basket is empty</h1>
+            <p class="text-gray-500 text-sm sm:text-base leading-relaxed mt-3 max-w-md">
+                Browse our plans and add a service when you are ready.
+            </p>
+            <div class="public-cart-empty-actions flex items-center justify-center mt-7 w-full sm:w-auto">
+                <a href="{{ '/order'|url }}"
+                   class="public-cart-primary inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold"
+                   style="color:#fff !important;">
+                    <span style="color:#fff !important;">Browse Plans</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                    </svg>
+                </a>
+            </div>
         </div>
-        <h2 class="text-xl font-bold text-white mb-2">Your cart is empty</h2>
-        <p class="text-gray-500 text-sm mb-8 max-w-xs">Browse our plans and add something to get started.</p>
-        <a href="{{ '/order'|url }}"
-           class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-all"
-           style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary)); box-shadow:0 4px 16px rgba(var(--color-primary-rgb),.25);">
-            Browse Plans
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-            </svg>
-        </a>
-    </div>
+    </section>
 
     {% endif %}
 

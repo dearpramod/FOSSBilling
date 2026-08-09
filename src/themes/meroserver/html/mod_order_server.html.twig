@@ -53,6 +53,7 @@
 {% endif %}
 {% if product is defined and product %}
 {% set pricing = product.pricing %}
+{% set option_fields = guest.serviceserver_product_options_get({'product_id': product.id}) %}
 {% set periods = guest.system_periods %}
 {% set first_period = '' %}
 {% if pricing.type == 'recurrent' %}{% for code, prices in pricing.recurrent %}{% if first_period == '' and prices.enabled %}{% set first_period = code %}{% endif %}{% endfor %}{% endif %}
@@ -61,10 +62,24 @@
 {% if pricing.type == 'recurrent' and pricing.recurrent['1M'] is defined and pricing.recurrent['1M'].enabled %}{% set _base_mo_price = pricing.recurrent['1M'].price %}{% endif %}
 {% set _period_months = {'1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36} %}
 
+{# Resolve parent category link dynamically from product.product_category_id #}
+{% set _cat_href = '/order'|url %}
+{% set _cat_label = 'All Plans' %}
+{% if product.product_category_id %}
+    {% set _cat_list = guest.product_category_get_list({'per_page': 200, 'deep': 0}) %}
+    {% for _cat in _cat_list.list %}
+        {% if _cat.id == product.product_category_id %}
+            {% set _cat_slug = _cat.title|lower|replace({' ': '-'})|replace({'/': '-'})|trim('-') %}
+            {% set _cat_href = ('/order/' ~ _cat_slug)|url %}
+            {% set _cat_label = _cat.title %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
 <div class="ord-srv-detail">
-    <a href="{{ '/order/vps'|url }}" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark-link-muted transition-colors mb-4">
+    <a href="{{ _cat_href }}" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark-link-muted transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        Back to Server Plans
+        Back to {{ _cat_label }}
     </a>
     <div class="flex items-end gap-3 mb-6">
         <h1 class="text-2xl font-bold text-slate-900 ord-srv-heading">{{ product.title }}</h1>
@@ -84,6 +99,49 @@
     {% else %}
 
     {% include 'partial_order_product_component.html.twig' %}
+
+    {% if option_fields|length > 0 %}
+    <script>
+    /* SRV_OPTION_FIELDS: server-side data emitted once; srvOptionField() references by index (avoids |raw in HTML attributes) */
+    const SRV_OPTION_FIELDS = {{ option_fields|json_encode|raw }};
+
+    function srvOptionField(fieldData) {
+        return {
+            field: fieldData,
+            selected: '',
+            activeGroup: null,
+
+            init() {
+                const groups = [...new Set((this.field.options || []).map(o => o.group).filter(Boolean))];
+                if (groups.length) this.activeGroup = groups[0];
+            },
+
+            selectOption(value, priceMonthly, optionLabel) {
+                this.selected = value;
+                document.dispatchEvent(new CustomEvent('srvFieldPriceUpdated', {
+                    detail: {
+                        fieldId: this.field.id,
+                        fieldLabel: this.field.label,
+                        optionValue: value || null,
+                        optionLabel: optionLabel || value,
+                        monthlyPrice: parseFloat(priceMonthly) || 0,
+                    }
+                }));
+            },
+
+            onDropdownChange(event) {
+                const el = event.target;
+                const opt = el.options[el.selectedIndex];
+                this.selectOption(
+                    el.value,
+                    parseFloat(opt?.dataset?.price || 0),
+                    opt?.dataset?.optlabel || el.value
+                );
+            },
+        };
+    }
+    </script>
+    {% endif %}
 
     {# ══ Two-column Stitch layout ══ #}
     <div x-data="orderProduct({{ product.id }}, '{{ first_period }}')" class="ord-srv-layout">
@@ -157,6 +215,166 @@
                 <span class="text-sm ord-srv-muted">Free plan</span>
                 <span class="text-2xl font-bold text-emerald-500">{{ 0|money_convert }}</span>
             </div>
+            {% endif %}
+
+            {# ── Server option fields (location, OS, etc.) ── #}
+            {% if option_fields|length > 0 %}
+            <section class="ord-srv-section-card-divided" id="srv-options-section">
+                <div class="flex items-center gap-3 ord-srv-section-hd">
+                    <span class="p-2 rounded-lg border shadow-sm flex items-center justify-center" style="background:#fff;border-color:rgba(0,0,0,0.1);">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--color-primary);"><rect x="3" y="4" width="18" height="6" rx="2" stroke-width="2"/><rect x="3" y="14" width="18" height="6" rx="2" stroke-width="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6" stroke-width="2"/></svg>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold ord-srv-heading">Server Configuration</h4>
+                        <p class="ord-srv-dimmed text-xs mt-0.5">Customise your server before ordering</p>
+                    </div>
+                </div>
+
+                <div class="p-5 space-y-7">
+                {% for field in option_fields %}
+                {% if field.options|default([])|length == 0 %}
+                <div class="ord-srv-option-card p-4">
+                    <p class="text-sm font-semibold ord-srv-heading mb-0.5">{{ field.label }}</p>
+                    <p class="text-xs ord-srv-dimmed">No options configured for this field.</p>
+                </div>
+                {% else %}
+                {% set field_groups = [] %}
+                {% for opt in field.options %}
+                    {% if opt.group is defined and opt.group and opt.group not in field_groups %}
+                        {% set field_groups = field_groups|merge([opt.group]) %}
+                    {% endif %}
+                {% endfor %}
+
+                <div class="ord-srv-option-card"
+                     x-data="srvOptionField(SRV_OPTION_FIELDS[{{ loop.index0 }}])"
+                     x-init="init()">
+
+                    {# Field heading #}
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <h5 class="text-sm font-semibold ord-srv-heading">
+                                {{ field.label }}
+                                {% if field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+                            </h5>
+                            {% if field.description is defined and field.description %}
+                            <p class="text-xs ord-srv-dimmed mt-0.5">{{ field.description }}</p>
+                            {% endif %}
+                        </div>
+                        {# Show currently selected option label #}
+                        <span class="text-xs font-medium transition-all ord-srv-dimmed"
+                              x-text="selected ? (field.options.find(o=>o.value===selected)?.label || selected) : ''"></span>
+                    </div>
+
+                    {# Hidden input — fallback collection in addToCart DOM scan #}
+                    <input type="hidden"
+                           name="config[{{ field.id }}]"
+                           :value="selected"
+                           data-server-option="1"
+                           data-required="{{ field.required ? 'true' : 'false' }}"
+                           data-label="{{ field.label }}">
+
+                    {% if field.display is defined and field.display == 'card-grid' %}
+
+                    {# ── Card-grid display ── #}
+                    {% if field_groups|length > 1 %}
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        {% for grp in field_groups %}
+                        <button type="button"
+                                @click="activeGroup = '{{ grp }}'"
+                                :class="activeGroup === '{{ grp }}'
+                                    ? 'ord-opt-tab-on'
+                                    : 'ord-opt-tab-off'"
+                                class="ord-opt-tab">{{ grp }}</button>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {% for opt in field.options %}
+                        <button type="button"
+                                {% if field_groups|length > 1 %}
+                                x-show="!activeGroup || activeGroup === {{ opt.group|default('')|json_encode }}"
+                                {% endif %}
+                                @click="selectOption({{ opt.value|json_encode }}, {{ opt.price_monthly|default(0) }}, {{ opt.label|json_encode }})"
+                                :class="selected === {{ opt.value|json_encode }}
+                                    ? 'ord-opt-card-on'
+                                    : 'ord-opt-card-off'"
+                                class="ord-opt-card relative text-left">
+
+                            {% if opt.image_url is defined and opt.image_url %}
+                            <img src="{{ opt.image_url }}" alt="{{ opt.label }}"
+                                 class="w-7 h-7 mb-2 object-contain" loading="lazy">
+                            {% endif %}
+
+                            {% if opt.badge is defined and opt.badge %}
+                            <span class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none"
+                                  style="{{ opt.badge == 'Best' ? 'background:#22c55e;color:#fff;'
+                                           : opt.badge == 'Good' ? 'background:#06b6d4;color:#fff;'
+                                           : opt.badge == 'Fair' ? 'background:#f59e0b;color:#fff;'
+                                           : 'background:#6b7280;color:#fff;' }}">
+                                {{ opt.badge }}
+                            </span>
+                            {% endif %}
+
+                            <div class="text-xs font-semibold ord-srv-heading truncate">{{ opt.label }}</div>
+
+                            {% if opt.meta is defined and opt.meta %}
+                            <div class="text-[10px] ord-srv-dimmed mt-0.5 truncate">{{ opt.meta }}</div>
+                            {% endif %}
+
+                            {% if opt.price_monthly is defined and opt.price_monthly > 0 %}
+                            <div class="text-[10px] font-semibold mt-1" style="color:var(--color-primary);">
+                                +{{ opt.price_monthly|money_convert }}/mo
+                            </div>
+                            {% endif %}
+                        </button>
+                        {% endfor %}
+                    </div>
+
+                    {% else %}
+
+                    {# ── Dropdown display (default) ── #}
+                    <div class="relative">
+                        <select class="ord-srv-select w-full"
+                                @change="onDropdownChange($event)">
+                            <option value="">— Select {{ field.label }} —</option>
+                            {% if field_groups|length > 1 %}
+                                {% for grp in field_groups %}
+                                <optgroup label="{{ grp }}">
+                                    {% for opt in field.options %}{% if opt.group|default('') == grp %}
+                                    <option value="{{ opt.value }}"
+                                            data-price="{{ opt.price_monthly|default(0) }}"
+                                            data-optlabel="{{ opt.label }}">
+                                        {{ opt.label }}{% if opt.meta is defined and opt.meta %} — {{ opt.meta }}{% endif %}{% if opt.badge is defined and opt.badge %} [{{ opt.badge }}]{% endif %}{% if opt.price_monthly is defined and opt.price_monthly > 0 %} (+{{ opt.price_monthly|money_convert }}/mo){% endif %}
+                                    </option>
+                                    {% endif %}{% endfor %}
+                                </optgroup>
+                                {% endfor %}
+                            {% else %}
+                                {% for opt in field.options %}
+                                <option value="{{ opt.value }}"
+                                        data-price="{{ opt.price_monthly|default(0) }}"
+                                        data-optlabel="{{ opt.label }}">
+                                    {{ opt.label }}{% if opt.meta is defined and opt.meta %} — {{ opt.meta }}{% endif %}{% if opt.badge is defined and opt.badge %} [{{ opt.badge }}]{% endif %}{% if opt.price_monthly is defined and opt.price_monthly > 0 %} (+{{ opt.price_monthly|money_convert }}/mo){% endif %}
+                                </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ord-srv-dimmed" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+
+                    {% endif %}
+
+                    {# Required validation hint #}
+                    {% if field.required %}
+                    <p x-show="!selected" x-cloak class="text-[10px] text-red-400 mt-1.5">Please select a {{ field.label }}</p>
+                    {% endif %}
+
+                </div>
+                {% endif %}
+                {% endfor %}
+                </div>
+            </section>
             {% endif %}
 
             {# ── Custom configuration card (formbuilder) ── #}
@@ -294,6 +512,15 @@
                         </div>
                         {% endfor %}
 
+                        {# Selected server option fields #}
+                        <template x-for="[fid, sel] in Object.entries(srvFieldSelections)" :key="fid">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="ord-srv-muted text-xs" x-text="sel.label + ': ' + sel.optionLabel"></span>
+                                <span class="font-semibold ord-srv-heading text-xs"
+                                      x-text="sel.price > 0 ? ('+' + formatMoney(sel.price * (periodMonthsMap[selectedPeriod] || 1))) : 'Included'"></span>
+                            </div>
+                        </template>
+
                         <div x-show="couponDiscount > 0" x-cloak class="flex items-center justify-between text-sm pt-2 border-t border-slate-100">
                             <span class="text-emerald-600">Coupon discount</span>
                             <span class="font-semibold text-emerald-600" x-text="'−' + formatMoney(couponDiscount)"></span>
@@ -305,6 +532,9 @@
                         <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Due Today</span>
                         <div class="text-[2.25rem] leading-none font-black text-slate-900 mt-1 ord-srv-heading"
                              x-text="calcTotal({% if pricing.type == 'once' %}'once'{% elseif pricing.type == 'free' %}'free'{% else %}selectedPeriod || '{{ first_period }}'{% endif %})"></div>
+                        {% if client and client.client_is_taxable %}
+                        <p class="text-[11px] text-slate-400 mt-1">Excl. {{ client.invoice_get_tax_rate }}% VAT — added at checkout</p>
+                        {% endif %}
                     </div>
 
                     {# Coupon — always-visible input + Apply button #}
@@ -368,7 +598,7 @@
                     <p class="text-[10px] text-slate-400 text-center leading-relaxed">
                         By ordering, you agree to our
                         <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-slate-500 underline hover:text-indigo-600">Terms of Service</a>
-                        and Privacy Policy. All taxes are calculated at checkout.
+                        and Privacy Policy. Tax (if applicable) calculated at checkout.
                     </p>
                 </div>
             </div>
@@ -924,6 +1154,35 @@
 .fb-chk-opt { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1.5px solid rgba(0,0,0,0.08); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s; }
 [data-theme="dark"] .fb-chk-opt { border-color: rgba(255,255,255,0.08); }
 
+/* ── Server option field cards ── */
+.ord-opt-card {
+    padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 2px solid;
+    transition: border-color 0.15s, background 0.15s; cursor: pointer; width: 100%;
+}
+.ord-opt-card-on  { border-color: var(--color-primary); background: rgba(var(--color-primary-rgb),0.07); }
+.ord-opt-card-off { border-color: rgba(0,0,0,0.1); background: transparent; }
+.ord-opt-card-off:hover { border-color: rgba(0,0,0,0.22); background: rgba(0,0,0,0.02); }
+[data-theme="dark"] .ord-opt-card-off { border-color: rgba(255,255,255,0.1); }
+[data-theme="dark"] .ord-opt-card-off:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.03); }
+/* Group tabs */
+.ord-opt-tab { padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; border: 1px solid; transition: all 0.15s; }
+.ord-opt-tab-on  { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.ord-opt-tab-off { background: transparent; color: inherit; border-color: rgba(0,0,0,0.12); }
+.ord-opt-tab-off:hover { border-color: rgba(0,0,0,0.3); }
+[data-theme="dark"] .ord-opt-tab-off { border-color: rgba(255,255,255,0.15); }
+[data-theme="dark"] .ord-opt-tab-off:hover { border-color: rgba(255,255,255,0.3); }
+/* Required error flash */
+.ord-srv-required-error { border-color: #ef4444 !important; background: rgba(239,68,68,0.06) !important; }
+/* Dropdown select */
+.ord-srv-select {
+    appearance: none; padding: 0.65rem 2.5rem 0.65rem 0.875rem;
+    border-radius: 0.75rem; border: 1.5px solid rgba(0,0,0,0.14);
+    background: #fff; color: inherit; font-size: 0.875rem;
+    transition: border-color 0.15s; cursor: pointer; outline: none;
+}
+.ord-srv-select:focus { border-color: var(--color-primary); }
+[data-theme="dark"] .ord-srv-select { border-color: rgba(255,255,255,0.14); background: rgba(255,255,255,0.04); }
+[data-theme="dark"] .ord-srv-select:focus { border-color: var(--color-primary); }
 .reveal-up, .reveal-left, .reveal-right {
     opacity: 0;
     transition: opacity 0.65s ease, transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);

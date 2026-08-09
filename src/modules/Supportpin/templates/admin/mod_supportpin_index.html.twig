@@ -106,7 +106,7 @@
 (function () {
     'use strict';
 
-    const adminBase = {{ ''|url|json_encode }};
+    const adminBase = {{ ''|url|json_encode|raw }};
     const input = document.getElementById('pin-input');
     const btn = document.getElementById('btn-lookup');
     const resultCard = document.getElementById('result-card');
@@ -140,7 +140,7 @@
                 ? '<span class="badge bg-success-lt">Active</span>'
                 : '<span class="badge bg-warning-lt">' + result.status + '</span>';
             document.getElementById('res-id').textContent = '#' + result.client_id;
-            document.getElementById('res-link').href = adminBase + 'client/manage/' + result.client_id;
+            document.getElementById('res-link').href = adminBase + '/client/manage/' + result.client_id;
         }, function (err) {
             resetBtn();
             showError(err.message || '{{ 'No client found for this PIN.'|trans|e('js') }}');

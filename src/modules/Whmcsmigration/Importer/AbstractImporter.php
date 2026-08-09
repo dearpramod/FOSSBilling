@@ -21,8 +21,8 @@ use Box\Mod\Whmcsmigration\Support\SourceDb;
 abstract class AbstractImporter implements ImporterInterface
 {
     /** Abort the stage when more than this share of rows fail (after MIN_ROWS_FOR_ABORT). */
-    private const FAILURE_RATE_ABORT = 0.05;
-    private const MIN_ROWS_FOR_ABORT = 100;
+    private const float FAILURE_RATE_ABORT = 0.05;
+    private const int MIN_ROWS_FOR_ABORT = 100;
 
     protected ?\Pimple\Container $di = null;
     protected SourceDb $source;

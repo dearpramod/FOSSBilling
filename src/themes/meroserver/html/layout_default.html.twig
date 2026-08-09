@@ -262,7 +262,7 @@
            class="saas-sidebar fixed inset-y-0 left-0 z-50 lg:z-auto w-[17.25rem] bg-white border-r border-slate-200 flex flex-col transform lg:translate-x-0 lg:relative">
 
            <!-- Logo -->
-           <div class="saas-sidebar-header flex-shrink-0 flex items-center border-b border-slate-200 transition-all duration-300"
+           <div class="saas-sidebar-header flex-shrink-0 flex items-center border-b border-slate-200"
                :class="sidebarCollapsed ? 'justify-center px-0 py-3' : 'flex-col justify-center gap-1 px-4 py-3 text-center'">
             <!-- Collapsed: favicon icon -->
             <a x-show="sidebarCollapsed" x-transition.opacity.duration.150ms href="{{ '/'|url }}" class="sb-logo-icon w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -273,7 +273,7 @@
                 {% endif %}
             </a>
             <!-- Expanded: logo or brand text, with dashboard label below -->
-            <div x-show="!sidebarCollapsed" x-transition.opacity.duration.150ms class="sb-logo-full flex-col items-center min-w-0 flex-1 overflow-hidden">
+            <div x-show="!sidebarCollapsed" class="sb-logo-full flex-col items-center justify-center w-full min-w-0 overflow-hidden">
                 {% if settings.logo_url|default(false) %}
                     <a href="{{ '/'|url }}" class="flex-shrink-0 overflow-hidden">
                         <img src="{{ settings.logo_url }}" alt="{{ company.name }}" class="h-7 w-auto logo-img mx-auto">
@@ -352,14 +352,8 @@
             {% if _sidebar_unverified %}<div class="sb-lock-wrap">{% endif %}
             {# Collapsed sidebar: single icon link #}
             <a x-show="sidebarCollapsed"
-               x-transition:enter="transition ease-out duration-200"
-               x-transition:enter-start="opacity-0 scale-95"
-               x-transition:enter-end="opacity-100 scale-100"
-               x-transition:leave="transition ease-in duration-150"
-               x-transition:leave-start="opacity-100 scale-100"
-               x-transition:leave-end="opacity-0 scale-95"
                href="{{ '/order'|url }}" title="Order Services"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
+               class="sb-order-collapsed flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                       {% if orderServicesActive %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}
                       {% if _sidebar_unverified %} opacity-40 pointer-events-none{% endif %}"
                :class="sidebarCollapsed ? 'justify-center px-2' : ''"{% if _sidebar_unverified %} aria-disabled="true" title="Verify your email to place orders"{% endif %}>
@@ -371,13 +365,8 @@
 
             {# Expanded sidebar: collapsible header + children #}
             <div x-show="!sidebarCollapsed"
-                 x-transition:enter="transition ease-out duration-200 delay-75"
-                 x-transition:enter-start="opacity-0 -translate-x-1"
-                 x-transition:enter-end="opacity-100 translate-x-0"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 translate-x-0"
-                 x-transition:leave-end="opacity-0 -translate-x-1"
-                 {% if _sidebar_unverified %}class="opacity-40 pointer-events-none" aria-disabled="true"{% endif %}>
+                 class="sb-order-expanded{% if _sidebar_unverified %} opacity-40 pointer-events-none{% endif %}"
+                 {% if _sidebar_unverified %}aria-disabled="true"{% endif %}>
                 <button @click="orderServicesOpen = !orderServicesOpen"
                         :aria-expanded="orderServicesOpen.toString()"
                         aria-controls="sidebar-order-services"
@@ -998,7 +987,7 @@
                     </svg>
                 </button>{% endif %}
                 <div>
-                    <h1 class="text-sm font-semibold text-[#0b1c30]">{% block page_header %}{{ block('meta_title') }}{% endblock %}</h1>
+                    <h1 class="text-sm font-semibold text-on-surface dark:text-white">{% block page_header %}{{ block('meta_title') }}{% endblock %}</h1>
                     {% block breadcrumb %}{% endblock %}
                 </div>
             </div>
@@ -1250,9 +1239,15 @@
                         <span>&copy; {{ "now"|date("Y") }} {{ company.name }} &mdash; A brand of Stable Cluster Pvt Ltd.</span>
                     </div>
                     <nav class="ref-compact-footer-nav" aria-label="Footer navigation">
-                        <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">Privacy</a>
-                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}">Terms</a>
-                        <a href="{{ (settings.link_support|default('/support/contact'))|url }}">Support</a>
+                        {% if settings.portal_footer_privacy_show|default('1') != '0' %}
+                        <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}">{{ settings.portal_footer_privacy_label|default('') ?: 'Privacy' }}</a>
+                        {% endif %}
+                        {% if settings.portal_footer_terms_show|default('1') != '0' %}
+                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}">{{ settings.portal_footer_terms_label|default('') ?: 'Terms' }}</a>
+                        {% endif %}
+                        {% if settings.portal_footer_support_show|default('1') != '0' %}
+                        <a href="{{ (settings.link_support|default('/support/contact'))|url }}">{{ settings.portal_footer_support_label|default('') ?: 'Support' }}</a>
+                        {% endif %}
                     </nav>
                 </div>
                 {{ render_widgets('client.theme.footer.end') }}

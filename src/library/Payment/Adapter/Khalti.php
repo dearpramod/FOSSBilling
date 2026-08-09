@@ -181,11 +181,15 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             }
         }
 
-        // Hydrate invoice_hash so bb-ipn.php can redirect the client after processing
+        // Hydrate invoice_hash so ipn.php can redirect the client after processing.
+        // Set on both $_GET and the DI request object: the Symfony Request was
+        // already constructed before processTransaction() runs, so $_GET alone
+        // would be missed by $request->query. Setting both keeps compatibility.
         if ($invoiceId) {
             $inv = $this->di['db']->load('Invoice', $invoiceId);
             if ($inv) {
                 $_GET['invoice_hash'] = $inv->hash;
+                $this->di['request']->query->set('invoice_hash', $inv->hash);
             }
         }
 
@@ -425,7 +429,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         // SYSTEM_URL is built in load.php with the correct scheme (https:// or http://).
         // getParamValue('url') returns the raw config value which has no scheme, so
         // Khalti's API rejects it (HTTP 500 on their URL validator). Use SYSTEM_URL.
-        $websiteUrl = defined('SYSTEM_URL') ? rtrim(SYSTEM_URL, '/') : '';
+        $websiteUrl = defined('SYSTEM_URL') ? rtrim((string) SYSTEM_URL, '/') : '';
         if ($websiteUrl === '') {
             $systemService = $this->di['mod_service']('System');
             $websiteUrl = rtrim((string) ($systemService->getParamValue('url') ?: ''), '/');
@@ -507,7 +511,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
 
         // Validate payment_url is a genuine Khalti domain
         $allowedHosts = ['pay.khalti.com', 'test-pay.khalti.com'];
-        $parsedUrl = parse_url($rawPaymentUrl);
+        $parsedUrl = parse_url((string) $rawPaymentUrl);
         $urlHost = $parsedUrl['host'] ?? '';
         $urlScheme = $parsedUrl['scheme'] ?? '';
 
@@ -523,8 +527,8 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             $this->storePaymentIntent($rawPidx, (int) $invoice->id, $amountPaisa, $purchaseOrderId, $expiresIn * 2);
         }
 
-        $paymentUrlHtml = htmlspecialchars($rawPaymentUrl, ENT_QUOTES, 'UTF-8');
-        $pidxHtml = htmlspecialchars($rawPidx, ENT_QUOTES, 'UTF-8');
+        $paymentUrlHtml = htmlspecialchars((string) $rawPaymentUrl, ENT_QUOTES, 'UTF-8');
+        $pidxHtml = htmlspecialchars((string) $rawPidx, ENT_QUOTES, 'UTF-8');
         $paymentUrlJs = json_encode($rawPaymentUrl);
         $expiryMinutes = (int) ceil($expiresIn / 60);
 
@@ -536,9 +540,8 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         $html .= '<p style="margin-top:12px;font-size:12px;color:#aaa;">Payment link expires in ' . $expiryMinutes . ' minutes &mdash; Reference: ' . $pidxHtml . '</p>';
         // Use window.top so the redirect escapes the sandboxed gateway iframe in mod_invoice_banklink
         $html .= '<script>setTimeout(function(){ (window.top||window).location.href=' . $paymentUrlJs . '; }, 1500);</script>';
-        $html .= '</div>';
 
-        return $html;
+        return $html . '</div>';
     }
 
     private function getAmountInPaisa(Model_Invoice $invoice): int
@@ -648,11 +651,11 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         }
 
         if (!empty($invoice->buyer_email)) {
-            $info['email'] = mb_substr($invoice->buyer_email, 0, 75);
+            $info['email'] = mb_substr((string) $invoice->buyer_email, 0, 75);
         }
 
         if (!empty($invoice->buyer_phone)) {
-            $phone = mb_substr(preg_replace('/[^0-9]/', '', $invoice->buyer_phone), 0, 16);
+            $phone = mb_substr((string) preg_replace('/[^0-9]/', '', (string) $invoice->buyer_phone), 0, 16);
             if (!empty($phone)) {
                 $info['phone'] = $phone;
             }
@@ -770,7 +773,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         $currencyService = $this->di['mod_service']('currency');
         $repo = $currencyService->getCurrencyRepository();
         $defaultCurrency = $repo->findDefault();
-        $baseCurrency = $defaultCurrency ? strtoupper($defaultCurrency->getCode()) : 'NPR';
+        $baseCurrency = $defaultCurrency ? strtoupper((string) $defaultCurrency->getCode()) : 'NPR';
 
         // Step 1: invoice currency → base currency.
         // toBaseCurrency() throws \FOSSBilling\Exception on a missing or zero rate,
@@ -818,7 +821,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         // {"detail": "..."} — standard Khalti auth/server error
         if (isset($response['detail'])) {
             return is_array($response['detail'])
-                ? implode(' ', array_map('strval', $response['detail']))
+                ? implode(' ', array_map(strval(...), $response['detail']))
                 : (string) $response['detail'];
         }
 
@@ -839,11 +842,11 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                 $isAssoc = array_keys($errors) !== range(0, count($errors) - 1);
                 if ($isAssoc) {
                     foreach ($errors as $subField => $subErrors) {
-                        $flat = is_array($subErrors) ? implode(', ', array_map('strval', $subErrors)) : (string) $subErrors;
+                        $flat = is_array($subErrors) ? implode(', ', array_map(strval(...), $subErrors)) : (string) $subErrors;
                         $messages[] = $field . '.' . $subField . ': ' . $flat;
                     }
                 } else {
-                    $messages[] = $field . ': ' . implode(', ', array_map('strval', $errors));
+                    $messages[] = $field . ': ' . implode(', ', array_map(strval(...), $errors));
                 }
             } elseif (is_string($errors) && $errors !== '') {
                 $messages[] = $field . ': ' . $errors;

@@ -231,7 +231,7 @@ class Payment_Adapter_BankTransfer
 
         // Amount badge
         $html .= '<div style="margin-bottom:24px;"><span class="bt-badge">';
-        $html .= 'Amount: ' . htmlspecialchars($currency, ENT_QUOTES, 'UTF-8') . ' ' . number_format((float) $amount, 2);
+        $html .= 'Amount: ' . htmlspecialchars((string) $currency, ENT_QUOTES, 'UTF-8') . ' ' . number_format((float) $amount, 2);
         $html .= ' &nbsp;&middot;&nbsp; Invoice #' . $invoiceNr;
         $html .= '</span></div>';
 
@@ -293,9 +293,8 @@ class Payment_Adapter_BankTransfer
 
         $html .= '<script>document.querySelectorAll(".bt-copy").forEach(function(el){el.addEventListener("click",function(){var val=this.parentElement.textContent.trim();if(navigator.clipboard){navigator.clipboard.writeText(val).then(function(){el.style.opacity="1";setTimeout(function(){el.style.opacity="0.5";},800);});}});});</script>';
         $html .= '<p class="bt-note">After completing the transfer, please allow some time for verification. Your invoice will be marked as paid once the payment is confirmed.</p>';
-        $html .= '</div>';
 
-        return $html;
+        return $html . '</div>';
     }
 
     public function processTransaction($api_admin, $id, $data, $gateway_id): bool

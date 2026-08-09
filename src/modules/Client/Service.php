@@ -129,7 +129,7 @@ class Service implements InjectionAwareInterface
         }
 
         // Links expire after 48 hours
-        if (strtotime($result['created_at']) < time() - (48 * 3600)) {
+        if (strtotime((string) $result['created_at']) < time() - (48 * 3600)) {
             $db->exec('DELETE FROM extension_meta WHERE id = :id', ['id' => $result['id']]);
             throw new InformationException('This email confirmation link has expired');
         }

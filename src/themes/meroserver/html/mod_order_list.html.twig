@@ -6,12 +6,13 @@
 {% import "macro_functions.html.twig" as mf %}
 
 {# Resolve filters from request #}
-{% set status_tab   = request.tab|default('active') %}
+{% set status_tab   = request.tab|default('all') %}
 {% set search_query = request.search|default('') %}
 {% set invoice_type = request.invoice_type|default('') %}
 {% set category_id  = request.category_id|default('') %}
 
 {# Build API params #}
+{% set sort_by = request.sort|default('') %}
 {% set api_params = {'per_page': 50, 'hide_addons': 1} %}
 {% if status_tab == 'active' %}
     {% set api_params = api_params|merge({'status': 'active'}) %}
@@ -26,6 +27,9 @@
 {% endif %}
 {% if category_id %}
     {% set api_params = api_params|merge({'product_category_id': category_id}) %}
+{% endif %}
+{% if sort_by in ['title', 'price'] %}
+    {% set api_params = api_params|merge({'order_by': sort_by, 'order_direction': 'ASC'}) %}
 {% endif %}
 
 {% set orders = client.order_get_list(api_params) %}
@@ -71,11 +75,11 @@
                    class="px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap
                           {{ status_tab == tab_id ? 'bg-white shadow-sm text-[color:var(--color-primary)]' : 'text-slate-500 hover:text-slate-700' }}">
                     {{ tab_label }}
-                    {% if tab_id == 'active' and count_active %}
+                    {% if tab_id == 'active' and count_active is not null %}
                         ({{ count_active }})
-                    {% elseif tab_id == 'cancelled' and count_cancelled %}
+                    {% elseif tab_id == 'cancelled' and count_cancelled is not null %}
                         ({{ count_cancelled }})
-                    {% elseif tab_id == 'all' %}
+                    {% elseif tab_id == 'all' and count_all is not null %}
                         ({{ count_all }})
                     {% endif %}
                 </a>
@@ -99,9 +103,9 @@
             <div style="position:relative;">
                 <select id="order-sort"
                         style="padding:0.5rem 2.25rem 0.5rem 0.75rem;border-radius:0.5rem;border:1px solid #e2e8f0;background:#f8fafc;font-size:0.875rem;color:#475569;-webkit-appearance:none;-moz-appearance:none;appearance:none;outline:none;cursor:pointer;">
-                    <option>Sort by: Newest</option>
-                    <option>Sort by: Name</option>
-                    <option>Sort by: Price</option>
+                    <option value="">Sort by: Newest</option>
+                    <option value="title" {{ request.sort == 'title' ? 'selected' : '' }}>Sort by: Name</option>
+                    <option value="price" {{ request.sort == 'price' ? 'selected' : '' }}>Sort by: Price</option>
                 </select>
                 <svg style="position:absolute;right:0.625rem;top:50%;transform:translateY(-50%);width:0.875rem;height:0.875rem;color:#64748b;pointer-events:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
@@ -323,21 +327,32 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var searchInput = document.getElementById('order-search');
-    if (!searchInput) return;
-    var timer;
-    searchInput.addEventListener('input', function () {
-        clearTimeout(timer);
-        timer = setTimeout(function () {
+    var sortSelect  = document.getElementById('order-sort');
+
+    function navigate(url) { window.location = url.toString(); }
+
+    if (searchInput) {
+        var timer;
+        searchInput.addEventListener('input', function () {
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                var url = new URL(window.location.href);
+                var val = searchInput.value.trim();
+                if (val) { url.searchParams.set('search', val); }
+                else      { url.searchParams.delete('search'); }
+                navigate(url);
+            }, 500);
+        });
+    }
+
+    if (sortSelect) {
+        sortSelect.addEventListener('change', function () {
             var url = new URL(window.location.href);
-            var val = searchInput.value.trim();
-            if (val) {
-                url.searchParams.set('search', val);
-            } else {
-                url.searchParams.delete('search');
-            }
-            window.location = url.toString();
-        }, 500);
-    });
+            if (this.value) { url.searchParams.set('sort', this.value); }
+            else             { url.searchParams.delete('sort'); }
+            navigate(url);
+        });
+    }
 });
 </script>
 {% endblock %}

@@ -30,7 +30,10 @@ class Client extends \FOSSBilling\Api\AbstractApi
 
         $this->getDi()['events_manager']->fire(['event' => 'onBeforeClientChangeNameservers', 'params' => $data]);
 
-        $this->getService()->updateNameservers($s, $data);
+        $this->_guardRegistrar(
+            fn () => $this->getService()->updateNameservers($s, $data),
+            'Nameservers could not be updated right now. Please try again later.'
+        );
 
         $this->getDi()['events_manager']->fire(['event' => 'onAfterClientChangeNameservers', 'params' => $data]);
 
@@ -46,7 +49,10 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        return $this->getService()->updateContacts($s, $data);
+        return $this->_guardRegistrar(
+            fn () => $this->getService()->updateContacts($s, $data),
+            'Contact details could not be updated right now. Please try again later.'
+        );
     }
 
     /**
@@ -58,7 +64,10 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        return $this->getService()->enablePrivacyProtection($s);
+        return $this->_guardRegistrar(
+            fn () => $this->getService()->enablePrivacyProtection($s),
+            'Privacy protection could not be enabled right now. Please try again later.'
+        );
     }
 
     /**
@@ -70,7 +79,10 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        return $this->getService()->disablePrivacyProtection($s);
+        return $this->_guardRegistrar(
+            fn () => $this->getService()->disablePrivacyProtection($s),
+            'Privacy protection could not be disabled right now. Please try again later.'
+        );
     }
 
     /**
@@ -82,7 +94,10 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        return $this->getService()->getTransferCode($s);
+        return $this->_guardRegistrar(
+            fn () => $this->getService()->getTransferCode($s),
+            'The transfer authorization (EPP) code could not be retrieved right now. Please try again later.'
+        );
     }
 
     /**
@@ -94,7 +109,10 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        return $this->getService()->lock($s);
+        return $this->_guardRegistrar(
+            fn () => $this->getService()->lock($s),
+            'The domain could not be locked right now. Please try again later.'
+        );
     }
 
     /**
@@ -106,7 +124,31 @@ class Client extends \FOSSBilling\Api\AbstractApi
     {
         $s = $this->_getService($data);
 
-        return $this->getService()->unlock($s);
+        return $this->_guardRegistrar(
+            fn () => $this->getService()->unlock($s),
+            'The domain could not be unlocked right now. Please try again later.'
+        );
+    }
+
+    /**
+     * Run a registrar-backed action, preventing adapter internals (registrar name,
+     * internal API endpoint/action names, backend error text) from reaching the
+     * client. Safe, controlled InformationExceptions still surface; anything else
+     * is logged server-side and replaced with a generic message.
+     *
+     * @param callable():mixed $action
+     */
+    private function _guardRegistrar(callable $action, string $failureMessage): mixed
+    {
+        try {
+            return $action();
+        } catch (\FOSSBilling\InformationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getDi()['logger']->err('Domain management action failed: ' . $e->getMessage());
+
+            throw new \FOSSBilling\InformationException($failureMessage);
+        }
     }
 
     protected function _getService($data)

@@ -16,6 +16,16 @@ use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
 final class BrowserHtmlSanitizer
 {
+    /**
+     * Symfony's HtmlSanitizer defaults to a 20 000-char input cap and silently
+     * truncates anything beyond it. Rich theme settings pages (e.g. meroserver)
+     * are far larger, which chopped off every section past the halfway point —
+     * the Site Links / footer controls simply never reached the browser. Theme
+     * settings HTML is trusted (theme-author template already run through the
+     * Twig sandbox), so a generous cap is safe here.
+     */
+    private const int THEME_SETTINGS_MAX_INPUT_LENGTH = 1_000_000;
+
     private static ?HtmlSanitizer $adapterSanitizer = null;
     private static ?HtmlSanitizer $themeSettingsSanitizer = null;
 
@@ -44,6 +54,7 @@ final class BrowserHtmlSanitizer
     private static function createThemeSettingsConfig(): HtmlSanitizerConfig
     {
         return self::createBaseConfig()
+            ->withMaxInputLength(self::THEME_SETTINGS_MAX_INPUT_LENGTH)
             ->allowElement('input', [
                 'type', 'name', 'value', 'id', 'checked', 'placeholder', 'accept',
                 'multiple', 'min', 'max', 'step', 'readonly', 'disabled', 'required',

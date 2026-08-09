@@ -857,21 +857,42 @@ class Service implements InjectionAwareInterface
             }
         }
 
-        // Server option surcharges (e.g. cPanel license): sum price_monthly × period months for each selected option
+        $serverOptions = [];
+
+        // Server option surcharges (e.g. datacenter and control-panel fees):
+        // sum price_monthly × period months and expose the selections to checkout.
         if ($productView['type'] === 'server') {
             try {
-                $srvConfig = $this->di['mod_config']('Serviceserver');
-                $optionFields = json_decode((string) ($srvConfig['option_fields'] ?? '[]'), true) ?: [];
+                // Use the same product → category → global → defaults cascade as the order form template
+                // so that surcharges are calculated from the correct option field definitions.
+                $optionFields = $this->di['mod_service']('Serviceserver')->getOptionsForProductId(
+                    (int) $model->product_id
+                );
+                // Support carts created before Serviceserver::attachOrderConfig()
+                // began normalizing the namespaced payload.
+                $selectedConfig = isset($config['config']) && is_array($config['config'])
+                    ? array_merge($config, $config['config'])
+                    : $config;
                 $periodMonthsMap = ['1W' => 0.25, '1M' => 1, '3M' => 3, '6M' => 6, '1Y' => 12, '2Y' => 24, '3Y' => 36];
                 $months = (float) ($periodMonthsMap[$config['period'] ?? '1M'] ?? 1);
                 foreach ($optionFields as $field) {
                     $fieldId = $field['id'] ?? '';
-                    if (!isset($config[$fieldId])) {
+                    if ($fieldId === '' || !isset($selectedConfig[$fieldId])) {
                         continue;
                     }
                     foreach ($field['options'] ?? [] as $opt) {
-                        if (($opt['value'] ?? '') === $config[$fieldId] && !empty($opt['price_monthly'])) {
-                            $price += (float) $opt['price_monthly'] * $months;
+                        if (($opt['value'] ?? '') === $selectedConfig[$fieldId]) {
+                            $monthlyPrice = (float) ($opt['price_monthly'] ?? 0);
+                            $optionPrice = $monthlyPrice * $months;
+                            $price += $optionPrice;
+                            $serverOptions[] = [
+                                'id' => $fieldId,
+                                'label' => (string) ($field['label'] ?? $fieldId),
+                                'value' => (string) $selectedConfig[$fieldId],
+                                'option_label' => (string) ($opt['label'] ?? $selectedConfig[$fieldId]),
+                                'price' => $optionPrice,
+                                'price_monthly' => $monthlyPrice,
+                            ];
                             break;
                         }
                     }
@@ -905,6 +926,7 @@ class Service implements InjectionAwareInterface
             'discount_price' => $discount_price,
             'discount_setup' => $discount_setup,
             'total' => $subtotal,
+            'server_options' => $serverOptions,
         ]);
     }
 

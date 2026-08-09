@@ -10,7 +10,7 @@ putenv('APP_ENV=' . $appEnv);
 $_ENV['APP_ENV'] = $appEnv;
 $_SERVER['APP_ENV'] = $appEnv;
 
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = parse_url((string) $_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 // Block direct access to runtime data (logs, cache, uploads) — mirrors the
 // production rule: location ^~ /data/ { return 403; }

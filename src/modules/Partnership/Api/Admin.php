@@ -14,7 +14,7 @@ use FOSSBilling\Validation\Api\RequiredParams;
 
 class Admin extends \FOSSBilling\Api\AbstractApi
 {
-    private const ALLOWED_PERIODS = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
+    private const array ALLOWED_PERIODS = ['1W', '1M', '3M', '6M', '1Y', '2Y', '3Y'];
 
     /* ================================================================
      *  Product Pricing
@@ -36,13 +36,13 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Create a partner product pricing rule.
      *
-     * @required int   client_group_id  Client group ID.
-     * @required int   product_id       Product ID.
-     * @required float price            Partner price (base currency).
      *
      * @optional string period          Billing period code (1M, 3M, 6M, 1Y, 2Y, 3Y). Omit for all periods.
      */
     #[RequiredParams(['client_group_id' => 'Client group ID is required', 'product_id' => 'Product ID is required', 'price' => 'Price is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_pricing_create(array $data): int
     {
         $this->_checkManagePermission();
@@ -65,12 +65,12 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Update a partner product pricing rule.
      *
-     * @required int   id     Rule ID.
-     * @required float price  New price.
      *
      * @optional string period New billing period code.
      */
     #[RequiredParams(['id' => 'Rule ID is required', 'price' => 'Price is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_pricing_update(array $data): bool
     {
         $this->_checkManagePermission();
@@ -92,10 +92,9 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
     /**
      * Delete a partner product pricing rule.
-     *
-     * @required int id Rule ID.
      */
     #[RequiredParams(['id' => 'Rule ID is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_pricing_delete(array $data): bool
     {
         $this->_checkManagePermission();
@@ -122,14 +121,14 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Create or update a partner TLD pricing rule.
      *
-     * @required int    client_group_id    Client group ID.
-     * @required string tld               TLD (e.g. .com or com).
      *
      * @optional float  price_registration Registration price.
      * @optional float  price_renew        Renewal price.
      * @optional float  price_transfer     Transfer price.
      */
     #[RequiredParams(['client_group_id' => 'Client group ID is required', 'tld' => 'TLD is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function tld_pricing_create(array $data): int
     {
         $this->_checkManagePermission();
@@ -157,13 +156,13 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Update a partner TLD pricing rule.
      *
-     * @required int   id                 Rule ID.
      *
      * @optional float price_registration Registration price.
      * @optional float price_renew        Renewal price.
      * @optional float price_transfer     Transfer price.
      */
     #[RequiredParams(['id' => 'Rule ID is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function tld_pricing_update(array $data): bool
     {
         $this->_checkManagePermission();
@@ -179,10 +178,9 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
     /**
      * Delete a partner TLD pricing rule.
-     *
-     * @required int id Rule ID.
      */
     #[RequiredParams(['id' => 'Rule ID is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function tld_pricing_delete(array $data): bool
     {
         $this->_checkManagePermission();

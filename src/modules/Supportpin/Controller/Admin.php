@@ -29,7 +29,7 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
         return [
             'subpages' => [
                 [
-                    'location' => 'clients',
+                    'location' => 'client',
                     'index' => 900,
                     'label' => __trans('Support PIN Lookup'),
                     'uri' => $this->di['url']->adminLink('supportpin'),

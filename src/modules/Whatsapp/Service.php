@@ -161,7 +161,7 @@ class Service implements InjectionAwareInterface
         $pager = $this->di['pager']->getPaginatedResultSet($sql, [], new PaginationOptions($page, $perPage));
 
         foreach ($pager['list'] as &$item) {
-            $decoded = json_decode($item['meta_value'], true);
+            $decoded = json_decode((string) $item['meta_value'], true);
             $item = array_merge($item, $decoded ?: []);
             unset($item['meta_value'], $item['meta_key'], $item['extension']);
         }
@@ -225,7 +225,7 @@ class Service implements InjectionAwareInterface
 
         $template = preg_replace('/\{\{[a-z_]+\}\}/', '', $template);
 
-        return trim($template);
+        return trim((string) $template);
     }
 
     // -------------------------------------------------------------------------

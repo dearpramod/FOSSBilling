@@ -6,6 +6,7 @@
 {% block content %}
 {% set company = guest.system_company %}
 {% set balance = client ? client.client_balance_get_total : 0 %}
+{% set client_currency = client ? client.profile_get.currency : invoice.currency %}
 {# Deposit invoices cannot be paid with credits — circular funding #}
 {% set is_deposit_invoice = false %}
 {% for line in invoice.lines %}{% if line.type == 'deposit' %}{% set is_deposit_invoice = true %}{% endif %}{% endfor %}
@@ -35,7 +36,7 @@
     {% endif %}
 
     {# ── Payment cancelled notice (shown when redirected back from a gateway after cancelling) ── #}
-    {% if request.get('status') == 'cancel' and invoice.status == 'unpaid' %}
+    {% if request.status == 'cancel' and invoice.status == 'unpaid' %}
     <div x-data="{ show: true }" x-show="show" x-transition.opacity
          class="flex items-start justify-between gap-4 p-4 rounded-xl border"
          style="background: rgba(245,158,11,0.07); border-color: rgba(245,158,11,0.2);">
@@ -317,8 +318,8 @@
                     {# ── Account Balance option ── #}
                     {# Deposit (add-funds) invoices cannot be paid with credits — that is circular #}
                     {% if not is_deposit_invoice %}
-                    {# balance_ok = client has enough credits to cover the full invoice total #}
-                    {% set balance_ok = balance >= invoice_total %}
+                    {# balance_ok = client has enough credit in the matching currency to cover the full invoice #}
+                    {% set balance_ok = balance >= invoice_total and client_currency == invoice.currency %}
                     <template x-if="!payResult">
                         <button @click="{{ balance_ok ? 'selectGateway(\'balance\')' : '' }}"
                                 {% if not balance_ok %}disabled{% endif %}
@@ -339,9 +340,11 @@
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-semibold text-slate-900 dark:text-white">Account Balance</p>
                                 {% if balance_ok %}
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Available: {{ balance|money(invoice.currency) }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Available: {{ balance|money(client_currency) }}</p>
+                                {% elseif client_currency != invoice.currency %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Balance currency ({{ client_currency }}) doesn't match invoice ({{ invoice.currency }})</p>
                                 {% elseif balance > 0 %}
-                                <p class="text-xs text-red-500 dark:text-red-400">Insufficient — {{ balance|money(invoice.currency) }} of {{ invoice_total|money(invoice.currency) }} needed</p>
+                                <p class="text-xs text-red-500 dark:text-red-400">Insufficient — {{ balance|money(client_currency) }} of {{ invoice_total|money(invoice.currency) }} needed</p>
                                 {% else %}
                                 <p class="text-xs text-slate-500 dark:text-slate-400">No credits available</p>
                                 {% endif %}

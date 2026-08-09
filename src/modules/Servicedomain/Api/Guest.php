@@ -94,7 +94,22 @@ class Guest extends \FOSSBilling\Api\AbstractApi
             throw new \FOSSBilling\InformationException('Domain availability could not be determined. TLD is not active.');
         }
 
-        if (!$this->getService()->isDomainAvailable($tld, $sld)) {
+        // Never leak registrar adapter internals (registrar name, internal API
+        // endpoint/action names, backend error text) to unauthenticated guests.
+        // Safe, controlled InformationExceptions still surface; anything else from
+        // the registrar adapter is logged server-side and replaced with a generic
+        // message. (Local hardening — upstream lets these exceptions propagate.)
+        try {
+            $available = $this->getService()->isDomainAvailable($tld, $sld);
+        } catch (\FOSSBilling\InformationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getDi()['logger']->err('Domain availability check failed for a guest: ' . $e->getMessage());
+
+            throw new \FOSSBilling\InformationException('Domain availability could not be determined right now. Please try again later.');
+        }
+
+        if (!$available) {
             throw new \FOSSBilling\InformationException('Domain is not available.');
         }
 
@@ -119,7 +134,19 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         if (!$tld instanceof \Model_Tld) {
             throw new \FOSSBilling\InformationException('TLD is not active.');
         }
-        if (!$this->getService()->canBeTransferred($tld, $data['sld'])) {
+
+        // Same guard as check(): do not expose registrar adapter internals to guests.
+        try {
+            $canBeTransferred = $this->getService()->canBeTransferred($tld, $data['sld']);
+        } catch (\FOSSBilling\InformationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getDi()['logger']->err('Domain transfer check failed for a guest: ' . $e->getMessage());
+
+            throw new \FOSSBilling\InformationException('Domain transfer eligibility could not be determined right now. Please try again later.');
+        }
+
+        if (!$canBeTransferred) {
             throw new \FOSSBilling\InformationException('Domain cannot be transferred.');
         }
 

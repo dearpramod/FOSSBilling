@@ -1,47 +1,100 @@
-{% set srv = client.serviceserver_get({'order_id': order.id}) %}
+{% set srv = service %}
 {% set addons = client.order_addons({'id': order.id}) %}
 {% set daysUntilDue = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
-{% set _unpaid_hash = order.unpaid_invoice_id ? client.invoice_renewal_invoice({'order_id': order.id}) : null %}
+{% set _unpaid_hash = unpaid_hash ?? null %}
 {% set _product = order.product_id ? guest.product_get({'id': order.product_id}) : null %}
 {% set avail_addons = _product.addons ?? [] %}
+{% set option_fields = order.product_id ? guest.serviceserver_product_options_get({'product_id': order.product_id}) : [] %}
+{% set saved_config = order.config.config|default(order.config|default({})) %}
+{% set selected_options = [] %}
+{% for field in option_fields %}
+  {% set selected_value = saved_config[field.id]|default('') %}
+  {% if selected_value is not same as('') and selected_value is not null %}
+    {% set selected_label = selected_value %}
+    {% set selected_image = '' %}
+    {% set selected_meta = '' %}
+    {% for option in field.options|default([]) %}
+      {% if option.value == selected_value %}
+        {% set selected_label = option.label|default(selected_value) %}
+        {% set selected_image = option.image_url|default('') %}
+        {% set selected_meta = option.meta|default('') %}
+      {% endif %}
+    {% endfor %}
+    {% set selected_options = selected_options|merge([{
+      'id': field.id,
+      'label': field.label|default(field.id|replace({'_': ' '})|title),
+      'description': field.description|default(''),
+      'value': selected_value,
+      'display': selected_label,
+      'image': selected_image,
+      'meta': selected_meta
+    }]) %}
+  {% endif %}
+{% endfor %}
 
 {% if srv is empty or (srv.status == 'pending' and not srv.hostname) %}
 {# ── Pending / not provisioned ─────────────────────────────────────────────── #}
 <div class="srv-manage srv-manage-v2 srv-manage-card srv-manage-pending overflow-hidden">
-  <div class="px-6 py-14 flex flex-col items-center text-center gap-5">
-    <div class="relative">
-      <div class="w-20 h-20 rounded-2xl flex items-center justify-center"
-           style="background:rgb(var(--brand-500)/.1); border:1px solid rgb(var(--brand-500)/.22);">
-        <svg class="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M12 5l7 7-7 7"/>
-        </svg>
+  <div class="pending-provisioning-panel">
+    <div class="pending-provisioning-heading">
+      <div>
+        <span>{{ 'Activation progress'|trans }}</span>
+        <h3>{{ 'Setting up your server'|trans }}</h3>
       </div>
-      <span class="absolute -top-1 -right-1 flex h-4 w-4">
-        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60"></span>
-        <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-400"></span>
-      </span>
+      <div class="pending-live-status"><i></i>{{ 'In progress'|trans }}</div>
     </div>
-    <div>
-      <h4 class="text-base font-bold text-white mb-2">{{ 'Server Being Configured'|trans }}</h4>
-      <p class="text-sm text-gray-500 max-w-sm leading-relaxed">
-        {{ 'Your server is being set up. Credentials and access details will appear here once provisioning is complete.'|trans }}
-      </p>
+    <div class="pending-provisioning-steps" role="list" aria-label="{{ 'Provisioning progress'|trans }}">
+      <div class="pending-step is-complete" role="listitem">
+        <div class="pending-step-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"/></svg></div>
+        <div><strong>{{ 'Order received'|trans }}</strong><span>{{ 'Your configuration has been saved.'|trans }}</span></div>
+      </div>
+      <div class="pending-step is-current" role="listitem">
+        <div class="pending-step-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+        <div><strong>{{ 'Infrastructure setup'|trans }}</strong><span>{{ 'Allocating resources and configuring network access.'|trans }}</span></div>
+      </div>
+      <div class="pending-step" role="listitem">
+        <div class="pending-step-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 15v2m-6 4h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7a5 5 0 00-10 0v2H6a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></div>
+        <div><strong>{{ 'Access ready'|trans }}</strong><span>{{ 'Credentials will appear on this page.'|trans }}</span></div>
+      </div>
     </div>
-    <a href="{{ '/support'|url }}"
-       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-sm text-gray-400
-              hover:text-white hover:border-white/20 hover:bg-white/5 transition-all">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-      </svg>
-      {{ 'Contact Support'|trans }}
-    </a>
+    <div class="pending-provisioning-note">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <p><strong>{{ 'No action is needed.'|trans }}</strong> {{ 'This page updates when provisioning is complete. Most activations finish within a few minutes.'|trans }}</p>
+      <button type="button" onclick="window.location.reload()">{{ 'Refresh status'|trans }}</button>
+    </div>
   </div>
 </div>
 
 {% else %}
 {# ── Active Dashboard ──────────────────────────────────────────────────────── #}
 <div class="srv-manage srv-manage-v2 space-y-5">
+
+  {# Primary server command bar #}
+  <section class="srv-command-bar" aria-label="{{ 'Server management actions'|trans }}">
+    <div class="srv-command-context">
+      <span class="srv-command-kicker">{{ 'Server workspace'|trans }}</span>
+      <div class="srv-command-title-row">
+        <h2>{{ order.title }}</h2>
+        <span class="srv-command-status is-{{ srv.status|default('unknown')|lower }}"><i></i>{{ srv.status|capitalize }}</span>
+      </div>
+      <p>{{ srv.hostname ?: (srv.ip ?: ('Manage deployment, billing, and service access from one place.'|trans)) }}</p>
+    </div>
+    <div class="srv-command-actions">
+      <a href="{{ '/order'|url }}" class="srv-command-btn is-primary">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m-7-7h14"/></svg>
+        <span>{{ 'Add New Server'|trans }}</span>
+      </a>
+      <a href="{{ order.unpaid_invoice_id ? (('invoice'|url) ~ '/' ~ _unpaid_hash) : ('/invoice'|url) }}" class="srv-command-btn is-secondary">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+        <span>{{ 'Pay Invoice'|trans }}</span>
+        {% if order.unpaid_invoice_id %}<i aria-label="{{ 'Payment due'|trans }}"></i>{% endif %}
+      </a>
+      <button type="button" @click="cancelModal = true" class="srv-command-btn is-danger">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12m-10 0 1 13h6l1-13m-6 4v5m4-5v5m-5-9 .8-3h4.4l.8 3"/></svg>
+        <span>{{ 'Cancel Server'|trans }}</span>
+      </button>
+    </div>
+  </section>
 
   {# ═══ SECTION 1 — Hero: Identity + Stats (left 2/3) + Billing Summary (right 1/3) ═══ #}
   <div class="srv-manage-overview grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -91,6 +144,11 @@
                 {% if srv.location %}{{ srv.location }}{% endif %}{% if srv.location and srv.ip %} · {% endif %}{% if srv.ip %}IP: {{ srv.ip }}{% endif %}
               </span>
             </div>
+            {% else %}
+            <div class="srv-identity-sync">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581M5.5 9a7 7 0 0111.9-2.5L20 9M4 15l2.6 2.5A7 7 0 0018.5 15"/></svg>
+              {{ 'Connection details are being synchronized'|trans }} · #{{ order.id }}
+            </div>
             {% endif %}
           </div>
 
@@ -106,16 +164,6 @@
                 {{ order.expires_at|format_date }}
               </p>
             </div>
-            {% endif %}
-            {% if order.unpaid_invoice_id %}
-            <a href="{{ 'invoice'|url }}/{{ _unpaid_hash }}"
-               class="srv-pay-invoice inline-flex items-center gap-2 px-5 py-2 rounded-lg text-white text-sm font-semibold transition-all">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-              </svg>
-              {{ 'Pay Invoice'|trans }}
-            </a>
             {% endif %}
           </div>
 
@@ -142,14 +190,14 @@
         </div>
         <div class="text-center px-3 py-4 rounded-xl">
           <p class="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-2">Disk</p>
-          <p class="text-xl font-bold text-white">{% if srv.disk_gb %}{{ srv.disk_gb }} GB{% else %}---{% endif %}</p>
+          <p class="text-xl font-bold text-white">{% if srv.disk_gb %}{{ srv.disk_gb|number_format(0, '.', ',') }} GB{% else %}---{% endif %}</p>
           <div class="srv-meter-track mt-2 w-full h-0.5 rounded-full overflow-hidden">
             <div class="h-full w-2/3" style="background:rgb(var(--brand-500));"></div>
           </div>
         </div>
         <div class="text-center px-3 py-4 rounded-xl">
           <p class="text-[9px] font-bold uppercase tracking-widest text-white/40 mb-2">Traffic</p>
-          <p class="text-xl font-bold text-white">{% if srv.bandwidth_gb %}{{ srv.bandwidth_gb }} GB{% else %}Unltd{% endif %}</p>
+          <p class="text-xl font-bold text-white">{% if srv.bandwidth_gb %}{{ srv.bandwidth_gb|number_format(0, '.', ',') }} GB{% else %}Unltd{% endif %}</p>
           <div class="srv-meter-track mt-2 w-full h-0.5 rounded-full overflow-hidden">
             <div class="h-full w-1/4" style="background:rgb(var(--brand-500));"></div>
           </div>
@@ -209,7 +257,7 @@
         {% endif %}
       </div>
 
-      <a href="{{ order.unpaid_invoice_id ? (('invoice'|url) ~ '/' ~ _unpaid_hash) : ('/client/invoices'|url) }}"
+      <a href="{{ order.unpaid_invoice_id ? (('invoice'|url) ~ '/' ~ _unpaid_hash) : ('/invoice'|url) }}"
          class="srv-pay-invoice mt-8 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -222,22 +270,87 @@
   </div>
   {# ═══ END SECTION 1 ═══ #}
 
+  {# ═══ SECTION 2 — Saved deployment configuration ═══ #}
+  <section class="srv-config-card srv-manage-card" aria-labelledby="srv-config-title">
+    <header class="srv-config-header">
+      <div class="srv-section-heading">
+        <span class="srv-section-icon" aria-hidden="true">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7h16M4 12h16M4 17h10M18 15l2 2 3-4"/></svg>
+        </span>
+        <div>
+          <p>{{ 'Deployment profile'|trans }}</p>
+          <h3 id="srv-config-title">{{ 'Selected configuration'|trans }}</h3>
+        </div>
+      </div>
+      <span class="srv-config-lock">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7a5 5 0 00-10 0v2H6a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        {{ 'Provisioned settings'|trans }}
+      </span>
+    </header>
 
-  {# ═══ SECTION 2 — SSH / Control Panels / Server Info (left 2/3) + Actions / Addons (right 1/3) ═══ #}
+    <div class="srv-config-grid{% if selected_options|length <= 1 %} is-single{% elseif selected_options|length == 2 %} is-pair{% endif %}">
+      {% for item in selected_options %}
+      <article class="srv-config-item">
+        <span class="srv-config-item-icon" aria-hidden="true">
+          {% if item.image %}
+          <img src="{{ item.image }}" alt="" loading="lazy">
+          {% else %}
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3v2m0 14v2M5.64 5.64l1.42 1.42m9.88 9.88 1.42 1.42M3 12h2m14 0h2M5.64 18.36l1.42-1.42m9.88-9.88 1.42-1.42M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          {% endif %}
+        </span>
+        <div class="srv-config-item-copy">
+          <span>{{ item.label }}</span>
+          <strong title="{{ item.display }}">{{ item.display }}</strong>
+          {% if item.meta %}<small>{{ item.meta }}</small>{% endif %}
+        </div>
+        <svg class="srv-config-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M5 13l4 4L19 7"/></svg>
+      </article>
+      {% else %}
+      <article class="srv-config-item">
+        <span class="srv-config-item-icon" aria-hidden="true">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-3-3v6m8 5H4a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2z"/></svg>
+        </span>
+        <div class="srv-config-item-copy"><span>{{ 'Configuration'|trans }}</span><strong>{{ 'Standard product defaults'|trans }}</strong><small>{{ 'No additional product options were selected.'|trans }}</small></div>
+      </article>
+      {% endfor %}
+
+      {% if srv.os and selected_options|filter(item => item.id in ['os', 'server_os'])|length == 0 %}
+      <article class="srv-config-item">
+        <span class="srv-config-item-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="1.8"/><path d="M3 9h18M8 14h3m-3 3h6" stroke-width="1.8"/></svg></span>
+        <div class="srv-config-item-copy"><span>{{ 'Operating system'|trans }}</span><strong>{{ srv.os }}</strong></div>
+        <svg class="srv-config-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M5 13l4 4L19 7"/></svg>
+      </article>
+      {% endif %}
+      {% if srv.location and selected_options|filter(item => item.id in ['location', 'server_location', 'datacenter', 'server_datacenter'])|length == 0 %}
+      <article class="srv-config-item">
+        <span class="srv-config-item-icon" aria-hidden="true"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 21s7-4.35 7-11a7 7 0 10-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5" stroke-width="1.8"/></svg></span>
+        <div class="srv-config-item-copy"><span>{{ 'Datacenter'|trans }}</span><strong>{{ srv.location }}</strong></div>
+        <svg class="srv-config-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M5 13l4 4L19 7"/></svg>
+      </article>
+      {% endif %}
+    </div>
+    <footer class="srv-config-footer">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      {{ 'These settings reflect the configuration selected when this service was ordered.'|trans }}
+    </footer>
+  </section>
+
+
+  {# ═══ SECTION 3 — SSH / Control Panels / Server Info (left 2/3) + Actions / Addons (right 1/3) ═══ #}
   <div class="srv-manage-content grid grid-cols-1 xl:grid-cols-3 gap-5">
 
     {# Left 2/3 #}
     <div class="xl:col-span-2 space-y-6">
 
       {# SSH Access #}
-      <div class="srv-manage-card overflow-hidden">
+      <div class="srv-manage-card srv-server-information overflow-hidden">
         <div class="px-5 py-4 border-b border-white/[0.06] bg-white/[0.015] flex items-center justify-between gap-3">
           <div class="flex items-center gap-2">
             <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
-            <h3 class="font-bold text-white">{{ 'SSH Access'|trans }}</h3>
+            <h3 class="font-bold text-white">{{ srv.ip ? ('SSH Access'|trans) : ('Connection Details'|trans) }}</h3>
           </div>
           <span class="text-xs font-mono text-white/35 bg-white/5 px-2.5 py-1 rounded border border-white/10">PORT: 22</span>
         </div>
@@ -297,71 +410,98 @@
             {% endif %}
           </div>
 
-          <div class="srv-info-note flex items-start gap-3 p-4 rounded-lg border border-indigo-500/20">
+          <div class="srv-info-note flex items-start gap-3 p-4 rounded-lg border border-indigo-500/20{% if not srv.ip %} is-waiting{% endif %}">
             <svg class="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <p class="text-xs text-indigo-300 leading-relaxed">
+              {% if srv.ip %}
               {{ 'Root password and full credentials were sent to your registered email at provisioning. If you need a password reset, please'|trans }}
               <a href="{{ '/support'|url }}" class="font-bold underline underline-offset-2 hover:text-white transition-colors">{{ 'contact support'|trans }}</a>.
+              {% else %}
+              <strong>{{ 'Network assignment is still pending.'|trans }}</strong>
+              {{ 'The IP address and SSH command will appear here automatically when the provider finishes synchronizing this service.'|trans }}
+              {% endif %}
             </p>
           </div>
 
         </div>
       </div>
 
-      {# Control Panel Access #}
-      {% if srv.ip %}
-      <div class="srv-manage-card srv-control-panels overflow-hidden">
-        <div class="px-5 py-4 border-b border-white/[0.06] bg-white/[0.015] flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-            </svg>
-            <h3 class="font-bold text-white">{{ 'Control Panel Access'|trans }}</h3>
+      {# One Click Deployment — presentation-only until provisioning is wired #}
+      <section class="srv-manage-card srv-one-click overflow-hidden"
+               x-data="{ category: 'featured', selected: 'WordPress' }"
+               aria-labelledby="srv-one-click-title">
+        <div class="srv-one-click-header border-b border-white/[0.06] bg-white/[0.015]">
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="srv-one-click-heading-icon" aria-hidden="true">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 3L4 14h7v7l9-11h-7V3z"/>
+              </svg>
+            </span>
+            <div class="min-w-0">
+              <h3 id="srv-one-click-title">{{ 'One Click Deployment'|trans }}</h3>
+              <p>{{ 'Choose a ready-to-deploy application template for this server.'|trans }}</p>
+            </div>
           </div>
-          <span class="text-xs text-white/25">{{ 'Opens in new tab'|trans }}</span>
+          <span class="srv-one-click-preview">{{ 'Frontend preview'|trans }}</span>
         </div>
-        <div class="p-5">
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {% set panels = [
-              { name: 'cPanel',      port: '2083',  color: 'rgba(var(--brand-500),.15)',  tcolor: 'text-indigo-400',  icon: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9' },
-              { name: 'WHM',         port: '2087',  color: 'rgba(59,130,246,.15)',  tcolor: 'text-blue-400',    icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
-              { name: 'Plesk',       port: '8443',  color: 'rgba(16,185,129,.15)',  tcolor: 'text-emerald-400', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-              { name: 'DirectAdmin', port: '2222',  color: 'rgba(245,158,11,.15)',  tcolor: 'text-amber-400',   icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
-              { name: 'Webmin',      port: '10000', color: 'rgba(139,92,246,.15)',  tcolor: 'text-violet-400',  icon: 'M5 12h14M12 5l7 7-7 7' },
-              { name: 'Proxmox VE',  port: '8006',  color: 'rgba(239,68,68,.15)',   tcolor: 'text-red-400',     icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' }
+
+        <div class="srv-one-click-body">
+          <div class="srv-deploy-tabs" role="tablist" aria-label="{{ 'Deployment categories'|trans }}">
+            {% for tab in [
+              { id: 'featured', label: 'Featured' },
+              { id: 'cms', label: 'CMS' },
+              { id: 'development', label: 'Development' },
+              { id: 'database', label: 'Databases' }
             ] %}
-            {% for panel in panels %}
-            <a href="https://{{ srv.ip }}:{{ panel.port }}" target="_blank" rel="noopener"
-               class="group flex items-center gap-3 px-4 py-3.5 rounded-xl border border-white/[0.06]
-                      hover:border-white/[0.14] transition-all"
-               style="background:rgba(255,255,255,0.02);">
-              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform"
-                   style="background:{{ panel.color }};">
-                <svg class="w-4 h-4 {{ panel.tcolor }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ panel.icon }}"/>
-                </svg>
-              </div>
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-white/65 group-hover:text-white transition-colors truncate">{{ panel.name }}</p>
-                <p class="text-[10px] text-white/25 font-mono mt-0.5">:{{ panel.port }}</p>
-              </div>
-            </a>
+            <button type="button" role="tab"
+                    @click="category = '{{ tab.id }}'"
+                    :aria-selected="category === '{{ tab.id }}'"
+                    :class="category === '{{ tab.id }}' ? 'is-active' : ''">
+              {{ tab.label|trans }}
+            </button>
             {% endfor %}
           </div>
-          <p class="mt-3.5 flex items-start gap-1.5 text-xs text-white/25">
-            <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            {{ 'Direct links to'|trans }} {{ srv.ip }}. {{ 'Only works if the control panel is installed on your VPS.'|trans }}
-          </p>
+
+          {% set deployApps = [
+            { name: 'WordPress', category: 'cms', color: '#21759b', tint: '#eef8fc', icon: '<path d="M9.5 9h3M4 9h2.5M11 9l3 11l4-9M5.5 9L9 20l3-7M18 11c.177-.528 1-1.364 1-2.5C19 6.72 18.224 6 17.125 6 16.227 6 16 6.812 16 7.429 16 9.259 18 9.487 18 11"/><circle cx="12" cy="12" r="9"/>' },
+            { name: 'Docker', category: 'development', color: '#2496ed', tint: '#edf8ff', icon: '<path d="M22 12.54c-1.804-.345-2.701-1.08-3.523-2.94-.487.696-1.102 1.568-.92 2.4.028.238-.32 1-.557 1H3c0 5.208 3.164 7 6.196 7 4.124.022 7.828-1.376 9.854-5 1.146-.101 2.296-1.505 2.95-2.46"/><path d="M5 10h3v3H5zM8 10h3v3H8zM11 10h3v3h-3zM8 7h3v3H8zM11 7h3v3h-3zM11 4h3v3h-3z"/>' },
+            { name: 'Node.js', category: 'development', color: '#339933', tint: '#f0f9ef', icon: '<path d="M9 9v8.044a2 2 0 01-2.996 1.734l-1.568-.9A3 3 0 013 15.317V8.682a3 3 0 011.436-2.56l6-3.667a3 3 0 013.128 0l6 3.667A3 3 0 0121 8.683v6.634a3 3 0 01-1.436 2.56l-6 3.667a3 3 0 01-3.128 0"/><path d="M17 9h-3.5a1.5 1.5 0 000 3h2a1.5 1.5 0 010 3H12"/>' },
+            { name: 'Laravel', category: 'development', color: '#ff2d20', tint: '#fff1f0', icon: '<path d="M3 17l8 5 7-4v-8l-4-2.5L18 5l4 2.5v4L11 18l-4-2.5V8L3 5.5V17zM11 18v4M7 15.5l7-4M14 7.5v4M14 11.5l4 2.5M11 13V5.5L7 3 3 5.5M7 8l4-2.5M18 10l4-2.5"/>' },
+            { name: 'Next.js', category: 'development', color: '#111827', tint: '#f1f3f6', icon: '<path d="M9 15V9l7.745 10.65A9 9 0 1119 17.657M15 12V9"/>' },
+            { name: 'MySQL', category: 'database', color: '#00758f', tint: '#edf8fa', icon: '<path d="M13 21c-1.427-1.026-3.59-3.854-4-6-.486.77-1.501 2-2 2-1.499-.888-.574-3.973 0-6-1.596-1.433-2.468-2.458-2.5-4C1.15 3.56 4.056 1.73 7 4h1c8.482.5 6.421 8.07 9 11.5 2.295.522 3.665 2.254 5 3.5-2.086-.2-2.784-.344-3.5 0 .478 1.64 2.123 2.2 3.5 3"/><path d="M9 7h.01"/>' }
+          ] %}
+
+          <div class="srv-deploy-apps">
+            {% for app in deployApps %}
+            <button type="button"
+                    x-show="category === 'featured' || category === '{{ app.category }}'"
+                    x-transition.opacity.duration.150ms
+                    @click="selected = '{{ app.name }}'"
+                    :class="selected === '{{ app.name }}' ? 'is-selected' : ''"
+                    :aria-pressed="selected === '{{ app.name }}'"
+                    class="srv-deploy-app">
+              <span class="srv-deploy-logo" style="--app-color:{{ app.color }};--app-tint:{{ app.tint }};" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  {{ app.icon|raw }}
+                </svg>
+              </span>
+              <span>{{ app.name }}</span>
+              <svg class="srv-deploy-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 13l4 4L19 7"/>
+              </svg>
+            </button>
+            {% endfor %}
+          </div>
+
+          <div class="srv-deploy-footer">
+            <p><strong x-text="selected"></strong> {{ 'is selected. Deployment functionality will be available soon.'|trans }}</p>
+            <button type="button" disabled>{{ 'Deploy application'|trans }}</button>
+          </div>
         </div>
-      </div>
-      {% endif %}
+      </section>
 
       {# Server Information — 2×3 boxed fact grid #}
       <div class="srv-manage-card overflow-hidden">
@@ -373,7 +513,7 @@
           <h3 class="font-bold text-white">{{ 'Server Information'|trans }}</h3>
         </div>
         <div class="p-5">
-          <div class="srv-manage-facts grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="srv-manage-facts grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
             <div>
               <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">{{ 'Plan'|trans }}</p>
@@ -461,18 +601,18 @@
           </a>
           <a href="{{ '/order'|url }}"
              class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-white/[0.05] transition-colors group">
-            <span class="text-sm font-medium text-white/65 group-hover:text-white">{{ 'Upgrade / Add-ons'|trans }}</span>
+            <span class="text-sm font-medium text-white/65 group-hover:text-white">{{ 'Add New Server'|trans }}</span>
             <svg class="w-4 h-4 text-white/25 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
             </svg>
           </a>
-          <a href="{{ '/support'|url }}?subject=Cancellation+Request+%23{{ order.id }}"
+          <button type="button" @click="cancelModal = true"
              class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-red-500/5 transition-colors group">
-            <span class="text-sm font-medium text-red-400/60 group-hover:text-red-400">{{ 'Cancellation Request'|trans }}</span>
+            <span class="text-sm font-medium text-red-400/60 group-hover:text-red-400">{{ 'Cancel Server'|trans }}</span>
             <svg class="w-4 h-4 text-red-400/30 group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
             </svg>
-          </a>
+          </button>
         </div>
       </section>
 
@@ -514,7 +654,7 @@
               <p class="srv-addon-description text-xs text-white/35 mb-3">{{ 'Extend your server capabilities.'|trans }}</p>
               {% endif %}
               <a href="{{ '/order'|url }}"
-                 class="srv-addon-cta mt-auto flex min-h-[36px] w-full items-center justify-center rounded-lg px-3 py-2 text-center text-xs font-semibold text-white transition-colors">
+                 class="srv-addon-cta mt-auto flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors">
                 {{- 'Add'|trans -}}{% if addon.price is defined and addon.price %} – {{ addon.price|money(addon.currency ?? order.currency) }}/{{ (addon.period ?? 'month')|period_title }}{% endif %}
               </a>
             </article>
@@ -535,14 +675,14 @@
             {# Prev / Next arrows #}
             <div class="flex items-center gap-1">
               <button @click="current = current > 0 ? current - 1 : total - 1"
-                      class="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
+                      class="w-9 h-9 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
                       aria-label="{{ 'Previous addon'|trans }}">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
               </button>
               <button @click="current = current < total - 1 ? current + 1 : 0"
-                      class="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
+                      class="w-9 h-9 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
                       aria-label="{{ 'Next addon'|trans }}">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>

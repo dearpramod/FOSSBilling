@@ -92,8 +92,8 @@ class Service implements InjectionAwareInterface
 
         // Strip spaces, dashes, and leading +977 country code
         $to = preg_replace('/[^0-9]/', '', $to);
-        if (str_starts_with($to, '977') && strlen($to) === 13) {
-            $to = substr($to, 3);
+        if (str_starts_with((string) $to, '977') && strlen((string) $to) === 13) {
+            $to = substr((string) $to, 3);
         }
 
         $client = HttpClient::create();
@@ -170,7 +170,7 @@ class Service implements InjectionAwareInterface
         $pager = $this->di['pager']->getPaginatedResultSet($sql, [], new PaginationOptions($page, $perPage));
 
         foreach ($pager['list'] as &$item) {
-            $decoded = json_decode($item['meta_value'], true);
+            $decoded = json_decode((string) $item['meta_value'], true);
             $item = array_merge($item, $decoded ?: []);
             unset($item['meta_value'], $item['meta_key'], $item['extension']);
         }
@@ -217,12 +217,12 @@ class Service implements InjectionAwareInterface
 
         $phone = preg_replace('/[^0-9]/', '', $phone);
 
-        if (str_starts_with($phone, '977') && strlen($phone) === 13) {
-            $phone = substr($phone, 3);
+        if (str_starts_with((string) $phone, '977') && strlen((string) $phone) === 13) {
+            $phone = substr((string) $phone, 3);
         }
 
         // Must be a 10-digit number starting with 97 or 98
-        if (strlen($phone) !== 10) {
+        if (strlen((string) $phone) !== 10) {
             return null;
         }
 
@@ -244,7 +244,7 @@ class Service implements InjectionAwareInterface
 
         $template = preg_replace('/\{\{[a-z_]+\}\}/', '', $template);
 
-        return trim($template);
+        return trim((string) $template);
     }
 
     // -------------------------------------------------------------------------

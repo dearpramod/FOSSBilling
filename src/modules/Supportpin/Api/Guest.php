@@ -33,11 +33,21 @@ class Guest extends \FOSSBilling\Api\AbstractApi
     ])]
     public function verify(array $data): array
     {
+        // IP throttle first: the per-client lockout in the service does not stop a
+        // targeted brute-force of the 6-digit PIN (wrong guesses increment other
+        // clients' counters, never the target's), so cap attempts per source IP.
+        $this->getDi()['rate_limiter']->consumeOrThrow('supportpin_verify_ip', (string) $this->getIp());
+
         $pin = trim((string) $data['pin']);
         $email = strtolower(trim((string) $data['email']));
 
         if (!preg_match('/^\d{6}$/', $pin)) {
             throw new \FOSSBilling\InformationException('Invalid credentials.');
+        }
+
+        // Per-target throttle: caps a distributed (many-IP) attack against one email.
+        if ($email !== '') {
+            $this->getDi()['rate_limiter']->consumeOrThrow('supportpin_verify_email', $email);
         }
 
         $svc = $this->getService();

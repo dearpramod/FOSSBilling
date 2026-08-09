@@ -22,6 +22,7 @@ function orderProduct(productId, defaultPeriod) {
         loading: false,
         errorMsg: null,
         domainInCart: false,
+        itemAdded: false,
         addons: {},
         addonIndex: 0,
         addonCount: {{ product.addons|length }},
@@ -65,6 +66,8 @@ function orderProduct(productId, defaultPeriod) {
         srvFieldPrices: {},
         srvFieldLabels: {},
         srvFieldSelections: {},
+        {# Order pages show pre-tax totals — VAT is added on /order/checkout only #}
+        taxRate: 0,
 
         formatMoney(rawPrice) {
             return Alpine.store('fbCurrency').formatMoney(rawPrice);
@@ -84,13 +87,59 @@ function orderProduct(productId, defaultPeriod) {
         getPeriodLabel(p) {
             return this.periodLabelMap[p] || p || '';
         },
+        resolveAddonPeriod(id, requestedPeriod) {
+            const prices = this.addonRawPrices[String(id)] || {};
+            const enabled = Object.keys(prices);
+            if (!enabled.length) return requestedPeriod || '';
+            if (requestedPeriod && enabled.includes(requestedPeriod)) return requestedPeriod;
+
+            const requestedMonths = this.periodMonthsMap[requestedPeriod] || 0;
+            const ranked = enabled
+                .map(period => ({ period, months: this.periodMonthsMap[period] || 0 }))
+                .filter(item => !requestedMonths || item.months <= requestedMonths)
+                .sort((a, b) => b.months - a.months);
+
+            return ranked.length ? ranked[0].period : enabled[0];
+        },
+        getAddonPeriod(id) {
+            const key = String(id);
+            return this.addons[key] && this.addons[key].period
+                ? this.addons[key].period
+                : this.resolveAddonPeriod(key, this.selectedPeriod || '');
+        },
+        getAddonRawPrice(id) {
+            const key = String(id);
+            const period = this.getAddonPeriod(key);
+            return this.addonRawPrices[key] && this.addonRawPrices[key][period] !== undefined
+                ? this.addonRawPrices[key][period]
+                : null;
+        },
+        getAddonDisplayPrice(id) {
+            const key = String(id);
+            const type = this.addonPricingTypes[key];
+            if (type === 'free') return 'Free';
+            if (type === 'once') {
+                const price = Number(this.addonOnceRawPrices[key]);
+                return Number.isFinite(price) ? this.formatMoney(price) : 'Unavailable';
+            }
+            const rawPrice = this.getAddonRawPrice(key);
+            if (rawPrice === null || rawPrice === undefined || rawPrice === '') return 'Unavailable';
+            const price = Number(rawPrice);
+            return Number.isFinite(price) ? this.formatMoney(price) : 'Unavailable';
+        },
+        getAddonPeriodLabel(id) {
+            const period = this.getAddonPeriod(id);
+            return this.periodLabels[period] || period || 'Recurring';
+        },
         getOriginalTotal(period) {
             if (!period) return '';
             const base = this.productRawPrices['1M'] || 0;
             if (!base) return '';
             const m = this.periodMonthsMap[period] || 1;
             if (m <= 1) return '';
-            return this.formatMoney(base * m + this.domainRawPrice);
+            const raw = base * m + this.domainRawPrice;
+            const withTax = this.taxRate > 0 ? raw * (1 + this.taxRate / 100) : raw;
+            return this.formatMoney(Math.round(withTax * 100) / 100);
         },
 
         calcTotal(period) {
@@ -100,10 +149,18 @@ function orderProduct(productId, defaultPeriod) {
             else if (period === 'free') { base = 0; }
             else if (this.productRawPrices[period] !== undefined) { base = this.productRawPrices[period]; }
             base += this.domainRawPrice;
+            // Server option surcharges are tracked separately from the discountable
+            // base: the backend applies PERCENTAGE promos to the product base price
+            // only (Product::getProductDiscount uses getProductPrice, which excludes
+            // server-option surcharges added later in Cart::cartProductToApiArray).
+            // Keeping them out of the percentage base keeps the previewed discount
+            // aligned with what checkout actually charges.
+            let serverSurcharge = 0;
             if (period !== 'once' && period !== 'free') {
                 const months = this.periodMonthsMap[period] || 1;
-                Object.values(this.srvFieldPrices).forEach(p => { base += (parseFloat(p) || 0) * months; });
+                Object.values(this.srvFieldPrices).forEach(p => { serverSurcharge += (parseFloat(p) || 0) * months; });
             }
+            base += serverSurcharge;
             Object.entries(this.addons).forEach(([id, state]) => {
                 if (!state.selected) return;
                 const type = this.addonPricingTypes[id];
@@ -118,12 +175,21 @@ function orderProduct(productId, defaultPeriod) {
             if (this.couponApplied && this.promoType && base > 0) {
                 const periodOk = this.promoPeriods.length === 0 || period === 'once' || this.promoPeriods.includes(period);
                 if (periodOk) {
-                    if (this.promoType === 'percentage') discount = Math.round(base * this.promoValue / 100 * 100) / 100;
-                    else if (this.promoType === 'absolute') discount = Math.min(this.promoValue, base);
+                    if (this.promoType === 'percentage') {
+                        // Percentage applies to the base excluding server surcharges (backend parity).
+                        const pctBase = Math.max(0, base - serverSurcharge);
+                        discount = Math.round(pctBase * this.promoValue / 100 * 100) / 100;
+                    } else if (this.promoType === 'absolute') {
+                        // Absolute value is capped at the full line subtotal, matching the
+                        // backend cap in Cart::cartProductToApiArray.
+                        discount = Math.min(this.promoValue, base);
+                    }
                 }
             }
             this.couponDiscount = discount;
-            return this.formatMoney(Math.max(0, base - discount));
+            const afterDiscount = Math.max(0, base - discount);
+            const withTax = this.taxRate > 0 ? afterDiscount * (1 + this.taxRate / 100) : afterDiscount;
+            return this.formatMoney(Math.round(withTax * 100) / 100);
         },
 
         prevAddon() { if (this.addonIndex > 0) this.addonIndex--; },
@@ -139,16 +205,12 @@ function orderProduct(productId, defaultPeriod) {
                 }
             }
             const addonIds = Object.keys(this.addonPricingTypes);
-            const resolveFor = (id, p) => {
-                const ep = this.addonPrices[id] ? Object.keys(this.addonPrices[id]) : [];
-                return (ep.length === 0 || ep.includes(p)) ? p : (ep[0] || p);
-            };
             addonIds.forEach(id => {
-                if (!this.addons[id]) this.addons[id] = { selected: false, period: resolveFor(id, this.selectedPeriod || '') };
+                if (!this.addons[id]) this.addons[id] = { selected: false, period: this.resolveAddonPeriod(id, this.selectedPeriod || '') };
             });
             this.$watch('selectedPeriod', v => {
                 addonIds.forEach(id => {
-                    if (this.addons[id]) this.addons[id].period = resolveFor(id, v || '');
+                    if (this.addons[id]) this.addons[id].period = this.resolveAddonPeriod(id, v || '');
                 });
             });
             document.addEventListener('domainPriceUpdated', e => {
@@ -167,7 +229,8 @@ function orderProduct(productId, defaultPeriod) {
                     nextSelections[fieldId] = {
                         id: fieldId,
                         label: e.detail.fieldLabel || fieldId,
-                        value: e.detail.optionLabel || e.detail.optionValue,
+                        value: e.detail.optionValue,
+                        optionLabel: e.detail.optionLabel || e.detail.optionValue,
                         price: parseFloat(e.detail.monthlyPrice) || 0,
                     };
                 } else {
@@ -203,9 +266,7 @@ function orderProduct(productId, defaultPeriod) {
             if (!this.addons[key]) {
                 let addonPeriod = '';
                 if (pricingType === 'recurrent' || this.addonPricingTypes[key] === 'recurrent') {
-                    const ep = this.addonPrices[key] ? Object.keys(this.addonPrices[key]) : [];
-                    if (this.selectedPeriod && ep.includes(this.selectedPeriod)) addonPeriod = this.selectedPeriod;
-                    else if (ep.length > 0) addonPeriod = ep[0];
+                    addonPeriod = this.resolveAddonPeriod(key, this.selectedPeriod || '');
                 }
                 this.addons[key] = { selected: false, period: addonPeriod };
             }
@@ -214,6 +275,10 @@ function orderProduct(productId, defaultPeriod) {
 
         addToCart(period) {
             if (!period) return;
+            // The line is already in the cart (e.g. a promo apply failed after a
+            // successful add). A second CTA click should continue to checkout
+            // rather than add a duplicate line.
+            if (this.itemAdded) { window.location.href = '{{ "/order/checkout"|url }}'; return; }
             this.loading = true;
             this.errorMsg = null;
             this.domainInCart = false;
@@ -269,11 +334,22 @@ function orderProduct(productId, defaultPeriod) {
             // JSON API payloads must use a nested config object; bracket notation is
             // not expanded server-side as it would be in a regular HTML form post.
             const serverConfig = {};
+
+            // The parent order component owns the authoritative selection
+            // state. Hidden inputs live inside nested Alpine components and
+            // their bound DOM value can still be stale when the CTA is clicked.
+            Object.entries(this.srvFieldSelections || {}).forEach(([fieldId, selection]) => {
+                const value = String((selection && selection.value) || '').trim();
+                if (value) serverConfig[fieldId] = value;
+            });
+
+            // Retain a DOM fallback for custom templates that emit native
+            // server-option inputs without dispatching selection events.
             const serverOptionInputs = this.$el.querySelectorAll('[data-server-option][name^="config["]');
             for (const el of serverOptionInputs) {
                 const match = el.name.match(/^config\[([^\]]+)\]$/);
                 if (!match) continue;
-                const value = String(el.value || '').trim();
+                const value = serverConfig[match[1]] || String(el.value || '').trim();
                 if (el.dataset.required === 'true' && !value) {
                     this.loading = false;
                     this.errorMsg = `Please select ${String(el.dataset.label || 'a required server option').toLowerCase()}.`;
@@ -287,7 +363,14 @@ function orderProduct(productId, defaultPeriod) {
                 }
                 if (value) serverConfig[match[1]] = value;
             }
-            if (Object.keys(serverConfig).length > 0) data.config = serverConfig;
+            if (Object.keys(serverConfig).length > 0) {
+                // Keep the namespaced payload for custom consumers and mirror
+                // each value to FOSSBilling's native top-level cart config.
+                data.config = serverConfig;
+                Object.entries(serverConfig).forEach(([fieldId, value]) => {
+                    data[fieldId] = value;
+                });
+            }
 
             // Selected add-ons — recurrent ones always need a valid period
             const addonPayload = {};
@@ -322,11 +405,27 @@ function orderProduct(productId, defaultPeriod) {
             API.guest.post('cart/add_item', data,
                 () => {
                     document.dispatchEvent(new CustomEvent('stablepanel:cartUpdated'));
+                    // The line is now in the cart; guard against a duplicate add if the
+                    // user clicks the CTA again after the promo notification below.
+                    this.itemAdded = true;
                     if (this.couponApplied && this.couponCode.trim()) {
-                        // Only apply a promo that was pre-validated; failure is non-blocking
                         API.guest.post('cart/apply_promo', { promocode: this.couponCode.trim() },
                             goCheckout,
-                            goCheckout
+                            (error) => {
+                                // The promo passed pre-validation but was rejected at apply
+                                // time (expired, usage limit reached, or no longer valid for
+                                // this product). Notify instead of silently dropping the
+                                // discount and sending the user to checkout.
+                                this.loading = false;
+                                const msg = (error && error.message) || 'This promo code could not be applied.';
+                                this.couponApplied = false;
+                                this.couponDiscount = 0;
+                                this.promoType = null;
+                                this.promoValue = 0;
+                                this.promoPeriods = [];
+                                this.couponError = msg;
+                                this.errorMsg = 'Added to your cart, but the promo code was not applied: ' + msg + ' You can continue to checkout to proceed without it.';
+                            }
                         );
                     } else {
                         goCheckout();
@@ -354,7 +453,9 @@ document.addEventListener('alpine:init', () => {
         priceFormat: {{ _op_currency.price_format|default(2)|json_encode|raw }},
         format: {{ (_op_currency.symbol|default(_op_currency.code|default('')) ~ '__PRICE__')|json_encode|raw }},
         formatMoney(rawPrice) {
-            const p = parseFloat(rawPrice) * this.rate;
+            const numericPrice = Number(rawPrice);
+            if (!Number.isFinite(numericPrice)) return '';
+            const p = numericPrice * this.rate;
             const tpl = this.format;
             if (tpl && tpl.includes('__PRICE__')) {
                 const fmt = parseInt(this.priceFormat);

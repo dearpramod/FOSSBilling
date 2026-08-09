@@ -7,7 +7,7 @@
 
 {% set isDomain = order.service_type == 'domain' %}
 {% set isActive = order.status == 'active' %}
-{% set service = client.order_service({'id': order.id}) %}
+{% set service = isActive ? client.order_service({'id': order.id}) : null %}
 {% set daysLeft = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
 
 {% block content %}
@@ -845,6 +845,8 @@
 
     {# Non-domain service — optional service partial with renew/cancel modals #}
     {% elseif not isDomain %}
+    {% set _has_service_partial = guest.system_template_exists({'file': 'mod_service' ~ order.service_type ~ '_manage.html.twig'}) %}
+    {% set _unpaid_hash = order.unpaid_invoice_id|default(false) ? client.invoice_renewal_invoice({'order_id': order.id}) : null %}
     {% if isActive and order.price > 0 and order.service_type not in ['hosting', 'custom'] %}
     <div x-data="{ renewModal: false, cancelModal: false }">
 
@@ -990,8 +992,8 @@
         {% endif %}
 
         {# Service partial inside x-data scope — Alpine state available to partial buttons #}
-        {% if guest.system_template_exists({'file': 'mod_service' ~ order.service_type ~ '_manage.html.twig'}) %}
-            {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service}) }}
+        {% if _has_service_partial %}
+            {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service, 'unpaid_hash': _unpaid_hash}) }}
         {% endif %}
     </div>{# /x-data: renewModal, cancelModal #}
 
@@ -1009,6 +1011,48 @@
     } %}
     {% set _sc = _statusColor[order.status] ?? {'bg': 'rgba(var(--color-primary-rgb),0.08)', 'border': 'rgba(var(--color-primary-rgb),0.20)', 'icon': 'rgb(var(--brand-400))', 'label': order.status|capitalize} %}
 
+    {% if order.status == 'pending_setup' %}
+    {% set _pending_pay_hash = _unpaid_hash %}
+    <section class="pending-activation-hero" aria-labelledby="pending-activation-title">
+        <div class="pending-activation-main">
+            <div class="pending-activation-mark" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l2.5 2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span></span>
+            </div>
+            <div class="pending-activation-copy">
+                <div class="pending-activation-eyebrow">
+                    <span class="pending-activation-dot"></span>
+                    {{ 'Provisioning in progress'|trans }}
+                </div>
+                <h2 id="pending-activation-title">{{ 'Your service is being prepared'|trans }}</h2>
+                <p>
+                    {{ 'We have received your order for'|trans }} <strong>{{ order.title }}</strong>.
+                    {{ 'The infrastructure is now being assigned and configured. Access details will appear here automatically when setup is complete.'|trans }}
+                </p>
+                <div class="pending-activation-actions">
+                    {% if _pending_pay_hash %}
+                    <a href="{{ 'invoice'|url }}/{{ _pending_pay_hash }}" class="pending-primary-action">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                        {{ 'Complete payment'|trans }}
+                    </a>
+                    {% endif %}
+                    <a href="{{ '/support'|url }}" class="pending-secondary-action">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                        {{ 'Contact support'|trans }}
+                    </a>
+                </div>
+            </div>
+        </div>
+        <dl class="pending-activation-meta">
+            <div><dt>{{ 'Order'|trans }}</dt><dd>#{{ order.id }}</dd></div>
+            <div><dt>{{ 'Product'|trans }}</dt><dd>{{ order.title }}</dd></div>
+            {% if order.price %}<div><dt>{{ 'Billing'|trans }}</dt><dd>{{ order.price|money(order.currency) }} · {{ order.period|period_title }}</dd></div>{% endif %}
+            <div><dt>{{ 'Ordered'|trans }}</dt><dd>{{ order.created_at|date('M j, Y') }}</dd></div>
+        </dl>
+    </section>
+    {% else %}
     <div class="rounded-2xl p-6" style="background: {{ _sc.bg }}; border: 1px solid {{ _sc.border }};">
         <div class="flex items-start gap-4">
             {# Icon #}
@@ -1042,7 +1086,7 @@
                 <p class="text-sm text-gray-400 leading-relaxed mb-4">
                     {% if order.status == 'pending_setup' %}
                         Your order for <strong class="text-gray-200">{{ order.title }}</strong> has been received and is awaiting activation. This usually completes within a few minutes.
-                        {% if order.invoice_id %}
+                        {% if order.unpaid_invoice_id|default(false) %}
                             If payment is required, please complete it using the link below.
                         {% endif %}
                     {% elseif order.status == 'failed_setup' %}
@@ -1061,7 +1105,7 @@
                 {# Action row #}
                 <div class="flex flex-wrap items-center gap-3">
                     {% if order.status in ['pending_setup', 'failed_setup', 'failed_renew'] and order.unpaid_invoice_id|default(false) %}
-                    {% set _pay_hash = client.invoice_renewal_invoice({'order_id': order.id}) %}
+                    {% set _pay_hash = _unpaid_hash %}
                     <a href="{{ 'invoice'|url }}/{{ _pay_hash }}"
                        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all"
                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
@@ -1105,6 +1149,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     {% endif %}{# /order.status != 'active' #}
 
@@ -1113,9 +1158,9 @@
     {# Fallback: render service partial for non-domain services excluded from the
          isActive+price guard above (e.g. hosting, custom, free services).
          Mirrors the outer include that existed before the 2026-05-13 refactor. #}
-    {% if guest.system_template_exists({'file': 'mod_service' ~ order.service_type ~ '_manage.html.twig'})
+    {% if _has_service_partial
         and (not isActive or order.price == 0 or order.service_type in ['hosting', 'custom']) %}
-        {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service}) }}
+        {{ include('mod_service' ~ order.service_type ~ '_manage.html.twig', {'order': order, 'service': service, 'unpaid_hash': _unpaid_hash}) }}
     {% endif %}
 
     {% endif %}{# /not isDomain #}
@@ -1946,4 +1991,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
-

@@ -7,8 +7,6 @@
 {% set categories = guest.product_category_get_list({'per_page': 100}) %}
 {% set currency = guest.cart_get_currency %}
 {% set currency_fmt_js = currency.symbol|default(currency.code|default('')) ~ '__PRICE__' %}
-{% set hasDomainCategory = false %}
-{% for cat in categories.list %}{% if cat.type == 'domain' %}{% set hasDomainCategory = true %}{% endif %}{% endfor %}
 {%- set _ord_sorted_cats = categories.list -%}
 
 {#
@@ -42,11 +40,10 @@
 </div>
 
 <div class="ord-refined">
-{% set domain_tlds = hasDomainCategory ? guest.servicedomain_tlds({}) : [] %}
-<div class="grid lg:grid-cols-12 gap-6 lg:gap-8">
+<div class="ord-catalog-shell">
 
 {# ── Products column ── #}
-<div class="order-1 lg:col-span-8 min-w-0">
+<div class="min-w-0">
 
 {# Category tabs if multiple categories #}
 {% if categories.list|length > 1 %}
@@ -304,10 +301,17 @@
                         </div>
                         {% endif %}
 
-                        {# Products layout: horizontal scroll with fixed-width cards #}
-                        <div>
-                        <div class="overflow-x-auto pb-2">
-                        <div style="display:flex; flex-wrap:nowrap; gap: 1rem; width: max-content;">
+                        {# Standalone product cards in a responsive horizontal rail #}
+                        <div class="ord-products-carousel">
+                        <button type="button"
+                                class="ord-carousel-control ord-carousel-prev"
+                                aria-label="Show previous plan"
+                                onclick="scrollOrderCards(this, -1)">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <div class="ord-products-grid" tabindex="0" aria-label="{{ category.title }} plans">
 
                             {% for i, product in cat_products %}
                                 {% set pricing_json = product.pricing|json_encode %}
@@ -378,7 +382,7 @@
                                   {% set icon_path = icon_map[product.type]|default('M5 12h14M12 5l7 7-7 7') %}
                                     {% set summary = summary ?: 'Reliable infrastructure for your project.' %}
 
-                                    <div class="product-card-wrap flex-none" style="width:268px;">
+                                    <div class="product-card-wrap min-w-0">
                                   <div class="ord-product-card group relative rounded-xl border border-slate-200 bg-white p-4 sm:p-6 transition-all shadow-[0px_4px_12px_rgba(0,0,0,0.02)] hover:shadow-lg h-full flex flex-col
                                       {% if i == 1 %}ring-2 ring-[rgba(var(--color-primary-rgb),0.10)]{% endif %}"
                                      x-data="{ pricing: {{ pricing_json }} }">
@@ -483,9 +487,16 @@
                                   </div>
                                   </div>
                             {% endfor %}
-                          </div>
-                          </div>
-                          </div>
+                        </div>
+                        <button type="button"
+                                class="ord-carousel-control ord-carousel-next"
+                                aria-label="Show next plan"
+                                onclick="scrollOrderCards(this, 1)">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        </div>
 
                     </div>
                 {% endif %}
@@ -516,97 +527,7 @@
 
 </div>{# end products column #}
 
-{# Sidebar Content Column (Domain Search + trust) #}
-<aside class="order-2 lg:col-span-4">
-    <div class="ord-sidebar-sticky space-y-6 lg:sticky lg:top-20">
-    {% if hasDomainCategory %}
-    <div x-data="{
-        domainQ: '',
-        get registerHref() {
-            const raw = this.domainQ.trim();
-            const base = '{{ '/order/domain-registration'|url }}';
-            if (!raw) return base;
-            const dot = raw.lastIndexOf('.');
-            const sld = dot > 0 ? raw.slice(0, dot) : raw;
-            const tld = dot > 0 ? raw.slice(dot) : '';
-            return base + '?register_sld=' + encodeURIComponent(sld) + (tld ? '&register_tld=' + encodeURIComponent(tld) : '');
-        },
-        tldHref(tld) {
-            const base = '{{ '/order/domain-registration'|url }}';
-            const sld = this.domainQ.trim().replace(/\.[^.]*$/, '') || '';
-            return base + '?register_tld=' + encodeURIComponent(tld) + (sld ? '&register_sld=' + encodeURIComponent(sld) : '');
-        },
-        goSearch() {
-            if (this.domainQ.trim()) window.location.href = this.registerHref;
-        }
-    }" class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-        <div class="flex items-center gap-3 mb-4">
-            <svg class="w-5 h-5 text-[color:var(--color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8"/></svg>
-            <h4 class="text-base font-bold text-slate-900">Find Your Domain</h4>
-        </div>
-        <div class="space-y-4">
-            <div class="relative">
-                <input x-model="domainQ"
-                       @keydown.enter="goSearch()"
-                       class="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[color:var(--color-primary)]/20 focus:border-[color:var(--color-primary)]"
-                       placeholder="example.com" type="text" autocomplete="off" />
-                <button type="button" @click="goSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 p-0 bg-transparent border-0 cursor-pointer">
-                    <svg class="w-4 h-4 text-slate-400 hover:text-[color:var(--color-primary)] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                </button>
-            </div>
-
-            {% if domain_tlds|length > 0 %}
-            <div class="flex gap-3 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
-                {% for t in domain_tlds|slice(0, 12) %}
-                <a :href="tldHref('{{ t.tld }}')"
-                   class="flex-none w-24 p-3 bg-slate-50 border border-slate-100 rounded-xl text-center hover:border-[color:var(--color-primary)]/30 transition-colors">
-                    <span class="block font-bold text-slate-700 text-sm mb-0.5">{{ t.tld }}</span>
-                    <span class="block text-[11px] font-bold text-[color:var(--color-primary)]">{{ t.price_registration | money_convert }}</span>
-                </a>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <div class="flex gap-2">
-                <a :href="registerHref" class="flex-1 text-center py-2 rounded-lg text-[11px] font-semibold text-white" style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">Register</a>
-                <a href="{{ '/order/domain-transfer'|url }}" class="flex-1 text-center py-2 rounded-lg text-[11px] font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50">Transfer</a>
-            </div>
-            <p class="text-[10px] text-slate-400 italic">Prices subject to change based on registrar fees.</p>
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="ord-moneyback-card bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-center">
-        {# Header: icon + title #}
-        <div class="flex items-center justify-center gap-2 mb-3">
-            <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-            </svg>
-            <span class="font-semibold text-on-surface text-sm">30-day money-back guarantee</span>
-        </div>
-        <p class="text-sm font-bold text-on-surface mb-4">Pay securely via eSewa, Khalti &amp; more.</p>
-        {# Payment logos — each in a uniform pill container for consistent sizing #}
-        <div class="grid grid-cols-2 gap-2 mb-4">
-            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
-                <img src="https://cdn.yoho.cloud/assets/img/payment/esewa.webp" alt="eSewa" class="h-5 w-auto max-w-[64px] object-contain">
-            </div>
-            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
-                <img src="https://cdn.yoho.cloud/assets/img/payment/khalti.png" alt="Khalti" class="h-5 w-auto max-w-[64px] object-contain">
-            </div>
-            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
-                <img src="https://cdn.yoho.cloud/assets/img/payment/imepay.png" alt="IME Pay" class="h-5 w-auto max-w-[64px] object-contain">
-            </div>
-            <div class="h-9 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
-                <img src="https://cdn.yoho.cloud/assets/img/payment/connectips.svg" alt="ConnectIPS" class="h-5 w-auto max-w-[64px] object-contain">
-            </div>
-        </div>
-        {# Trust line #}
-        <p class="text-center text-[11px] text-slate-400 font-medium whitespace-nowrap">No hidden charges &bull; Same price at renewal.</p>
-    </div>
-    </div>{# end sticky wrapper #}
-</aside>
-
-</div>{# end flex wrapper #}
+</div>{# end catalog shell #}
 
 {%- set _help_link = settings.link_support|default('/support/contact') -%}
 {%- set _help_href = (_help_link matches '/^https?:\\/\\//') ? '/support/contact'|url : _help_link|url -%}
@@ -657,6 +578,89 @@
     border-color: rgba(var(--color-primary-rgb), 0.35) !important;
 }
 
+.ord-products-carousel {
+    position: relative;
+}
+
+.ord-products-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 1rem;
+    align-items: stretch;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0;
+}
+
+.ord-products-grid::-webkit-scrollbar {
+    display: none;
+}
+
+.ord-products-grid .product-card-wrap {
+    display: flex;
+    flex: 0 0 calc((100% - 3rem) / 4);
+    width: calc((100% - 3rem) / 4);
+    scroll-snap-align: start;
+}
+
+.ord-products-grid .ord-product-card {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+}
+
+.ord-carousel-control {
+    position: absolute;
+    z-index: 5;
+    top: 50%;
+    display: none;
+    width: 42px;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dbe3ee;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .96);
+    color: #475569;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .12);
+    transform: translateY(-50%);
+    transition: opacity .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.ord-products-carousel.is-overflowing .ord-carousel-control {
+    display: inline-flex;
+}
+
+.ord-carousel-control:hover:not(:disabled) {
+    border-color: rgba(var(--color-primary-rgb), .45);
+    color: var(--color-primary);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .16);
+}
+
+.ord-carousel-control:disabled {
+    pointer-events: none;
+    opacity: 0;
+}
+
+.ord-carousel-control svg {
+    width: 19px;
+    height: 19px;
+}
+
+.ord-carousel-prev {
+    left: -21px;
+}
+
+.ord-carousel-next {
+    right: -21px;
+}
+
 .ord-refined .ord-price-row {
     border-color: #e2e8f0 !important;
 }
@@ -684,9 +688,35 @@
     .ord-page-head {
         padding: 0;
     }
-    /* Hide sidebar below the products on mobile — not useful when buried 2000px down */
-    aside.order-2 {
-        display: none;
+
+    .ord-products-grid {
+        gap: 1rem;
+    }
+
+    .ord-products-grid .product-card-wrap {
+        flex-basis: calc((100% - 2rem) / 3);
+        width: calc((100% - 2rem) / 3);
+    }
+}
+
+@media (max-width: 639px) {
+    .ord-products-grid {
+        margin-inline: -1rem;
+        padding-inline: 1rem;
+        scroll-padding-inline: 1rem;
+    }
+
+    .ord-carousel-prev {
+        left: -4px;
+    }
+
+    .ord-carousel-next {
+        right: -4px;
+    }
+
+    .ord-products-grid .product-card-wrap {
+        flex-basis: min(84vw, 300px);
+        width: min(84vw, 300px);
     }
 }
 
@@ -703,4 +733,43 @@
     border-radius: 0 0.75rem 0.75rem 0;
 }
 </style>
+<script>
+function updateOrderCarousel(carousel) {
+    const rail = carousel.querySelector('.ord-products-grid');
+    const previous = carousel.querySelector('.ord-carousel-prev');
+    const next = carousel.querySelector('.ord-carousel-next');
+    if (!rail || !previous || !next) return;
+
+    const maximum = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    const hasOverflow = maximum > 2;
+    carousel.classList.toggle('is-overflowing', hasOverflow);
+    previous.disabled = !hasOverflow || rail.scrollLeft <= 2;
+    next.disabled = !hasOverflow || rail.scrollLeft >= maximum - 2;
+}
+
+function scrollOrderCards(control, direction) {
+    const carousel = control.closest('.ord-products-carousel');
+    const rail = carousel && carousel.querySelector('.ord-products-grid');
+    const card = rail && rail.querySelector('.product-card-wrap');
+    if (!rail || !card) return;
+
+    const gap = parseFloat(getComputedStyle(rail).gap) || 0;
+    rail.scrollBy({ left: direction * (card.getBoundingClientRect().width + gap), behavior: 'smooth' });
+}
+
+function initialiseOrderCarousels() {
+    document.querySelectorAll('.ord-products-carousel').forEach((carousel) => {
+        const rail = carousel.querySelector('.ord-products-grid');
+        if (!rail) return;
+        if (!rail.dataset.carouselReady) {
+            rail.dataset.carouselReady = 'true';
+            rail.addEventListener('scroll', () => updateOrderCarousel(carousel), { passive: true });
+        }
+        updateOrderCarousel(carousel);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initialiseOrderCarousels);
+window.addEventListener('resize', initialiseOrderCarousels);
+</script>
 {% endblock %}

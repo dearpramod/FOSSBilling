@@ -61,23 +61,27 @@ class Client implements \FOSSBilling\InjectionAwareInterface
     {
         $api = $this->di['api_guest'];
 
-        // Try product lookup first.
+        // Try product lookup first — only the API call is wrapped, not the render.
+        $product = null;
         try {
             $product = $api->product_get(['slug' => $slug]);
+        } catch (\Exception) {
+            // Product not found by slug — fall through to category lookup.
+        }
+
+        if ($product !== null) {
             $tpl = 'mod_service' . $product['type'] . '_order';
             if ($api->system_template_exists(['file' => $tpl . '.html.twig'])) {
                 return $app->render($tpl, ['product' => $product]);
             }
 
             return $app->render('mod_order_product', ['product' => $product]);
-        } catch (\Exception) {
-            // Fall through to category lookup.
         }
 
         // Try matching the slug against slugified category titles.
         $categories = $api->product_category_get_list(['per_page' => 200, 'deep' => 0]);
         foreach ($categories['list'] as $cat) {
-            $catSlug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower((string) ($cat['title'] ?? ''))), '-');
+            $catSlug = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower((string) ($cat['title'] ?? ''))), '-');
             if ($catSlug === $slug) {
                 return $app->render('mod_order_category', ['category_id' => $cat['id'], 'category_slug' => $slug]);
             }

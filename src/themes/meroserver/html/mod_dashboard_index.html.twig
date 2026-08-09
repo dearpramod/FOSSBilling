@@ -40,7 +40,7 @@
     {% set client_currency = profile.currency|default(guest.cart_get_currency.code) %}
     {% set bal = dashboard.balance %}
     {# === REFERENCE-ALIGNED DASHBOARD === #}
-    {% set active_orders = client.order_get_list({'per_page': 6, 'hide_addons': 1, 'status': 'active'}) %}
+    {% set active_orders = client.order_get_list({'per_page': 6, 'hide_addons': 1}) %}
     {% set unpaid_count = dashboard.invoices.unpaid|default(0) %}
     {# — Todos: per-item completion state wired to live profile data — #}
     {# Email: done when validation is disabled system-wide OR the account is approved #}

@@ -453,11 +453,15 @@
                                                                 <label class="form-label font-monospace text-muted small mb-0" for="config_{{ key }}_{{ key2 }}">{{ key2 }}</label>
                                                             </div>
                                                             <div class="col-lg-8">
-                                                                <input class="form-control form-control-sm"
-                                                                       id="config_{{ key }}_{{ key2 }}"
-                                                                       type="text"
-                                                                       name="config[{{ key }}][{{ key2 }}]"
-                                                                       value="{{ config2 }}"{% if config2 is null %} placeholder="null"{% endif %}>
+                                                                {% if config2 is iterable %}
+                                                                    <code class="form-control form-control-sm text-muted bg-light" style="font-size:.75rem;overflow:auto;">{{ config2|json_encode }}</code>
+                                                                {% else %}
+                                                                    <input class="form-control form-control-sm"
+                                                                           id="config_{{ key }}_{{ key2 }}"
+                                                                           type="text"
+                                                                           name="config[{{ key }}][{{ key2 }}]"
+                                                                           value="{{ config2 }}"{% if config2 is null %} placeholder="null"{% endif %}>
+                                                                {% endif %}
                                                             </div>
                                                         </div>
                                                     {% endfor %}

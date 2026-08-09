@@ -602,19 +602,27 @@ html[data-theme="light"] #sidebar {
 }
 
 /* /order page right sidebar cards — light mode */
-html[data-theme="light"] .order-sidebar > div {
+html[data-theme="light"] .order-sidebar > div,
+html[data-theme="light"] .co-sidebar-outer > div {
     background: rgba(255,255,255,0.80) !important;
     border-color: rgb(var(--brand-300) / 0.30) !important;
     box-shadow: 0 2px 12px rgba(var(--color-primary-rgb),0.07) !important;
 }
-html[data-theme="light"] .order-sidebar > div .text-gray-400 {
+html[data-theme="light"] .order-sidebar > div .text-gray-400,
+html[data-theme="light"] .co-sidebar-outer > div .text-gray-400 {
     color: #475569 !important;
 }
-html[data-theme="light"] .order-sidebar > div .text-gray-500 {
+html[data-theme="light"] .order-sidebar > div .text-gray-500,
+html[data-theme="light"] .co-sidebar-outer > div .text-gray-500 {
     color: #64748b !important;
 }
-html[data-theme="light"] .order-sidebar > div .text-gray-600 {
+html[data-theme="light"] .order-sidebar > div .text-gray-600,
+html[data-theme="light"] .co-sidebar-outer > div .text-gray-600 {
     color: #64748b !important;
+}
+/* Checkout sidebar CTA buttons — keep white text on gradient background in light mode */
+html[data-theme="light"] .co-sidebar-outer button.text-white {
+    color: #fff !important;
 }
 
 /* ── /order page product cards, buttons, period switcher (light mode) ── */
@@ -1401,6 +1409,53 @@ html[data-theme="light"] .domain-search-group .dsg-divider {
 }
 [data-theme="dark"] .domain-search-group .dsg-divider {
     border-left-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* ── Domain search group polish ──
+   Collapse the nested "box-in-box-in-box" around the TLD selector into a single
+   clean field: the .com segment blends into the input, separated only by one
+   hairline divider, and the whole group gets a visible focus ring for affordance.
+   Specificity is deliberately high (IDs + doubled theme scopes) to beat the glass
+   rules that otherwise paint a background on the wrapper/select. */
+.domain-search-group {
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+html .domain-search-group:focus-within,
+html[data-theme="light"] .domain-search-group:focus-within,
+html[data-theme="dark"] .domain-search-group:focus-within {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb, 82, 113, 255), .18) !important;
+}
+/* The whole group carries the focus ring; the inner input must not draw its own,
+   or the ring hugs the name field and looks detached from the .com segment. */
+#register-sld:focus, #transfer-sld:focus,
+.domain-search-group input:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+/* TLD wrapper: transparent in both themes, reduced to one hairline divider */
+html .domain-search-group .domain-tld-select,
+html[data-theme="light"] .domain-search-group .domain-tld-select,
+html[data-theme="dark"] .domain-search-group .domain-tld-select {
+    background: transparent !important;
+    border: 0 !important;
+    border-left: 1px solid rgba(15, 23, 42, .10) !important;
+    border-radius: 0 !important;
+    margin: .55rem 0 !important;
+    padding-left: .35rem !important;
+}
+html[data-theme="dark"] .domain-search-group .domain-tld-select {
+    border-left-color: rgba(255, 255, 255, .14) !important;
+}
+/* TLD <select>: ID selectors (1,0,0) decisively beat the .order-professional glass rule */
+#register-tld, #transfer-tld,
+html[data-theme="dark"] .domain-search-group .domain-tld-select select,
+html[data-theme="light"] .domain-search-group .domain-tld-select select {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    height: 100% !important;
 }
 
 /* ═══════════════════════════════════════════════════

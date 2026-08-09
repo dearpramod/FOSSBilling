@@ -1,6 +1,10 @@
 {# Shown under Admin > Orders > [order] > Manage tab.
    Variables: order, service (toApiArray result) #}
 
+{# Product config used to pre-fill spec fields before activation #}
+{% set _product = admin.product_get({id: order.product_id}) %}
+{% set pc = _product.config|default({}) %}
+
 {# Load configured option fields and index them by id for fast lookup #}
 {% set srvOptionsList = admin.serviceserver_options_get %}
 {% set srvOptionsMap = {} %}
@@ -65,7 +69,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">{{ 'Root Password'|trans }}</label>
-                    <input class="form-control" type="text" name="root_password" value="{{ service.root_password ?? '' }}" placeholder="{{ 'Leave blank to keep current'|trans }}">
+                    <input class="form-control" type="password" name="root_password" autocomplete="new-password" placeholder="{{ 'Leave blank to keep current'|trans }}">
                 </div>
 
                 {# ── Operating System — grouped select or plain text fallback ── #}
@@ -81,22 +85,30 @@
                     {% endif %}
                 </div>
 
-                {# ── Hardware specs ── #}
+                {# ── Hardware specs — service values take precedence; product config pre-fills when empty ── #}
                 <div class="col-md-3">
                     <label class="form-label">{{ 'CPU Cores'|trans }}</label>
-                    <input class="form-control" type="number" min="1" name="cpu_cores" value="{{ service.cpu_cores ?? '' }}">
+                    <input class="form-control" type="number" min="1" name="cpu_cores"
+                           value="{{ service.cpu_cores is not empty ? service.cpu_cores : pc.cpu_cores|default('') }}">
+                    {% if service.cpu_cores is empty and pc.cpu_cores is not empty %}<div class="form-hint">{{ 'Pre-filled from product configuration.'|trans }}</div>{% endif %}
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ 'RAM (MB)'|trans }}</label>
-                    <input class="form-control" type="number" min="1" step="1" name="ram_mb" value="{{ service.ram_mb ?? '' }}">
+                    <input class="form-control" type="number" min="1" step="1" name="ram_mb"
+                           value="{{ service.ram_mb is not empty ? service.ram_mb : pc.ram_mb|default('') }}">
+                    {% if service.ram_mb is empty and pc.ram_mb is not empty %}<div class="form-hint">{{ 'Pre-filled from product configuration.'|trans }}</div>{% endif %}
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ 'Disk (GB)'|trans }}</label>
-                    <input class="form-control" type="number" min="1" name="disk_gb" value="{{ service.disk_gb ?? '' }}">
+                    <input class="form-control" type="number" min="1" name="disk_gb"
+                           value="{{ service.disk_gb is not empty ? service.disk_gb : pc.disk_gb|default('') }}">
+                    {% if service.disk_gb is empty and pc.disk_gb is not empty %}<div class="form-hint">{{ 'Pre-filled from product configuration.'|trans }}</div>{% endif %}
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ 'Bandwidth (GB)'|trans }}</label>
-                    <input class="form-control" type="number" min="0" name="bandwidth_gb" value="{{ service.bandwidth_gb ?? '' }}">
+                    <input class="form-control" type="number" min="0" name="bandwidth_gb"
+                           value="{{ service.bandwidth_gb is not empty ? service.bandwidth_gb : pc.bandwidth_gb|default('') }}">
+                    {% if service.bandwidth_gb is empty and pc.bandwidth_gb is not empty %}<div class="form-hint">{{ 'Pre-filled from product configuration.'|trans }}</div>{% endif %}
                 </div>
 
                 {# ── Location — grouped select or plain text fallback ── #}

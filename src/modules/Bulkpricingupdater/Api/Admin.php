@@ -22,9 +22,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
     /**
      * Get billing cycles and current prices for selected products.
-     *
-     * @required array|string product_ids Product ids array or comma-separated ids.
      */
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function product_period_pricing_get(array $data): array
     {
         $this->checkPermissions('bulkpricingupdater', 'manage_settings');
@@ -39,9 +38,6 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Preview product renewal repricing impact.
      *
-     * @required string period Billing period: 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y.
-     * @required string mode   set|percent.
-     * @required float  value  New value (set) or percentage delta.
      *
      * @optional int    product_category_id Product category filter.
      * @optional int    product_id Product filter.
@@ -49,6 +45,9 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      * @optional bool   include_active_orders Reprice active recurring orders in preview.
      */
     #[RequiredParams(['period' => 'Period is required', 'mode' => 'Mode is required', 'value' => 'Value is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function preview_product_renewal_update(array $data): array
     {
         $this->checkPermissions('bulkpricingupdater', 'manage_settings');
@@ -60,9 +59,6 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Apply product renewal repricing in bulk.
      *
-     * @required string period Billing period: 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y.
-     * @required string mode   set|percent.
-     * @required float  value  New value (set) or percentage delta.
      *
      * @optional int    product_category_id Product category filter.
      * @optional int    product_id Product filter.
@@ -70,6 +66,9 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      * @optional bool   include_active_orders Reprice active recurring orders.
      */
     #[RequiredParams(['period' => 'Period is required', 'mode' => 'Mode is required', 'value' => 'Value is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function apply_product_renewal_update(array $data): array
     {
         $this->checkPermissions('bulkpricingupdater', 'manage_settings');
@@ -81,14 +80,14 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Preview domain renewal repricing impact.
      *
-     * @required string mode  set|percent.
-     * @required float  value New value (set) or percentage delta.
      *
      * @optional string tld Target single TLD (.com or com).
      * @optional int    tld_registrar_id Registrar filter.
      * @optional bool   include_active_orders Reprice active domain orders in preview.
      */
     #[RequiredParams(['mode' => 'Mode is required', 'value' => 'Value is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function preview_domain_renewal_update(array $data): array
     {
         $this->checkPermissions('bulkpricingupdater', 'manage_settings');
@@ -100,14 +99,14 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Apply domain renewal repricing in bulk.
      *
-     * @required string mode  set|percent.
-     * @required float  value New value (set) or percentage delta.
      *
      * @optional string tld Target single TLD (.com or com).
      * @optional int    tld_registrar_id Registrar filter.
      * @optional bool   include_active_orders Reprice active domain orders.
      */
     #[RequiredParams(['mode' => 'Mode is required', 'value' => 'Value is required'])]
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    #[\Symfony\Contracts\Service\Attribute\Required]
     public function apply_domain_renewal_update(array $data): array
     {
         $this->checkPermissions('bulkpricingupdater', 'manage_settings');

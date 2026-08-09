@@ -1,5 +1,12 @@
 {% import 'macro_functions.html.twig' as mf %}
 
+{% if service is null %}
+<div class="card-body">
+    <div class="alert alert-warning mb-0">
+        {{ 'Hosting account has not been provisioned yet.'|trans }}
+    </div>
+</div>
+{% else %}
 {% set server = service.server %}
 {% set hp = service.hosting_plan %}
 
@@ -216,3 +223,4 @@
         </form>
     </div>
 </div>
+{% endif %}

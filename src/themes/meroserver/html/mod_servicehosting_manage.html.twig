@@ -7,7 +7,8 @@
 {% set hp = service.hosting_plan %}
 {% set daysUntilDue = order.expires_at ? ((order.expires_at|date('U') - 'now'|date('U')) / 86400)|round : null %}
 {% set upgradables = client.order_upgradables({ 'id': order.id }) %}
-{% set period_labels = {'1W': 'Weekly', '1M': 'Monthly', '3M': 'Quarterly', '6M': 'Semi-Annual', '1Y': 'Annual', '2Y': 'Biennial', '3Y': 'Triennial'} %}
+{% set helpdesks = client.support_helpdesk_get_pairs %}
+{% set period_labels ={'1W': 'Weekly', '1M': 'Monthly', '3M': 'Quarterly', '6M': 'Semi-Annual', '1Y': 'Annual', '2Y': 'Biennial', '3Y': 'Triennial'} %}
 {% set period_label = order.period ? period_labels[order.period]|default('Billing') : 'Billing' %}
 
 <div x-data="hostingDash()" data-order-id="{{ order.id }}" class="space-y-6"
@@ -432,7 +433,7 @@
                 <input type="hidden" name="rel_type" value="order">
                 <input type="hidden" name="rel_id" value="{{ order.id }}">
                 <input type="hidden" name="rel_task" value="upgrade">
-                {% set helpdesks = client.support_helpdesk_get_pairs %}
+      
                 {% if helpdesks|length > 1 %}
                 <div>
                   <label class="block text-xs text-slate-500 mb-1.5">Help Desk</label>
@@ -726,7 +727,7 @@
           <input type="hidden" name="rel_type" value="order">
           <input type="hidden" name="rel_id" value="{{ order.id }}">
           <input type="hidden" name="rel_task" value="cancel">
-          {% set helpdesks = client.support_helpdesk_get_pairs %}
+
           {% if helpdesks|length > 1 %}
           <div>
             <label class="block text-xs text-gray-500 mb-1.5">Help Desk</label>
@@ -809,7 +810,7 @@
           <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
           <input type="hidden" name="rel_type" value="order">
           <input type="hidden" name="rel_id" value="{{ order.id }}">
-          {% set helpdesks = client.support_helpdesk_get_pairs %}
+
           {% if helpdesks|length > 1 %}
           <div>
             <label class="block text-xs text-gray-500 mb-1.5">{{ 'Help Desk'|trans }}</label>

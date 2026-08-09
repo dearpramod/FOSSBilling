@@ -4,5 +4,6 @@
   "name": "Server product type",
   "description": "Server / VPS product type for FOSSBilling",
   "version": "1.0.0",
-  "icon_url": "icon.svg"
+  "icon_url": "icon.svg",
+  "author": "MeroVPS"
 }

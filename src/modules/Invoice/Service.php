@@ -1018,6 +1018,18 @@ class Service implements InjectionAwareInterface
         }
 
         $client = $this->di['db']->load('Client', $invoice->client_id);
+
+        // Refuse cross-currency credit application: client_balance stores raw floats
+        // with no currency column; comparing NPR balance against USD invoice total
+        // would cause over- or under-payment.
+        if ($client->currency && $invoice->currency && $client->currency !== $invoice->currency) {
+            $this->di['logger']->setChannel('billing')->warning(
+                "Credit payment skipped for invoice {$invoice->id}: currency mismatch (invoice: {$invoice->currency}, client: {$client->currency})."
+            );
+
+            return false;
+        }
+
         $cbrepo = $this->di['mod_service']('Client', 'Balance');
         $balance = $cbrepo->getClientBalance($client);
         $required = $this->getTotalWithTax($invoice);

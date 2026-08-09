@@ -88,6 +88,58 @@ class Guest extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
+     * Validate a promo code and return its discount details without applying it to the cart.
+     * Used for preview on product order pages before the item is added.
+     *
+     * @return array{type: string, value: float, periods: array<string>}
+     */
+    #[RequiredParams(['promocode' => 'Promo code was not passed'])]
+    public function validate_promo($data)
+    {
+        $this->getDi()['rate_limiter']->consumeOrThrow('cart_promo_apply_ip', (string) $this->getIp());
+
+        $promo = $this->getService()->findActivePromoByCode($data['promocode']);
+        if (!$promo instanceof Promo) {
+            throw new \FOSSBilling\InformationException('The promo code has expired or does not exist');
+        }
+
+        if (!$this->getService()->isPromoAvailableForClientGroup($promo)) {
+            throw new \FOSSBilling\InformationException('Promo code cannot be applied to your account');
+        }
+
+        if (!$this->getService()->promoCanBeApplied($promo)) {
+            throw new \FOSSBilling\InformationException('The promo code has expired or does not exist');
+        }
+
+        $periodsJson = $promo->getPeriods();
+        $periods = $periodsJson ? (json_decode($periodsJson, true) ?? []) : [];
+
+        // Verify the promo is genuinely usable for the product/period being previewed.
+        // Without this, the order page advertises a discount for promos not linked to
+        // the product (or invalid for the chosen period) that the cart later applies as
+        // zero — showing the customer a discount they never receive.
+        $productId = isset($data['product_id']) ? (int) $data['product_id'] : 0;
+        if ($productId > 0) {
+            $productService = $this->getDi()['mod_service']('Product');
+            $product = $productService->findProductById($productId);
+            if (!$productService->isPromoLinkedToProduct($promo, $product)) {
+                throw new \FOSSBilling\InformationException('This promo code is not valid for the selected product');
+            }
+        }
+
+        $period = isset($data['period']) ? (string) $data['period'] : '';
+        if ($period !== '' && $periods !== [] && !in_array($period, $periods, true)) {
+            throw new \FOSSBilling\InformationException('This promo code is not valid for the selected billing period');
+        }
+
+        return [
+            'type' => $promo->getType(),
+            'value' => (float) ($promo->getValue() ?? 0),
+            'periods' => $periods,
+        ];
+    }
+
+    /**
      * Apply Promo code to shopping cart.
      *
      * @return bool

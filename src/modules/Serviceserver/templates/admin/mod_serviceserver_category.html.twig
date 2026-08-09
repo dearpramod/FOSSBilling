@@ -1,0 +1,316 @@
+{% extends 'layout_default.html.twig' %}
+
+{% set active_menu = 'system' %}
+
+{% block meta_title %}{{ category.title }} — {{ 'Server Option Fields'|trans }}{% endblock %}
+
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item">
+        <a href="{{ '/'|url }}">
+            <svg class="icon"><use href="#home"/></svg>
+        </a>
+    </li>
+    <li class="breadcrumb-item"><a href="{{ 'system'|url }}">{{ 'Settings'|trans }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ 'serviceserver'|url }}">{{ 'Server Option Fields'|trans }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ category.title }}</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex align-items-center gap-3">
+            <span class="avatar avatar-sm bg-primary-lt text-primary" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="icon"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg>
+            </span>
+            <div>
+                <h3 class="card-title mb-0">
+                    {{ category.title }}
+                    <span class="badge bg-blue-lt ms-1">{{ 'Category fields'|trans }}</span>
+                    <span id="field-count" class="badge bg-secondary-lt ms-1"></span>
+                </h3>
+                <p class="card-subtitle mt-1">{{ 'Define which options are shown when a client orders a server product from this category.'|trans }}</p>
+            </div>
+        </div>
+        <div class="card-options">
+            <button id="btn-reset-global" type="button" class="btn btn-ghost-secondary btn-sm">
+                <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9M3 12V7m0 5H8"/></svg>
+                {{ 'Load from global defaults'|trans }}
+            </button>
+            <button id="btn-save" type="button" class="btn btn-primary btn-sm">
+                <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                {{ 'Save'|trans }}
+            </button>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="alert alert-info" role="note">
+            <svg class="icon alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+            <div>
+                <h4 class="alert-title">{{ 'Category-level option fields'|trans }}</h4>
+                <div class="text-secondary">
+                    {{ 'These options apply to all server products in the'|trans }}
+                    <strong>{{ category.title }}</strong>
+                    {{ 'category, merged on top of global defaults. Individual products can add or override specific fields via their own Configuration tab.'|trans }}
+                </div>
+            </div>
+        </div>
+
+        <div id="fields-editor" class="srv-fields-editor mt-3" aria-live="polite"></div>
+
+        <div class="d-flex align-items-center gap-2 mt-3 pt-3 border-top">
+            <button id="btn-add-field" type="button" class="btn btn-outline-primary btn-sm">
+                <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                {{ 'Add Option Field'|trans }}
+            </button>
+            <span class="text-secondary small">{{ 'Each field becomes a picker on the server order form.'|trans }}</span>
+        </div>
+    </div>
+</div>
+
+<style>
+.srv-fields-editor { display: grid; gap: 1rem; }
+.srv-field-card { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); background: var(--tblr-bg-surface); overflow: hidden; transition: border-color .15s, box-shadow .15s; }
+.srv-field-card:focus-within { border-color: var(--tblr-primary); box-shadow: 0 0 0 .25rem rgba(var(--tblr-primary-rgb),.1); }
+.srv-field-head { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--tblr-border-color); }
+.srv-field-index { width: 1.75rem; height: 1.75rem; display: grid; place-items: center; flex: none; margin-top: 1.4rem; border-radius: var(--tblr-border-radius-sm); color: var(--tblr-primary); background: rgba(var(--tblr-primary-rgb),.1); font-size: .7rem; font-weight: 700; letter-spacing: .02em; }
+.srv-field-form { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(9rem,.27fr) 1fr; gap: .625rem; }
+.srv-field-description, .srv-field-required, .srv-field-display { grid-column: 1 / -1; }
+.srv-field-required { display: flex; align-items: center; justify-content: space-between; padding: .5rem .75rem; background: rgba(var(--tblr-secondary-rgb),.04); border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-sm); }
+.srv-remove-field { margin-top: 1.25rem; flex: none; }
+.srv-options-wrap { border-top: 1px solid var(--tblr-border-color); }
+.srv-options-table { width: 100%; border-collapse: collapse; }
+.srv-options-table thead th { padding: .4rem .5rem; font-size: .65rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tblr-secondary); border-bottom: 1px solid var(--tblr-border-color); white-space: nowrap; }
+.srv-options-table tbody tr:hover { background: rgba(var(--tblr-secondary-rgb),.04); }
+.srv-options-table tbody td { padding: .35rem .5rem; vertical-align: middle; }
+.srv-options-table .form-control-sm, .srv-options-table .form-select-sm { min-height: 2rem; font-size: .8125rem; }
+.srv-col-value { width: 9rem; }
+.srv-col-label { width: 12rem; }
+.srv-col-image { width: 2.5rem; text-align: center; }
+.srv-col-group { width: 7rem; }
+.srv-col-badge { width: 6.5rem; }
+.srv-col-meta { width: 5.5rem; }
+.srv-col-price { width: 5rem; }
+.srv-col-del { width: 2.25rem; }
+.srv-img-preview { width: 1.75rem; height: 1.75rem; object-fit: contain; border-radius: 3px; display: block; margin: 0 auto; }
+.srv-field-footer { display: flex; align-items: center; justify-content: space-between; padding: .625rem 1rem; background: rgba(var(--tblr-secondary-rgb),.025); border-top: 1px solid var(--tblr-border-color); }
+.srv-empty-options { padding: 1rem 1rem .875rem; text-align: center; color: var(--tblr-secondary); font-size: .875rem; }
+.srv-empty-editor { padding: 2.5rem 1rem; border: 2px dashed var(--tblr-border-color); border-radius: var(--tblr-border-radius); text-align: center; color: var(--tblr-secondary); }
+.srv-empty-editor svg { width: 1.75rem; height: 1.75rem; margin-bottom: .5rem; stroke-width: 1.5; }
+@media (max-width: 767.98px) {
+    .srv-field-head { flex-direction: column; }
+    .srv-field-index { display: none; }
+    .srv-field-form { width: 100%; grid-template-columns: 1fr; }
+    .srv-field-form > * { grid-column: 1; }
+    .srv-remove-field { width: 100%; margin-top: 0; }
+    .srv-options-table thead { display: none; }
+    .srv-options-table tbody td { display: block; padding: .25rem .5rem; }
+    .srv-options-table tbody td::before { content: attr(data-label); display: block; font-size: .65rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tblr-secondary); margin-bottom: .2rem; }
+    .srv-options-table tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: .25rem; padding: .5rem; border-bottom: 1px solid var(--tblr-border-color); }
+    .srv-options-table tbody tr td:last-child { grid-column: 2; justify-self: end; }
+}
+</style>
+
+<script>
+const CATEGORY_ID = {{ category.id }};
+const INITIAL = {{ option_fields|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }};
+let fields = JSON.parse(JSON.stringify(INITIAL));
+const BADGE_OPTS = ['', 'Best', 'Good', 'Fair', 'Distant'];
+
+function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function imgCell(url, fi, oi) {
+    const safe = esc(url ?? '');
+    const preview = (url ?? '').trim() && /^(https?:\/\/|\/)/.test((url ?? '').trim())
+        ? `<img src="${safe}" class="srv-img-preview mb-1" alt="" onerror="this.style.display='none'">`
+        : '';
+    return `<td class="srv-col-image" data-label="{{ 'Image'|trans }}">${preview}<input type="text" class="form-control form-control-sm" value="${safe}" oninput="fields[${fi}].options[${oi}].image_url=this.value;updateImgPreview(this)" placeholder="https://…" title="${safe}"></td>`;
+}
+
+function updateImgPreview(input) {
+    const cell = input.closest('td');
+    let img = cell.querySelector('.srv-img-preview');
+    const url = input.value.trim();
+    if (!img) { img = document.createElement('img'); img.className = 'srv-img-preview mb-1'; img.alt = ''; img.onerror = () => img.style.display='none'; cell.insertBefore(img, input); }
+    if (url && /^(https?:\/\/|\/)/.test(url)) { img.src = url; img.style.display = ''; } else { img.style.display = 'none'; }
+}
+
+function render() {
+    const container = document.getElementById('fields-editor');
+    const counter   = document.getElementById('field-count');
+    counter.textContent = fields.length === 1 ? '1 {{ 'field'|trans }}' : `${fields.length} {{ 'fields'|trans }}`;
+
+    if (!fields.length) {
+        container.innerHTML = `
+            <div class="srv-empty-editor">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M8 7h8M8 17h8"/></svg>
+                <p class="h4 mb-1">{{ 'No option fields yet'|trans }}</p>
+                <p class="mb-0 small">{{ 'Click "Add Option Field" below, or load from global defaults.'|trans }}</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = fields.map((field, fi) => `
+        <section class="srv-field-card" data-fi="${fi}">
+            <div class="srv-field-head">
+                <span class="srv-field-index" aria-hidden="true">${String(fi+1).padStart(2,'0')}</span>
+                <div class="srv-field-form">
+                    <div>
+                        <label for="fid-${fi}" class="form-label text-secondary small mb-1">{{ 'Field ID'|trans }}</label>
+                        <input id="fid-${fi}" class="form-control font-monospace" value="${esc(field.id)}"
+                               oninput="fields[${fi}].id=this.value" pattern="[a-z0-9_]+" placeholder="location">
+                        <small class="form-hint">{{ 'Lowercase letters, numbers, underscores.'|trans }}</small>
+                    </div>
+                    <div>
+                        <label for="flabel-${fi}" class="form-label text-secondary small mb-1">{{ 'Customer-facing label'|trans }}</label>
+                        <input id="flabel-${fi}" class="form-control fw-medium" value="${esc(field.label)}"
+                               oninput="fields[${fi}].label=this.value" placeholder="{{ 'e.g. Server Location'|trans }}">
+                    </div>
+                    <div class="srv-field-description">
+                        <label for="fdesc-${fi}" class="form-label text-secondary small mb-1">{{ 'Description'|trans }} <span class="text-secondary fw-normal">({{ 'optional'|trans }})</span></label>
+                        <input id="fdesc-${fi}" class="form-control" value="${esc(field.description??'')}"
+                               oninput="fields[${fi}].description=this.value" placeholder="{{ 'Helper text shown below the picker on the order form'|trans }}">
+                    </div>
+                    <div class="srv-field-display">
+                        <label for="fdisp-${fi}" class="form-label text-secondary small mb-1">{{ 'Display style'|trans }}</label>
+                        <select id="fdisp-${fi}" class="form-select form-select-sm" onchange="fields[${fi}].display=this.value">
+                            <option value="dropdown" ${(field.display||'dropdown')==='dropdown'?'selected':''}>{{ 'Searchable dropdown'|trans }}</option>
+                            <option value="card-grid" ${field.display==='card-grid'?'selected':''}>{{ 'Card grid with tabs'|trans }}</option>
+                        </select>
+                    </div>
+                    <div class="srv-field-required">
+                        <div>
+                            <strong class="small">{{ 'Require a selection'|trans }}</strong>
+                            <span class="text-secondary small d-block">{{ 'Customers must pick an option before continuing.'|trans }}</span>
+                        </div>
+                        <label class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" ${field.required?'checked':''}
+                                   onchange="fields[${fi}].required=this.checked">
+                        </label>
+                    </div>
+                </div>
+                <div class="srv-remove-field">
+                    <button type="button" class="btn btn-ghost-danger btn-sm" onclick="removeField(${fi})">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="srv-options-wrap">
+            ${field.options&&field.options.length ? `
+                <div class="table-responsive">
+                <table class="srv-options-table">
+                    <thead>
+                        <tr>
+                            <th class="srv-col-value">{{ 'Value'|trans }}</th>
+                            <th class="srv-col-label">{{ 'Label'|trans }}</th>
+                            <th class="srv-col-image">{{ 'Image'|trans }}</th>
+                            <th class="srv-col-group">{{ 'Group'|trans }}</th>
+                            <th class="srv-col-badge">{{ 'Badge'|trans }}</th>
+                            <th class="srv-col-meta">{{ 'Meta'|trans }}</th>
+                            <th class="srv-col-price">{{ '$/mo'|trans }}</th>
+                            <th class="srv-col-del"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${field.options.map((opt,oi) => `
+                        <tr>
+                            <td class="srv-col-value" data-label="{{ 'Value'|trans }}"><input class="form-control form-control-sm font-monospace" value="${esc(opt.value)}" oninput="fields[${fi}].options[${oi}].value=this.value" placeholder="india"></td>
+                            <td class="srv-col-label" data-label="{{ 'Label'|trans }}"><input class="form-control form-control-sm" value="${esc(opt.label)}" oninput="fields[${fi}].options[${oi}].label=this.value" placeholder="{{ 'India'|trans }}"></td>
+                            ${imgCell(opt.image_url, fi, oi)}
+                            <td class="srv-col-group" data-label="{{ 'Group'|trans }}"><input class="form-control form-control-sm" value="${esc(opt.group??'')}" oninput="fields[${fi}].options[${oi}].group=this.value" placeholder="{{ 'Asia'|trans }}"></td>
+                            <td class="srv-col-badge" data-label="{{ 'Badge'|trans }}"><select class="form-select form-select-sm" onchange="fields[${fi}].options[${oi}].badge=this.value">${BADGE_OPTS.map(b=>`<option value="${b}"${opt.badge===b?' selected':''}>${b||'—'}</option>`).join('')}</select></td>
+                            <td class="srv-col-meta" data-label="{{ 'Meta'|trans }}"><input class="form-control form-control-sm" value="${esc(opt.meta??'')}" oninput="fields[${fi}].options[${oi}].meta=this.value" placeholder="39ms"></td>
+                            <td class="srv-col-price" data-label="{{ '$/mo'|trans }}"><input class="form-control form-control-sm" type="number" min="0" step="0.01" value="${parseFloat(opt.price_monthly||0).toFixed(2)}" oninput="fields[${fi}].options[${oi}].price_monthly=parseFloat(this.value)||0"></td>
+                            <td class="srv-col-del"><button type="button" class="btn btn-ghost-danger btn-icon btn-sm" onclick="removeOption(${fi},${oi})" title="{{ 'Remove'|trans }}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+                </div>
+            ` : `<div class="srv-empty-options"><span class="text-secondary">{{ 'No choices yet.'|trans }}</span> <span class="small text-secondary">{{ 'Add at least one selectable value below.'|trans }}</span></div>`}
+            </div>
+
+            <div class="srv-field-footer">
+                <button type="button" class="btn btn-ghost-secondary btn-sm" onclick="addOption(${fi})">
+                    <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    {{ 'Add Choice'|trans }}
+                </button>
+                <span class="text-secondary small">${field.options?.length||0} {{ 'options'|trans }}</span>
+            </div>
+        </section>
+    `).join('');
+}
+
+function addField() {
+    fields.push({id:'field_'+Date.now(),label:'{{ 'New Field'|trans }}',description:'',required:false,display:'dropdown',options:[]});
+    render();
+    const cards = document.querySelectorAll('#fields-editor [data-fi]');
+    if (cards.length) cards[cards.length-1].scrollIntoView({behavior:'smooth',block:'center'});
+}
+function removeField(fi) {
+    if (!confirm('{{ 'Remove this option field and all its options?'|trans }}')) return;
+    fields.splice(fi,1); render();
+}
+function addOption(fi) {
+    fields[fi].options = fields[fi].options||[];
+    fields[fi].options.push({value:'',label:'',image_url:'',group:'',badge:'',meta:'',price_monthly:0});
+    render();
+}
+function removeOption(fi,oi) { fields[fi].options.splice(oi,1); render(); }
+
+function validate() {
+    for (let fi=0;fi<fields.length;fi++) {
+        const f = fields[fi];
+        if (!/^[a-z0-9_]+$/.test((f.id||'').trim())) { alert('{{ 'Field ID must use lowercase letters, numbers, or underscores.'|trans }}'); return false; }
+        if (!(f.label||'').trim()) { alert('{{ 'Every field needs a customer-facing label.'|trans }}'); return false; }
+        for (const opt of (f.options||[])) {
+            if (!(opt.value||'').trim()||!(opt.label||'').trim()) { alert('{{ 'Every option needs a value and a label.'|trans }}'); return false; }
+        }
+    }
+    return true;
+}
+
+document.getElementById('btn-add-field').addEventListener('click', addField);
+
+document.getElementById('btn-reset-global').addEventListener('click', function () {
+    if (!confirm('{{ 'Replace these fields with the global server option field defaults?'|trans }}')) return;
+    FOSSBilling.api.admin.get('serviceserver/options_get', {}, function(res) {
+        fields = JSON.parse(JSON.stringify(res.result ?? res));
+        render();
+    }, function(err) {
+        alert('{{ 'Could not load global defaults.'|trans }} ' + (err?.message ?? ''));
+    });
+});
+
+document.getElementById('btn-save').addEventListener('click', function () {
+    const btn = this;
+    if (!validate()) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>{{ 'Saving…'|trans }}';
+
+    FOSSBilling.api.admin.post('serviceserver/category_options_save', {
+        category_id: CATEGORY_ID,
+        options_json: JSON.stringify(fields),
+    }, function () {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>{{ 'Save'|trans }}';
+        const t = document.createElement('div');
+        t.className = 'alert alert-success alert-dismissible fade show position-fixed bottom-0 end-0 m-4 shadow';
+        t.style.cssText = 'z-index:9999;min-width:280px;';
+        t.innerHTML = '<svg class="icon me-2 text-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>{{ 'Category option fields saved.'|trans }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+        document.body.appendChild(t);
+        setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); }, 3500);
+    }, function (err) {
+        btn.disabled = false;
+        btn.innerHTML = '{{ 'Save'|trans }}';
+        alert('{{ 'Error: '|trans }}' + (err?.message ?? JSON.stringify(err)));
+    });
+});
+
+render();
+</script>
+{% endblock %}

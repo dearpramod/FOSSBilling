@@ -340,7 +340,7 @@
                                         onblur="this.style.boxShadow='';this.style.borderColor='';">
                                     <option value="">Select country...</option>
                                     {% for val, label in guest.system_countries %}
-                                        <option value="{{ val }}" {% if request.country == val %}selected{% endif %}>{{ label }}</option>
+                                        <option value="{{ val }}" {% if request.country == val or (not request.country and val == 'NP') %}selected{% endif %}>{{ label }}</option>
                                     {% endfor %}
                                 </select>
                             </div>

@@ -193,7 +193,7 @@
                  class="min-w-0 flex-1 pl-11 pr-3 py-3 bg-transparent border-0 text-slate-900 outline-none"
                  placeholder="yourdomain">
           {# TLD selector — right side, with its own chevron #}
-          <div class="relative flex items-center border-l border-slate-200">
+          <div class="domain-tld-select relative flex items-center">
             <select name="domain[register_tld]" id="register-tld"
                     class="pl-3 pr-8 py-1 h-full text-sm font-semibold text-slate-700 bg-transparent appearance-none outline-none cursor-pointer border-0"
                     style="min-width:5.5rem;">
@@ -214,7 +214,11 @@
         {# Check button — detached, with search icon #}
         <button type="button" id="domain-check-btn"
                 class="domain-action-btn flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold transition-all whitespace-nowrap hover:opacity-90 disabled:opacity-60">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg data-action-spinner class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3"/>
+            <path class="opacity-90" fill="currentColor" d="M12 3a9 9 0 00-9 9h3a6 6 0 016-6V3z"/>
+          </svg>
+          <svg data-action-icon class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
           <span id="domain-check-btn-label">Check</span>
@@ -262,7 +266,7 @@
                  value="{{ request.transfer_sld|default('') }}"
                  class="min-w-0 flex-1 pl-11 pr-3 py-3 bg-transparent border-0 text-slate-900 outline-none"
                  placeholder="yourdomain">
-          <div class="relative flex items-center border-l border-slate-200">
+          <div class="domain-tld-select relative flex items-center">
             <select name="domain[transfer_tld]" id="transfer-tld"
                     class="pl-3 pr-8 py-1 h-full text-sm font-semibold text-slate-700 bg-transparent appearance-none outline-none cursor-pointer border-0"
                     style="min-width:5.5rem;">
@@ -282,7 +286,11 @@
         </div>
         <button type="button" id="transfer-check-btn"
                 class="domain-action-btn flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold transition-all whitespace-nowrap hover:opacity-90 disabled:opacity-60">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg data-action-spinner class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3"/>
+            <path class="opacity-90" fill="currentColor" d="M12 3a9 9 0 00-9 9h3a6 6 0 016-6V3z"/>
+          </svg>
+          <svg data-action-icon class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
           <span id="transfer-check-btn-label">Check</span>
@@ -298,22 +306,34 @@
     <div id="domain-panel-owndomain" class="space-y-4"
          style="{{ default_action != 'owndomain' ? 'display:none' : '' }}">
       <label class="block text-sm font-medium text-slate-700">Domain name</label>
-      <div class="flex items-stretch gap-3">
-        <div class="domain-search-group relative flex-1 flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:border-slate-400 transition-colors">
+      <div class="own-domain-entry flex items-stretch gap-3">
+        <div class="domain-search-group own-domain-input-group relative flex-1 flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:border-slate-400 transition-colors">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.1-2.4 3.2-5.4 3.2-9S14.1 5.4 12 3m0 18c-2.1-2.4-3.2-5.4-3.2-9S9.9 5.4 12 3M3 12h18"/>
+            </svg>
+          </div>
           <input type="text" name="domain[owndomain_sld]" id="owndomain-sld"
                  value="{{ request.owndomain_sld|default('') }}"
-                 class="min-w-0 flex-1 px-4 h-full bg-transparent border-0 text-slate-900 outline-none"
+                 class="min-w-0 flex-1 pl-11 pr-3 h-full bg-transparent border-0 text-slate-900 outline-none"
                  placeholder="yourdomain">
           <input type="text" name="domain[owndomain_tld]" id="owndomain-tld"
                  value="{{ request.owndomain_tld|default('.com') }}"
-                 class="dsg-divider w-28 flex-none px-3 h-full bg-transparent border-0 text-sm font-semibold outline-none"
+                 aria-label="Domain extension"
+                 autocomplete="off"
+                 spellcheck="false"
+                 class="domain-tld-input flex-none px-3 text-sm font-semibold outline-none"
                  style="color:var(--color-primary);"
                  placeholder=".com">
         </div>
         {# Use button — confirms the domain, mirrors the Check button pattern #}
         <button type="button" id="owndomain-use-btn"
                 class="domain-action-btn flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold transition-all whitespace-nowrap hover:opacity-90 disabled:opacity-60">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg data-action-spinner class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3"/>
+            <path class="opacity-90" fill="currentColor" d="M12 3a9 9 0 00-9 9h3a6 6 0 016-6V3z"/>
+          </svg>
+          <svg data-action-icon class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
           </svg>
           <span id="owndomain-use-btn-label">Use</span>
@@ -328,7 +348,7 @@
          style="{{ default_action != 'subdomain' ? 'display:none' : '' }}">
       <label class="block text-sm font-medium text-slate-700">Choose your free subdomain</label>
       <div class="domain-search-group flex h-12 rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:border-slate-400 transition-colors">
-        <input type="text" name="domain[subdomain_sld]"
+        <input type="text" name="domain[subdomain_sld]" id="subdomain-sld"
                value="{{ request.subdomain_sld|default('') }}"
                class="min-w-0 flex-1 bg-transparent px-4 h-full text-slate-900 outline-none"
                placeholder="name">
@@ -412,6 +432,24 @@
         );
     }
 
+    function clearDomainSelection() {
+        document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: '' } }));
+        document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: 0 } }));
+    }
+
+    function setDomainActionState(button, labelElement, label, state) {
+        if (!button) return;
+        if (labelElement) labelElement.textContent = label;
+        button.disabled = state === 'loading';
+        button.classList.toggle('is-loading', state === 'loading');
+        button.classList.toggle('is-success', state === 'success');
+        var spinner = button.querySelector('[data-action-spinner]');
+        var icon = button.querySelector('[data-action-icon]');
+        if (spinner) spinner.classList.toggle('hidden', state !== 'loading');
+        if (icon) icon.classList.toggle('hidden', state === 'loading');
+        button.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+    }
+
     // ── Register check ──
     var registerBtn      = document.getElementById('domain-check-btn');
     var registerBtnLabel = document.getElementById('domain-check-btn-label');
@@ -419,10 +457,11 @@
     var registerTld      = document.getElementById('register-tld');
     var registerYears    = document.getElementById('register-years-select');
     var registerYearsRow = document.getElementById('register-years-row');
+    var registerBasePrice = 0;
+    var registerRenewPrice = 0;
 
     function setRegisterBtn(label, disabled) {
-        if (registerBtnLabel) registerBtnLabel.textContent = label;
-        if (registerBtn) registerBtn.disabled = disabled;
+        setDomainActionState(registerBtn, registerBtnLabel, label, disabled ? 'loading' : 'idle');
     }
 
     function resetYearOptions() {
@@ -435,12 +474,17 @@
     }
 
     if (registerSld) {
-        registerSld.addEventListener('input', function () { showAvailability(null, ''); resetYearOptions(); });
+        registerSld.addEventListener('input', function () { showAvailability(null, ''); resetYearOptions(); clearDomainSelection(); setDomainActionState(registerBtn, registerBtnLabel, 'Check', 'idle'); });
         registerSld.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') { e.preventDefault(); if (registerBtn) registerBtn.click(); }
         });
     }
-    if (registerTld) registerTld.addEventListener('change', function () { showAvailability(null, ''); resetYearOptions(); });
+    if (registerTld) registerTld.addEventListener('change', function () { showAvailability(null, ''); resetYearOptions(); clearDomainSelection(); setDomainActionState(registerBtn, registerBtnLabel, 'Check', 'idle'); });
+    if (registerYears) registerYears.addEventListener('change', function () {
+        var years = Math.max(1, parseInt(registerYears.value, 10) || 1);
+        var total = registerBasePrice + Math.max(0, years - 1) * registerRenewPrice;
+        document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: total } }));
+    });
 
     if (registerBtn) {
         registerBtn.addEventListener('click', function () {
@@ -453,7 +497,6 @@
 
             FOSSBilling.api.guest.post('servicedomain/check', { sld: sld, tld: tld },
                 function () {
-                    setRegisterBtn('Check', false);
                     showAvailability(true, sld + tld + ' is available.');
                     document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
 
@@ -464,18 +507,28 @@
                             var regPrice   = Number(result.price_registration);
                             var renewPrice = Number(result.price_renew);
                             if (!result.price_renew || isNaN(renewPrice)) renewPrice = regPrice;
+                            registerBasePrice = regPrice;
+                            registerRenewPrice = renewPrice;
                             for (var i = 1; i <= 5; i++) {
                                 var total = (i === 1) ? regPrice : regPrice + (i - 1) * renewPrice;
                                 registerYears.append(new Option(i + (i === 1 ? ' year @ ' : ' years @ ') + formatPrice(total), i));
                             }
                             if (registerYearsRow) registerYearsRow.style.display = '';
                             document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: regPrice } }));
+                            setDomainActionState(registerBtn, registerBtnLabel, 'Available', 'success');
+                        },
+                        function () {
+                            setDomainActionState(registerBtn, registerBtnLabel, 'Available', 'success');
                         }
                     );
                 },
-                function () {
+                function (error) {
+                    // Show the actual reason from the API — a taken domain, a registrar
+                    // outage/misconfig ("could not be determined"), or a rate limit are
+                    // different situations and must not all read as "not available".
                     setRegisterBtn('Check', false);
-                    showAvailability(false, 'This domain is not available.');
+                    showAvailability(false, (error && error.message) ? error.message : 'This domain is not available.');
+                    clearDomainSelection();
                 }
             );
         });
@@ -489,17 +542,20 @@
     var transferPriceVal = document.getElementById('transfer-price-value');
 
     function setTransferBtn(label, disabled) {
-        if (transferBtnLabel) transferBtnLabel.textContent = label;
-        if (transferBtn) transferBtn.disabled = disabled;
+        setDomainActionState(transferBtn, transferBtnLabel, label, disabled ? 'loading' : 'idle');
     }
 
     if (transferSld) transferSld.addEventListener('input', function () {
         showAvailability(null, '');
         if (transferPriceRow) transferPriceRow.style.display = 'none';
+        clearDomainSelection();
+        setDomainActionState(transferBtn, transferBtnLabel, 'Check', 'idle');
     });
     if (transferTld) transferTld.addEventListener('change', function () {
         showAvailability(null, '');
         if (transferPriceRow) transferPriceRow.style.display = 'none';
+        clearDomainSelection();
+        setDomainActionState(transferBtn, transferBtnLabel, 'Check', 'idle');
     });
 
     if (transferBtn) {
@@ -513,7 +569,6 @@
 
             FOSSBilling.api.guest.post('servicedomain/can_be_transferred', { sld: sld, tld: tld },
                 function () {
-                    setTransferBtn('Check', false);
                     showAvailability(true, sld + tld + ' can be transferred.');
                     document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
 
@@ -524,12 +579,19 @@
                                 transferPriceRow.style.display = '';
                                 document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: result.price_transfer } }));
                             }
+                            setDomainActionState(transferBtn, transferBtnLabel, 'Transferable', 'success');
+                        },
+                        function () {
+                            setDomainActionState(transferBtn, transferBtnLabel, 'Transferable', 'success');
                         }
                     );
                 },
-                function () {
+                function (error) {
+                    // Surface the real reason (ineligible, registrar unreachable, rate limit)
+                    // instead of always claiming the domain cannot be transferred.
                     setTransferBtn('Check', false);
-                    showAvailability(false, 'This domain cannot be transferred.');
+                    showAvailability(false, (error && error.message) ? error.message : 'This domain cannot be transferred.');
+                    clearDomainSelection();
                 }
             );
         });
@@ -537,12 +599,14 @@
 
     // ── Own domain: Use button ──
     var ownBtn = document.getElementById('owndomain-use-btn');
+    var ownBtnLabel = document.getElementById('owndomain-use-btn-label');
     var ownSld = document.getElementById('owndomain-sld');
     var ownTld = document.getElementById('owndomain-tld');
 
     function clearOwnSelection() {
         showAvailability(null, '');
-        document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: '' } }));
+        clearDomainSelection();
+        setDomainActionState(ownBtn, ownBtnLabel, 'Use', 'idle');
     }
 
     if (ownSld) ownSld.addEventListener('input', clearOwnSelection);
@@ -578,9 +642,29 @@
                 return;
             }
 
-            showAvailability(true, sld + tld + ' will be used with this order.');
-            document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
-            document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: 0 } }));
+            setDomainActionState(ownBtn, ownBtnLabel, 'Using…', 'loading');
+            window.setTimeout(function () {
+                showAvailability(true, sld + tld + ' will be used with this order.');
+                document.dispatchEvent(new CustomEvent('domainSelected', { detail: { domain: sld + tld } }));
+                document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: 0 } }));
+                setDomainActionState(ownBtn, ownBtnLabel, 'Used', 'success');
+            }, 260);
+        });
+    }
+
+    // ── Free subdomain: update the summary as the value changes ──
+    var subdomainSld = document.getElementById('subdomain-sld');
+    if (subdomainSld) {
+        subdomainSld.addEventListener('input', function () {
+            var sld = subdomainSld.value.trim().toLowerCase();
+            if (/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(sld)) {
+                document.dispatchEvent(new CustomEvent('domainSelected', {
+                    detail: { domain: sld + '.{{ subdomain_base_domain|default('')|trim('.')|escape('js') }}' }
+                }));
+                document.dispatchEvent(new CustomEvent('domainPriceUpdated', { detail: { rawPrice: 0 } }));
+            } else {
+                clearDomainSelection();
+            }
         });
     }
 

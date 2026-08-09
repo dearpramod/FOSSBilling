@@ -609,7 +609,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         $queue->setRecipient((string) $to);
         $queue->setSender((string) $from);
         $queue->setSubject((string) $subject);
-        $queue->setContent((string) $content);
+        $queue->setContent($content);
         $queue->setToName($to_name !== null ? (string) $to_name : null);
         $queue->setFromName($from_name !== null ? (string) $from_name : null);
         $queue->setClientId($client_id !== null ? (int) $client_id : null);
@@ -662,6 +662,8 @@ class Service implements \FOSSBilling\InjectionAwareInterface
                 $addressParts
             ))
             : '';
+
+        $footerLinksHtml = $this->buildEmailFooterLinksHtml();
 
         $logoUrl = $this->resolveEmailLogoUrl();
         $logoMarkup = $logoUrl !== null
@@ -737,10 +739,10 @@ class Service implements \FOSSBilling\InjectionAwareInterface
                     </tr>
                     <tr>
                         <td align="center" style="padding:22px 24px 0;color:#7d899b;font-size:12px;line-height:18px;">
-                            <strong style="color:#56637a;font-size:13px;">{$safeBrand}</strong>{$addressHtml}<br>
-                            This transactional notification was sent for your records.
+                            <strong style="color:#56637a;font-size:13px;">{$safeBrand}</strong>{$addressHtml}
                         </td>
                     </tr>
+                    {$footerLinksHtml}
                 </table>
             </td>
         </tr>
@@ -748,6 +750,52 @@ class Service implements \FOSSBilling\InjectionAwareInterface
 </body>
 </html>
 HTML;
+    }
+
+    /**
+     * Build the Privacy / Terms / Support footer link row from the active
+     * client theme's "Site Links" settings (meroserver: config/settings.html.twig,
+     * section #s-links) — the same source layout_default.html.twig's footer nav
+     * reads from, kept in sync so admins only manage these URLs in one place.
+     */
+    private function buildEmailFooterLinksHtml(): string
+    {
+        $defaults = [
+            'privacy' => ['key' => 'link_privacy', 'path' => '/page/privacy-policy', 'label' => 'Privacy'],
+            'terms' => ['key' => 'link_terms', 'path' => '/page/terms-and-conditions', 'label' => 'Terms'],
+            'support' => ['key' => 'link_support', 'path' => '/support/contact', 'label' => 'Support'],
+        ];
+
+        $settings = [];
+        try {
+            $themeService = $this->di['mod_service']('theme');
+            $theme = $themeService->getCurrentClientAreaTheme();
+            $settings = $themeService->getThemeSettings($theme);
+        } catch (\Throwable) {
+            // Theme data may not be available during installation or tests.
+        }
+
+        $links = [];
+        foreach ($defaults as $item) {
+            $path = trim((string) ($settings[$item['key']] ?? '')) ?: $item['path'];
+            $url = preg_match('~^https?://~i', $path) === 1
+                ? $path
+                : rtrim((string) SYSTEM_URL, '/') . '/' . ltrim($path, '/');
+
+            if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+                continue;
+            }
+
+            $links[] = '<a href="' . htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '" style="color:#7d899b;text-decoration:underline;">' . htmlspecialchars($item['label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</a>';
+        }
+
+        if ($links === []) {
+            return '';
+        }
+
+        return '<tr><td align="center" style="padding:10px 24px 0;font-size:12px;line-height:18px;">'
+            . implode(' <span style="color:#c4cbd8;">&middot;</span> ', $links)
+            . '</td></tr>';
     }
 
     /**

@@ -125,7 +125,7 @@ class Client implements \FOSSBilling\InjectionAwareInterface
                 try {
                     $regularPrice = $this->extractRegularPrice($pricingData, $pricingRow['period']);
                     if ($regularPrice !== null) {
-                        $partnerPrice = (float) $pricingRow['price'];
+                        $partnerPrice = $pricingRow['price'];
                         $pricingRow['regular_price'] = $regularPrice;
                         if ($regularPrice > 0.0) {
                             $pricingRow['discount_percent'] = round((($regularPrice - $partnerPrice) / $regularPrice) * 100, 2);

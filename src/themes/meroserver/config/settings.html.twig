@@ -33,6 +33,9 @@
     'login_show_register': '1', 'login_show_reset': '1', 'login_logo_url': '',
     'footer_enabled': '1',
     'link_terms': '', 'tos': '', 'link_privacy': '', 'link_cookie': '', 'link_support': '',
+    'portal_footer_privacy_show': '1', 'portal_footer_privacy_label': '',
+    'portal_footer_terms_show': '1', 'portal_footer_terms_label': '',
+    'portal_footer_support_show': '1', 'portal_footer_support_label': '',
     'footer_phone': '', 'footer_email': '', 'footer_address': '',
     'footer_company_heading': 'Company', 'footer_about_label': 'About Us', 'footer_about_url': '/page/about-us',
     'footer_contact_label': 'Contact', 'footer_legal_heading': 'Legal',
@@ -53,6 +56,18 @@
     'category_title_in_tab': '1', 'inject_javascript': ''
 } -%}
 {%- set settings = _sd|merge(settings) -%}
+
+{# ═══ Orientation banner ═══ #}
+<div class="alert alert-info mb-4" role="alert">
+  <h4 class="alert-title mb-1">{{ 'Theme configuration'|trans }}</h4>
+  <div class="text-secondary">{{ 'Settings are organized into groups below. Use "Jump to Section" above to navigate, adjust any group, then click Apply Changes at the bottom to save. Empty fields fall back to sensible defaults.'|trans }}</div>
+</div>
+
+{# ═══ GROUP: Branding ═══ #}
+<div class="mt-2 mb-3">
+  <h3 class="mb-1">{{ 'Branding'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Your logo, favicon and the accent colors used across the theme.'|trans }}</p>
+</div>
 
 {# ── Logo ── #}
 <section id="s-logo">
@@ -103,6 +118,12 @@
   </div>
 </div>
 </section>
+
+{# ═══ GROUP: Navigation ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'Navigation'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Control the client sidebar links and the public header menu.'|trans }}</p>
+</div>
 
 {# ── Sidebar Navigation ── #}
 <section id="s-sidebar">
@@ -253,6 +274,12 @@
 </div>
 </section>
 
+{# ═══ GROUP: Pages & Login ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'Pages & Login'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Homepage behavior for visitors and the login screen options.'|trans }}</p>
+</div>
+
 {# ── Homepage ── #}
 <section id="s-homepage">
 <h4>{{ 'Homepage'|trans }}</h4>
@@ -341,6 +368,12 @@
 </div>
 </section>
 
+{# ═══ GROUP: Footer ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'Footer'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Footer visibility, the shared site links (Terms / Privacy / Cookie / Support), portal footer links, contact details and legal labels.'|trans }}</p>
+</div>
+
 {# ── Footer ── #}
 <section id="s-footer">
 <h4>{{ 'Footer'|trans }}</h4>
@@ -394,6 +427,78 @@
         <input type="text" class="form-control" name="link_support" id="link_support"
                value="{{ settings.link_support }}" placeholder="/support/contact">
       </div>
+    </div>
+  </div>
+</div>
+</section>
+
+{# ── Portal Footer Navigation ── #}
+<section id="s-portalfooter">
+<h4>{{ 'Portal Footer Navigation'|trans }}</h4>
+<div class="card mb-4">
+  <div class="card-body">
+    <p class="text-muted small mb-3">{{ 'Controls the three links in the compact footer bar shown on all client portal pages (dashboard, services, invoices, etc.). URLs come from the Site Links section above.'|trans }}</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>{{ 'Link'|trans }}</th>
+            <th>{{ 'Visibility'|trans }}</th>
+            <th>{{ 'Label'|trans }} <span class="text-muted fw-normal">({{ 'leave blank for default'|trans }})</span></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr>
+            <td><strong>{{ 'Privacy'|trans }}</strong><br><small class="text-muted">{{ 'URL: Privacy Policy URL from Site Links'|trans }}</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="portal_footer_privacy_show" id="r_pfp1" value="1" autocomplete="off"
+                       {% if settings.portal_footer_privacy_show|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_pfp1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="portal_footer_privacy_show" id="r_pfp0" value="0" autocomplete="off"
+                       {% if settings.portal_footer_privacy_show == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_pfp0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="portal_footer_privacy_label"
+                       value="{{ settings.portal_footer_privacy_label }}" placeholder="Privacy"></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Terms'|trans }}</strong><br><small class="text-muted">{{ 'URL: Terms of Service URL from Site Links'|trans }}</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="portal_footer_terms_show" id="r_pft1" value="1" autocomplete="off"
+                       {% if settings.portal_footer_terms_show|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_pft1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="portal_footer_terms_show" id="r_pft0" value="0" autocomplete="off"
+                       {% if settings.portal_footer_terms_show == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_pft0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="portal_footer_terms_label"
+                       value="{{ settings.portal_footer_terms_label }}" placeholder="Terms"></td>
+          </tr>
+
+          <tr>
+            <td><strong>{{ 'Support'|trans }}</strong><br><small class="text-muted">{{ 'URL: Support / Contact URL from Site Links'|trans }}</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="portal_footer_support_show" id="r_pfs1" value="1" autocomplete="off"
+                       {% if settings.portal_footer_support_show|default('1') != '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-success" for="r_pfs1">{{ 'Show'|trans }}</label>
+                <input type="radio" class="btn-check" name="portal_footer_support_show" id="r_pfs0" value="0" autocomplete="off"
+                       {% if settings.portal_footer_support_show == '0' %} checked="checked"{% endif %}>
+                <label class="btn btn-sm btn-outline-secondary" for="r_pfs0">{{ 'Hide'|trans }}</label>
+              </div>
+            </td>
+            <td><input type="text" class="form-control form-control-sm" name="portal_footer_support_label"
+                       value="{{ settings.portal_footer_support_label }}" placeholder="Support"></td>
+          </tr>
+
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -478,6 +583,12 @@
 </div>
 </section>
 
+{# ═══ GROUP: Client Service Pages ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'Client Service Pages'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'What customers can see and do on their hosted service detail pages.'|trans }}</p>
+</div>
+
 {# ── Service Management ── #}
 <section id="s-services">
 <h4>{{ 'Service Management'|trans }}</h4>
@@ -515,6 +626,12 @@
   </div>
 </div>
 </section>
+
+{# ═══ GROUP: SEO & Social ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'SEO & Social'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Social profile links and default SEO meta tags for public pages.'|trans }}</p>
+</div>
 
 {# ── Social Media ── #}
 <section id="s-social">
@@ -585,6 +702,12 @@
   </div>
 </div>
 </section>
+
+{# ═══ GROUP: Support & Help ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'Support & Help'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Support contact channels and the links shown in the client help panel.'|trans }}</p>
+</div>
 
 {# ── Support & Contact ── #}
 <section id="s-contact">
@@ -766,6 +889,12 @@
   </div>
 </div>
 </section>
+
+{# ═══ GROUP: Advanced ═══ #}
+<div class="mt-4 mb-3">
+  <h3 class="mb-1">{{ 'Advanced'|trans }}</h3>
+  <p class="text-secondary mb-0">{{ 'Browser tab titles and custom script injection. Change with care.'|trans }}</p>
+</div>
 
 {# ── Page Titles ── #}
 <section id="s-titles">

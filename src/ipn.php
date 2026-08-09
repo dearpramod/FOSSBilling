@@ -82,11 +82,10 @@ try {
     $response = $apiResponseFactory->create(null, $e);
 }
 
-// redirect to invoice if gateways requires
-// Also check $_GET directly — some payment adapters (e.g. Khalti) set
-// $_GET['invoice_hash'] inside processTransaction() after the Symfony Request
-// was already constructed from globals, so $request->query won't see that mutation.
-$resolvedInvoiceHash = $request->query->get('invoice_hash') ?? ($_GET['invoice_hash'] ?? null);
+// redirect to invoice if gateway requires
+// Khalti sets invoice_hash on $di['request']->query inside processTransaction(),
+// so a plain query->get() is sufficient after processTransaction() returns.
+$resolvedInvoiceHash = $request->query->get('invoice_hash');
 if ($request->query->has('redirect') && $resolvedInvoiceHash !== null) {
     $invoiceHash = $resolvedInvoiceHash;
     $hash = preg_replace('/[^a-zA-Z0-9]/', '', is_string($invoiceHash) ? $invoiceHash : '');

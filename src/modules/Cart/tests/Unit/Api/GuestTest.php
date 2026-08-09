@@ -392,3 +392,82 @@ test('addItem returns true when multiple is false', function (): void {
 
     expect($result)->toBeTrue();
 });
+
+test('validatePromo returns discount details for an eligible promo', function (): void {
+    $guestApi = apiEndpoint(new Guest());
+
+    $promo = new Promo();
+    $promo->setType(Promo::PERCENTAGE);
+    $promo->setValue(10);
+    $promo->setPeriods('["1M","1Y"]');
+
+    $serviceMock = Mockery::mock(Service::class)->makePartial();
+    $serviceMock->shouldReceive('findActivePromoByCode')->atLeast()->once()->andReturn($promo);
+    $serviceMock->shouldReceive('isPromoAvailableForClientGroup')->atLeast()->once()->andReturn(true);
+    $serviceMock->shouldReceive('promoCanBeApplied')->atLeast()->once()->andReturn(true);
+
+    $product = new Product();
+    $productServiceMock = Mockery::mock(ProductService::class)->makePartial();
+    $productServiceMock->shouldReceive('findProductById')->once()->with(5)->andReturn($product);
+    $productServiceMock->shouldReceive('isPromoLinkedToProduct')->once()->with($promo, $product)->andReturn(true);
+
+    $di = container();
+    $di['rate_limiter'] = getAllowedRateLimiter();
+    $di['mod_service'] = $di->protect(fn ($mod) => $productServiceMock);
+    $guestApi->setDi($di);
+    $guestApi->setService($serviceMock);
+
+    $result = $guestApi->validate_promo(['promocode' => 'CODE', 'product_id' => 5, 'period' => '1M']);
+
+    expect($result)->toMatchArray(['type' => Promo::PERCENTAGE, 'value' => 10.0, 'periods' => ['1M', '1Y']]);
+});
+
+test('validatePromo throws when promo is not linked to the product', function (): void {
+    $guestApi = apiEndpoint(new Guest());
+
+    $promo = new Promo();
+    $promo->setType(Promo::PERCENTAGE);
+    $promo->setValue(10);
+
+    $serviceMock = Mockery::mock(Service::class)->makePartial();
+    $serviceMock->shouldReceive('findActivePromoByCode')->atLeast()->once()->andReturn($promo);
+    $serviceMock->shouldReceive('isPromoAvailableForClientGroup')->atLeast()->once()->andReturn(true);
+    $serviceMock->shouldReceive('promoCanBeApplied')->atLeast()->once()->andReturn(true);
+
+    $product = new Product();
+    $productServiceMock = Mockery::mock(ProductService::class)->makePartial();
+    $productServiceMock->shouldReceive('findProductById')->once()->with(5)->andReturn($product);
+    $productServiceMock->shouldReceive('isPromoLinkedToProduct')->once()->with($promo, $product)->andReturn(false);
+
+    $di = container();
+    $di['rate_limiter'] = getAllowedRateLimiter();
+    $di['mod_service'] = $di->protect(fn ($mod) => $productServiceMock);
+    $guestApi->setDi($di);
+    $guestApi->setService($serviceMock);
+
+    expect(fn () => $guestApi->validate_promo(['promocode' => 'CODE', 'product_id' => 5]))
+        ->toThrow(FOSSBilling\InformationException::class, 'This promo code is not valid for the selected product');
+});
+
+test('validatePromo throws when period is not eligible', function (): void {
+    $guestApi = apiEndpoint(new Guest());
+
+    $promo = new Promo();
+    $promo->setType(Promo::PERCENTAGE);
+    $promo->setValue(10);
+    $promo->setPeriods('["1Y"]');
+
+    $serviceMock = Mockery::mock(Service::class)->makePartial();
+    $serviceMock->shouldReceive('findActivePromoByCode')->atLeast()->once()->andReturn($promo);
+    $serviceMock->shouldReceive('isPromoAvailableForClientGroup')->atLeast()->once()->andReturn(true);
+    $serviceMock->shouldReceive('promoCanBeApplied')->atLeast()->once()->andReturn(true);
+
+    $di = container();
+    $di['rate_limiter'] = getAllowedRateLimiter();
+    $guestApi->setDi($di);
+    $guestApi->setService($serviceMock);
+
+    // No product_id passed → only the period gate is exercised.
+    expect(fn () => $guestApi->validate_promo(['promocode' => 'CODE', 'period' => '1M']))
+        ->toThrow(FOSSBilling\InformationException::class, 'This promo code is not valid for the selected billing period');
+});

@@ -15,7 +15,7 @@ use Doctrine\DBAL\Connection;
 
 class IdMap
 {
-    public function __construct(private Connection $dbal)
+    public function __construct(private readonly Connection $dbal)
     {
     }
 

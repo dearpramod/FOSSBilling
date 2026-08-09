@@ -174,7 +174,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         $rows = $this->di['dbal']->fetchAllAssociative('SELECT * FROM mod_whmcsmigration_run');
         $byEntity = [];
         foreach ($rows as $row) {
-            $row['errors'] = !empty($row['errors']) ? json_decode($row['errors'], true) : [];
+            $row['errors'] = !empty($row['errors']) ? json_decode((string) $row['errors'], true) : [];
             $byEntity[$row['entity']] = $row;
         }
 

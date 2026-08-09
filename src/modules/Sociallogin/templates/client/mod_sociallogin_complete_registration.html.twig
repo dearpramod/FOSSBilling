@@ -2,295 +2,421 @@
 
 {% import "macro_functions.html.twig" as mf %}
 
-{% set company  = guest.system_company %}
-{% set r        = guest.client_required %}
+{% set company       = guest.system_company %}
+{% set r             = guest.client_required %}
 {% set custom_fields = guest.client_custom_fields %}
 
 {% block meta_title %}Complete Your Registration{% endblock %}
+{% block body_class %}public-auth-page auth-signup-page{% endblock %}
+
+{% block head %}<style>main{display:flex;flex-direction:column;}</style>{% endblock %}
 
 {% block content %}
-<div class="min-h-[80vh] flex items-center justify-center px-4 py-12">
-    <div class="w-full max-w-lg">
+<div class="auth-page-shell auth-signup-shell flex flex-1">
 
-        {# Brand header #}
-        <div class="text-center mb-8">
-            {# Google branding badge #}
-            <div class="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <svg class="w-6 h-6" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+    {# ══════════════════════════════════════════════════════════════
+       LEFT PANEL — "Almost there!" confirmation panel
+       ══════════════════════════════════════════════════════════════ #}
+    <aside class="auth-aside auth-signup-aside hidden lg:flex lg:w-[34%] flex-col items-center justify-center px-10 py-16 relative overflow-hidden"
+         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+
+        <div class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full pointer-events-none"
+             style="background: radial-gradient(circle, rgba(255,255,255,.15), transparent 60%);"></div>
+        <div class="absolute -bottom-24 -right-24 w-80 h-80 rounded-full pointer-events-none"
+             style="background: radial-gradient(circle, rgba(255,255,255,.10), transparent 60%);"></div>
+        <div class="absolute inset-0 pointer-events-none"
+             style="opacity:.05; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 24px 24px;"></div>
+
+        <div class="auth-support-card relative z-10 w-full max-w-sm rounded-2xl px-8 py-10 flex flex-col items-center text-center">
+
+            {# Icon — first direct child receives .auth-support-card > div:first-child styling #}
+            <div class="mb-6 p-4 rounded-2xl" style="background: rgba(var(--color-primary-rgb),.10);">
+                <svg class="w-10 h-10" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
                     <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
                     <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
                 </svg>
             </div>
-            <h1 class="text-2xl font-bold text-white">Complete your registration</h1>
-            <p class="text-sm text-gray-500 mt-1">You're signing up with Google. Fill in the remaining details to continue.</p>
+
+            <h2 class="text-xl font-extrabold mb-3" style="color:#fff !important;">
+                Almost there!
+            </h2>
+            <p class="text-sm leading-relaxed mb-7" style="color:rgba(255,255,255,.72) !important;">
+                Your Google account is verified. Just fill in a few more details to complete your registration.
+            </p>
+
+            <div class="w-full rounded-xl px-4 py-3 text-left space-y-2.5" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);">
+                <div class="flex items-center gap-2.5 text-sm" style="color:rgba(255,255,255,.85);">
+                    <svg class="w-4 h-4 flex-shrink-0" style="color:rgba(134,239,172,1);" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Email verified by Google</span>
+                </div>
+                <div class="flex items-center gap-2.5 text-sm" style="color:rgba(255,255,255,.85);">
+                    <svg class="w-4 h-4 flex-shrink-0" style="color:rgba(134,239,172,1);" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>No password needed</span>
+                </div>
+            </div>
+
         </div>
+    </aside>
 
-        {# Error banner — hidden by default, shown via JS #}
-        <div id="reg-error"
-             class="hidden mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
-             role="alert"></div>
+    {# ══════════════════════════════════════════════════════════════
+       RIGHT PANEL — completion form
+       ══════════════════════════════════════════════════════════════ #}
+    <section class="auth-form-panel w-full lg:w-[66%] flex items-start justify-center px-5 sm:px-10 lg:px-14 py-10 overflow-y-auto login-right-panel">
+        <div class="auth-form-card auth-signup-card w-full max-w-2xl">
 
-        {# Registration card #}
-        <div class="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-8 shadow-2xl shadow-black/50 backdrop-blur-sm">
-            <form id="complete-reg-form" novalidate>
+            {# Mobile logo #}
+            <div class="lg:hidden mb-8 flex justify-center">
+                {% if company.logo_url %}
+                    <img src="{{ company.logo_url }}" alt="{{ company.name }}" class="h-9 w-auto">
+                {% else %}
+                    <span class="text-xl font-bold" style="color: var(--color-primary);">{{ company.name }}</span>
+                {% endif %}
+            </div>
 
-                {# Hidden token — proves Google-verified email #}
+            {# Google verified badge #}
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-4"
+                 style="background:rgba(34,197,94,.10);color:#16a34a;border:1px solid rgba(34,197,94,.25);">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                </svg>
+                Google account verified
+            </div>
+
+            <span class="auth-eyebrow">One more step</span>
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-1">Complete your registration</h1>
+            <p class="text-sm text-gray-400 mb-6">
+                Signing up as <strong class="text-gray-600">{{ email|e }}</strong>.
+                <a href="{{ 'signup'|url }}" class="font-semibold hover:underline underline-offset-2 transition-colors" style="color: var(--color-primary);">Use a different account</a>
+            </p>
+
+            {# Error banner #}
+            <div id="reg-error"
+                 class="hidden mb-5 flex items-start gap-3 px-4 py-3 rounded-xl text-sm" role="alert"
+                 style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);color:#f87171;">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span id="reg-error-msg"></span>
+            </div>
+
+            <form id="complete-reg-form" novalidate class="auth-form auth-signup-form space-y-6">
+
+                {# Hidden fields — token proves Google-verified email; old_sid carries pre-login cart #}
                 <input type="hidden" name="token" value="{{ token|e('html_attr') }}">
+                {% if old_sid is defined and old_sid %}
+                <input type="hidden" name="old_session_id" value="{{ old_sid|e('html_attr') }}">
+                {% endif %}
 
-                <div class="space-y-4">
+                {# ─── Name row (pre-filled from Google, editable) ─────── #}
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest mb-4 pb-3 border-b"
+                        style="color: var(--color-primary); border-color: rgba(var(--color-primary-rgb),.15);">
+                        Personal Information
+                    </h3>
+                    <div class="space-y-4">
 
-                    {# ── Name row (pre-filled from Google, editable) ── #}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="space-y-1.5">
-                            <label for="first_name" class="block text-xs font-medium text-gray-400">First Name <span class="text-red-400">*</span></label>
-                            <input id="first_name" type="text" name="first_name"
-                                   value="{{ first_name|e('html_attr') }}" required autofocus
-                                   autocomplete="given-name"
-                                   maxlength="100"
-                                   placeholder="First name"
-                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="first_name" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    First Name <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="first_name" type="text" name="first_name"
+                                       value="{{ first_name|e('html_attr') }}" required autofocus
+                                       autocomplete="given-name" maxlength="100" placeholder="First name"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            <div>
+                                <label for="last_name" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Last Name{% if 'last_name' in r %} <span style="color: var(--color-primary);">*</span>{% endif %}
+                                </label>
+                                <input id="last_name" type="text" name="last_name"
+                                       value="{{ last_name|e('html_attr') }}"
+                                       {% if 'last_name' in r %}required{% endif %}
+                                       autocomplete="family-name" maxlength="100" placeholder="Last name"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
                         </div>
-                        <div class="space-y-1.5">
-                            <label for="last_name" class="block text-xs font-medium text-gray-400">
-                                Last Name{% if 'last_name' in r %} <span class="text-red-400">*</span>{% endif %}
+
+                        {# Email — locked, verified by Google #}
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Email Address
+                                <span class="ml-2 inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 border border-emerald-200">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                    Verified by Google
+                                </span>
                             </label>
-                            <input id="last_name" type="text" name="last_name"
-                                   value="{{ last_name|e('html_attr') }}"
-                                   {% if 'last_name' in r %}required{% endif %}
-                                   autocomplete="family-name"
-                                   maxlength="100"
-                                   placeholder="Last name"
-                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <input type="email" value="{{ email|e('html_attr') }}" readonly
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 text-sm cursor-not-allowed"
+                                   tabindex="-1" onfocus="this.blur()">
                         </div>
-                    </div>
 
-                    {# ── Email (locked — provided by Google) ── #}
-                    <div class="space-y-1.5">
-                        <label for="email" class="block text-xs font-medium text-gray-400">
-                            Email Address
-                            <span class="ml-2 inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 rounded-full px-2 py-0.5">
-                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                                Verified by Google
-                            </span>
-                        </label>
-                        <input id="email" type="email" name="_email_display"
-                               value="{{ email|e('html_attr') }}" readonly
-                               autocomplete="off"
-                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-gray-400 text-sm cursor-not-allowed select-none"
-                               tabindex="-1">
-                        {# actual value sent with the token, not via input #}
-                    </div>
-
-                    {# ── Company ── #}
-                    {% if 'company' in r %}
-                    <div class="space-y-1.5">
-                        <label for="company" class="block text-xs font-medium text-gray-400">Company <span class="text-red-400">*</span></label>
-                        <input id="company" type="text" name="company"
-                               value="" required
-                               autocomplete="organization"
-                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                    </div>
-                    {% endif %}
-
-                    {# ── Gender ── #}
-                    {% if 'gender' in r %}
-                    <div class="space-y-1.5">
-                        <label for="gender" class="block text-xs font-medium text-gray-400">Gender <span class="text-red-400">*</span></label>
-                        <select id="gender" name="gender" required
-                                class="w-full px-4 py-2.5 rounded-xl bg-[#0a0f1e] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                            <option value="">Select…</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                            <option value="nonbinary">Non-binary</option>
-                            <option value="other">Other / Prefer not to say</option>
-                        </select>
-                    </div>
-                    {% endif %}
-
-                    {# ── Birthday ── #}
-                    {% if 'birthday' in r %}
-                    <div class="space-y-1.5">
-                        <label for="birthday" class="block text-xs font-medium text-gray-400">Date of Birth <span class="text-red-400">*</span></label>
-                        <input id="birthday" type="date" name="birthday"
-                               required
-                               autocomplete="bday"
-                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                    </div>
-                    {% endif %}
-
-                    {# ── Phone ── #}
-                    {% if 'phone' in r %}
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-medium text-gray-400">Phone Number <span class="text-red-400">*</span></label>
-                        <div class="flex gap-2">
-                            <div class="flex-shrink-0 w-24">
-                                <input id="phone_cc" type="text" name="phone_cc"
-                                       placeholder="+1"
-                                       maxlength="5"
-                                       inputmode="numeric"
-                                       autocomplete="tel-country-code"
-                                       class="w-full px-3 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-center">
-                            </div>
-                            <div class="flex-1">
-                                <input id="phone" type="tel" name="phone"
-                                       required
-                                       placeholder="555 000 0000"
-                                       inputmode="tel"
-                                       maxlength="30"
-                                       autocomplete="tel-national"
-                                       class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                        {# Phone #}
+                        {% if 'phone' in r %}
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Phone Number <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <div class="flex-shrink-0 w-20">
+                                    <input id="phone_cc" type="text" name="phone_cc"
+                                           value="+977" placeholder="+977"
+                                           maxlength="5" inputmode="numeric" autocomplete="tel-country-code"
+                                           class="w-full px-3 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none text-center"
+                                           onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                           onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                </div>
+                                <div class="flex-1">
+                                    <input id="phone" type="tel" name="phone"
+                                           required placeholder="Phone number"
+                                           inputmode="tel" maxlength="30" autocomplete="tel-national"
+                                           class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                           onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                           onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                </div>
                             </div>
                         </div>
-                        <p class="text-[11px] text-gray-600">Country code in left box (e.g. +977), number in right.</p>
-                    </div>
-                    {% endif %}
-
-                    {# ── Address ── #}
-                    {% if 'address_1' in r %}
-                    <div class="space-y-1.5">
-                        <label for="address_1" class="block text-xs font-medium text-gray-400">Address Line 1 <span class="text-red-400">*</span></label>
-                        <input id="address_1" type="text" name="address_1"
-                               required
-                               placeholder="Street address"
-                               autocomplete="address-line1"
-                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                    </div>
-                    {% endif %}
-                    {% if 'address_2' in r %}
-                    <div class="space-y-1.5">
-                        <label for="address_2" class="block text-xs font-medium text-gray-400">Address Line 2</label>
-                        <input id="address_2" type="text" name="address_2"
-                               placeholder="Apartment, suite, unit (optional)"
-                               autocomplete="address-line2"
-                               class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                    </div>
-                    {% endif %}
-
-                    {# ── City + State ── #}
-                    {% if 'city' in r or 'state' in r %}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {% if 'city' in r %}
-                        <div class="space-y-1.5">
-                            <label for="city" class="block text-xs font-medium text-gray-400">City <span class="text-red-400">*</span></label>
-                            <input id="city" type="text" name="city"
-                                   required
-                                   autocomplete="address-level2"
-                                   maxlength="100"
-                                   placeholder="City name"
-                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                        </div>
                         {% endif %}
-                        {% if 'state' in r %}
-                        <div class="space-y-1.5">
-                            <label for="state" class="block text-xs font-medium text-gray-400">State / Province <span class="text-red-400">*</span></label>
-                            <input id="state" type="text" name="state"
-                                   required
-                                   autocomplete="address-level1"
-                                   maxlength="100"
-                                   placeholder="State / Province / Region"
-                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
 
-                    {# ── Postcode + Country ── #}
-                    {% if 'postcode' in r or 'country' in r %}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {% if 'postcode' in r %}
-                        <div class="space-y-1.5 {% if 'country' not in r %}sm:col-span-2{% endif %}">
-                            <label for="postcode" class="block text-xs font-medium text-gray-400">Postcode / ZIP <span class="text-red-400">*</span></label>
-                            <input id="postcode" type="text" name="postcode"
-                                   required
-                                   autocomplete="postal-code"
-                                   maxlength="20"
-                                   placeholder="Postcode / ZIP"
-                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                        </div>
-                        {% endif %}
-                        {% if 'country' in r %}
-                        <div class="space-y-1.5 {% if 'postcode' not in r %}sm:col-span-2{% endif %}">
-                            <label for="country" class="block text-xs font-medium text-gray-400">Country <span class="text-red-400">*</span></label>
-                            <select id="country" name="country" required
-                                    autocomplete="country"
-                                    class="w-full px-4 py-2.5 rounded-xl bg-[#0a0f1e] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                                <option value="">Select country…</option>
-                                {% for val, label in guest.system_countries %}
-                                    <option value="{{ val }}">{{ label }}</option>
-                                {% endfor %}
+                        {# Gender #}
+                        {% if 'gender' in r %}
+                        <div>
+                            <label for="gender" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Gender <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <select id="gender" name="gender" required
+                                    class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                                    onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                    onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                <option value="">Select...</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="nonbinary">Non-binary</option>
+                                <option value="other">Other / Prefer not to say</option>
                             </select>
                         </div>
                         {% endif %}
-                    </div>
-                    {% endif %}
 
-                    {# ── Custom fields ── #}
-                    {% for field_name, field in custom_fields %}
-                        {% if field.active|default(false) %}
-                        <div class="space-y-1.5">
-                            <label for="{{ field_name }}" class="block text-xs font-medium text-gray-400">
-                                {{ field.title is not empty ? field.title : field_name|capitalize }}
-                                {% if field.required|default(false) %}<span class="text-red-400">*</span>{% endif %}
+                        {# Birthday #}
+                        {% if 'birthday' in r %}
+                        <div>
+                            <label for="birthday" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Date of Birth <span style="color: var(--color-primary);">*</span>
                             </label>
-                            <input id="{{ field_name }}" type="text" name="{{ field_name }}"
-                                   {% if field.required|default(false) %}required{% endif %}
-                                   class="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <input id="birthday" type="date" name="birthday"
+                                   required autocomplete="bday"
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                                   onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                   onblur="this.style.boxShadow='';this.style.borderColor='';">
                         </div>
                         {% endif %}
-                    {% endfor %}
 
-                    {# ── Currency ── #}
-                    <div class="space-y-1.5">
-                        <label for="currency" class="block text-xs font-medium text-gray-400">Billing Currency <span class="text-red-400">*</span></label>
-                        {% set avail_currencies = guest.currency_get_pairs %}
-                        {% set default_currency = guest.currency_get %}
-                        <select id="currency" name="currency" required
-                                class="w-full px-4 py-2.5 rounded-xl bg-[#0a0f1e] border border-white/[0.10] text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
-                            {% for code, title in avail_currencies %}
-                                <option value="{{ code }}" {% if default_currency.code == code %}selected{% endif %}>{{ code }} — {{ title }}</option>
-                            {% endfor %}
-                        </select>
-                        <p class="text-[11px] text-gray-600">All invoices and balances will use this currency. Cannot be changed later.</p>
                     </div>
+                </div>
 
-                    {# ── TOS agreement ── #}
-                    {% if settings.tos %}
-                    <div class="flex items-start gap-3 pt-1">
-                        <input type="checkbox" id="tos" name="agree_tos" value="1" required
-                               class="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0">
-                        <label for="tos" class="text-xs text-gray-400 leading-relaxed">
-                            I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Terms of Service</a>
+                {# ─── Billing Address ──────────────────────────────────── #}
+                {% if 'company' in r or 'address_1' in r or 'address_2' in r or 'city' in r or 'state' in r or 'postcode' in r or 'country' in r %}
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest mb-4 pb-3 border-b"
+                        style="color: var(--color-primary); border-color: rgba(var(--color-primary-rgb),.15);">
+                        Billing Address
+                    </h3>
+                    <div class="space-y-4">
+
+                        {% if 'company' in r %}
+                        <div>
+                            <label for="company" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Company Name <span style="color: var(--color-primary);">*</span>
+                            </label>
+                            <input id="company" type="text" name="company"
+                                   required autocomplete="organization" placeholder="Your company name"
+                                   class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                   onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                   onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        </div>
+                        {% endif %}
+
+                        {% if 'address_1' in r or 'address_2' in r %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {% if 'address_1' in r %}
+                            <div class="{% if 'address_2' not in r %}sm:col-span-2{% endif %}">
+                                <label for="address_1" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Street Address <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="address_1" type="text" name="address_1"
+                                       required placeholder="Street address" autocomplete="address-line1"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                            {% if 'address_2' in r %}
+                            <div class="{% if 'address_1' not in r %}sm:col-span-2{% endif %}">
+                                <label for="address_2" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Street Address 2 <span class="text-gray-400 font-normal">(Optional)</span>
+                                </label>
+                                <input id="address_2" type="text" name="address_2"
+                                       placeholder="Apartment, suite, unit" autocomplete="address-line2"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {# City + Country #}
+                        {% if 'city' in r or 'country' in r %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {% if 'city' in r %}
+                            <div class="{% if 'country' not in r %}sm:col-span-2{% endif %}">
+                                <label for="city" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    City <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="city" type="text" name="city"
+                                       required autocomplete="address-level2" maxlength="100" placeholder="City name"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                            {% if 'country' in r %}
+                            <div class="{% if 'city' not in r %}sm:col-span-2{% endif %}">
+                                <label for="country" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Country <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <select id="country" name="country" required autocomplete="country"
+                                        class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                                        onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                        onblur="this.style.boxShadow='';this.style.borderColor='';">
+                                    <option value="">Select country...</option>
+                                    {% for val, label in guest.system_countries %}
+                                        <option value="{{ val }}" {% if val == 'NP' %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {# State + Postcode #}
+                        {% if 'state' in r or 'postcode' in r %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {% if 'state' in r %}
+                            <div class="{% if 'postcode' not in r %}sm:col-span-2{% endif %}">
+                                <label for="state" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    State / Province <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="state" type="text" name="state"
+                                       required autocomplete="address-level1" maxlength="100" placeholder="State / Province"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                            {% if 'postcode' in r %}
+                            <div class="{% if 'state' not in r %}sm:col-span-2{% endif %}">
+                                <label for="postcode" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Postcode / ZIP <span style="color: var(--color-primary);">*</span>
+                                </label>
+                                <input id="postcode" type="text" name="postcode"
+                                       required autocomplete="postal-code" maxlength="20" placeholder="Postcode / ZIP"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                                       onblur="this.style.boxShadow='';this.style.borderColor='';">
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+                {% endif %}
+
+                {# Custom fields #}
+                {% for field_name, field in custom_fields %}
+                    {% if field.active|default(false) %}
+                    <div>
+                        <label for="{{ field_name }}" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            {{ field.title|default('') is not empty ? field.title : field_name|capitalize }}
+                            {% if field.required|default(false) %}<span style="color: var(--color-primary);">*</span>{% endif %}
                         </label>
+                        <input id="{{ field_name }}" type="text" name="{{ field_name }}"
+                               {% if field.required|default(false) %}required{% endif %}
+                               class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm placeholder-gray-300 transition-all focus:outline-none"
+                               onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                               onblur="this.style.boxShadow='';this.style.borderColor='';">
                     </div>
                     {% endif %}
+                {% endfor %}
 
-                    <button id="submit-btn" type="submit"
-                            class="w-full py-3 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 mt-2 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
-                        <span id="submit-label">Continue to Dashboard</span>
-                        <svg id="submit-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                        </svg>
-                    </button>
-
+                {# Billing Currency #}
+                <div>
+                    <label for="currency" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Billing Currency <span style="color: var(--color-primary);">*</span>
+                    </label>
+                    {% set avail_currencies = guest.currency_get_pairs %}
+                    {% set default_currency = guest.currency_get %}
+                    <select id="currency" name="currency" required
+                            class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm transition-all focus:outline-none"
+                            onfocus="this.style.boxShadow='0 0 0 3px rgba(var(--color-primary-rgb),.15)';this.style.borderColor='var(--color-primary)';"
+                            onblur="this.style.boxShadow='';this.style.borderColor='';">
+                        {% for code, title in avail_currencies %}
+                            <option value="{{ code }}" {% if default_currency.code == code %}selected{% endif %}>{{ code }} — {{ title }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-gray-400 mt-1.5">All invoices and balances will use this currency. Cannot be changed later.</p>
                 </div>
+
+                {# TOS #}
+                {% if settings.tos|default(false) %}
+                <div class="flex items-start gap-3">
+                    <input type="checkbox" id="tos" name="agree_tos" value="1" required
+                           class="mt-0.5 w-4 h-4 rounded border-gray-300 cursor-pointer"
+                           style="accent-color: var(--color-primary);">
+                    <label for="tos" class="text-sm text-gray-500 leading-relaxed cursor-pointer">
+                        I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank"
+                           class="font-semibold hover:underline underline-offset-2 transition-colors"
+                           style="color: var(--color-primary);">Terms of Service</a>
+                    </label>
+                </div>
+                {% endif %}
+
+                {# Submit #}
+                <button id="submit-btn" type="submit"
+                        class="auth-primary-btn w-full h-12 px-4 rounded-xl text-base font-bold flex items-center justify-center gap-2"
+                        style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.38); letter-spacing:.01em;">
+                    <span id="submit-label">Create Account</span>
+                    <svg id="submit-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                </button>
+
             </form>
 
-            <div class="mt-6 text-center border-t border-white/5 pt-5">
-                <p class="text-sm text-gray-500">
-                    Already have an account?
-                    <a href="{{ 'login'|url }}" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Sign in</a>
-                </p>
+            {# Trust badge #}
+            <div class="mt-8 pt-6 border-t flex items-center justify-center gap-2" style="border-color:#f0f0f0;">
+                <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                <span class="text-[11px] text-gray-400 font-medium">Protected by 256-bit SSL encryption</span>
             </div>
-        </div>
 
-        <div class="text-center mt-6">
-            <a href="{{ '/'|url }}" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Back to {{ company.name }}</a>
         </div>
+    </section>
 
-    </div>
 </div>
 {% endblock %}
 
@@ -299,13 +425,16 @@
 (function () {
     'use strict';
 
-    var form     = document.getElementById('complete-reg-form');
-    var btn      = document.getElementById('submit-btn');
-    var label    = document.getElementById('submit-label');
-    var spinner  = document.getElementById('submit-spinner');
-    var errBox   = document.getElementById('reg-error');
+    var form    = document.getElementById('complete-reg-form');
+    var btn     = document.getElementById('submit-btn');
+    var label   = document.getElementById('submit-label');
+    var spinner = document.getElementById('submit-spinner');
+    var errBox  = document.getElementById('reg-error');
+    var errMsg  = document.getElementById('reg-error-msg');
 
-    // Set birthday limits
+    var afterUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|url|e('js') }}{% endif %}';
+
+    // Birthday limits
     var bday = form ? form.querySelector('[name="birthday"]') : null;
     if (bday) {
         bday.max = new Date().toISOString().split('T')[0];
@@ -313,21 +442,19 @@
     }
 
     function showError(msg) {
-        errBox.textContent = msg;
+        errMsg.textContent = msg;
         errBox.classList.remove('hidden');
         errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     function hideError() {
         errBox.classList.add('hidden');
-        errBox.textContent = '';
+        errMsg.textContent = '';
     }
-
-    var afterUrl = '{% if return_to is defined and return_to %}{{ return_to|e('js') }}{% else %}{{ 'dashboard'|url|e('js') }}{% endif %}';
 
     function setLoading(loading) {
         btn.disabled = loading;
-        label.textContent = loading ? 'Creating account…' : (afterUrl.indexOf('/order/checkout') !== -1 ? 'Continue to Checkout' : 'Continue to Dashboard');
+        label.textContent = loading ? 'Creating account…' : (afterUrl.indexOf('/order/checkout') !== -1 ? 'Continue to Checkout' : 'Create Account');
         spinner.classList.toggle('hidden', !loading);
     }
 
@@ -344,10 +471,7 @@
 
         setLoading(true);
 
-        // Collect all named form fields except the display-only email copy
         var formData = new FormData(form);
-        formData.delete('_email_display');
-
         var body = new URLSearchParams();
         formData.forEach(function (val, key) { body.append(key, val); });
 

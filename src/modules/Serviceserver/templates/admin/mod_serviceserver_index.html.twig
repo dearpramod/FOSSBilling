@@ -1,0 +1,119 @@
+{% extends 'layout_default.html.twig' %}
+
+{% set active_menu = 'system' %}
+
+{% block meta_title %}{{ 'Server Option Fields'|trans }}{% endblock %}
+
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item">
+        <a href="{{ '/'|url }}">
+            <svg class="icon"><use href="#home"/></svg>
+        </a>
+    </li>
+    <li class="breadcrumb-item"><a href="{{ 'system'|url }}">{{ 'Settings'|trans }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ 'Server Option Fields'|trans }}</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">{{ 'Server Option Fields'|trans }}</h3>
+                    <p class="card-subtitle">{{ 'Configure the location, OS, and other pickers shown on server product order forms.'|trans }}</p>
+                </div>
+                <div class="card-options">
+                    <a href="{{ 'extension/settings/serviceserver'|url }}" class="btn btn-ghost-secondary btn-sm">
+                        <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                        {{ 'Global settings'|trans }}
+                    </a>
+                </div>
+            </div>
+
+            {% if categories|length %}
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ 'Category'|trans }}</th>
+                            <th>{{ 'Configuration'|trans }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cat in categories %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="avatar avatar-xs bg-blue-lt text-primary" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+                                    </span>
+                                    <strong>{{ cat.title }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                {% if cat.has_custom %}
+                                    <span class="badge bg-green-lt">
+                                        <svg class="icon icon-xs me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                        {{ 'Custom fields configured'|trans }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary-lt">{{ 'Inherits global defaults'|trans }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ ('serviceserver/category/' ~ cat.id)|url }}" class="btn btn-sm btn-primary">
+                                    <svg class="icon me-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    {{ 'Configure'|trans }}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-center py-5">
+                <div class="text-secondary mb-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:2.5rem;height:2.5rem;"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+                </div>
+                <p class="text-secondary mb-2">{{ 'No product categories found.'|trans }}</p>
+                <a href="{{ 'product'|url }}" class="btn btn-sm btn-outline-primary">{{ 'Go to Products'|trans }}</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ 'How option fields work'|trans }}</h3>
+            </div>
+            <div class="card-body">
+                <div class="steps steps-counter">
+                    <div class="step-item">
+                        <div class="h4 m-0">{{ 'Global defaults'|trans }}</div>
+                        <p class="text-secondary mb-0">
+                            {{ 'The baseline set of fields shown on all server order forms.'|trans }}
+                            <a href="{{ 'extension/settings/serviceserver'|url }}">{{ 'Edit in Global settings'|trans }}</a>.
+                        </p>
+                    </div>
+                    <div class="step-item">
+                        <div class="h4 m-0">{{ 'Category fields'|trans }}</div>
+                        <p class="text-secondary mb-0">{{ 'Fields configured here are merged on top of global defaults. A field with a matching ID replaces its global counterpart; new IDs are appended.'|trans }}</p>
+                    </div>
+                    <div class="step-item">
+                        <div class="h4 m-0">{{ 'Product-level override'|trans }}</div>
+                        <p class="text-secondary mb-0">{{ 'Set on each product\'s Configuration tab. Merged on top of category and global fields. Products with no override automatically inherit from their category.'|trans }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

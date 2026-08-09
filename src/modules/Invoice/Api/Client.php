@@ -49,7 +49,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
      *
      * @return array{total:int, unpaid_count:int, paid_count:int, outstanding_total:float, paid_total:float, currency:string, last_paid:array|null}
      */
-    public function get_stats($data = [])
+    public function get_stats($data = []): array
     {
         $clientId = $this->getIdentity()->id;
         $db = $this->getDi()['db'];
@@ -219,5 +219,44 @@ class Client extends \FOSSBilling\Api\AbstractApi
         $service = $this->getDi()['mod_service']('Invoice', 'Tax');
 
         return $service->getTaxRateForClient($this->getIdentity());
+    }
+
+    /**
+     * Pay an invoice using account credit balance.
+     * Requires the client's currency to match the invoice currency.
+     *
+     * @return array{type: string}
+     *
+     * @throws \FOSSBilling\InformationException
+     */
+    #[RequiredParams(['hash' => 'Invoice hash was not passed'])]
+    public function pay_with_credits($data): array
+    {
+        $identity = $this->getIdentity();
+        $invoice = $this->getDi()['db']->findOne('Invoice', 'hash = :hash AND client_id = :client_id', [
+            'hash' => $data['hash'],
+            'client_id' => $identity->id,
+        ]);
+        if (!$invoice instanceof \Model_Invoice) {
+            throw new \FOSSBilling\InformationException('Invoice was not found');
+        }
+        if ($invoice->status === \Model_Invoice::STATUS_PAID) {
+            throw new \FOSSBilling\InformationException('Invoice is already paid');
+        }
+        if ($identity->currency && $invoice->currency && $identity->currency !== $invoice->currency) {
+            throw new \FOSSBilling\InformationException(
+                sprintf(
+                    'Account balance is in %s but invoice is in %s. Please use a payment gateway to pay this invoice.',
+                    $identity->currency,
+                    $invoice->currency
+                )
+            );
+        }
+        $paid = $this->getService()->tryPayWithCredits($invoice);
+        if (!$paid) {
+            throw new \FOSSBilling\InformationException('Insufficient account credit to cover this invoice.');
+        }
+
+        return ['type' => 'full'];
     }
 }

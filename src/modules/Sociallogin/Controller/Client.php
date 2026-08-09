@@ -173,7 +173,7 @@ class Client implements InjectionAwareInterface
         $oldSid = $this->sanitizeSessionId(session_id());
 
         // HMAC covers every state field — no field can be swapped individually.
-        $sig = hash_hmac('sha256', implode('|', [$nonce, $context, $returnTo, $oldSid]), $secret);
+        $sig = hash_hmac('sha256', implode('|', [$nonce, $context, $returnTo, $oldSid]), (string) $secret);
 
         // Bind this OAuth round-trip to the initiating browser via a short-lived
         // SameSite=Lax cookie.  The callback will reject any state whose nonce
@@ -254,7 +254,7 @@ class Client implements InjectionAwareInterface
         }
 
         // Layer 2: HMAC over all fields — proves none were tampered in transit.
-        if ($nonce === '' || $sig === '' || !hash_equals(hash_hmac('sha256', implode('|', [$nonce, $context, $returnTo, $oldSid]), $secret), $sig)) {
+        if ($nonce === '' || $sig === '' || !hash_equals(hash_hmac('sha256', implode('|', [$nonce, $context, $returnTo, $oldSid]), (string) $secret), $sig)) {
             return $this->renderError('Authentication failed (state mismatch). Please try again.');
         }
 
@@ -480,7 +480,7 @@ class Client implements InjectionAwareInterface
 
     private function renderError(string $message): string
     {
-        $loginUrl = htmlspecialchars($this->di['url']->link('login'), ENT_QUOTES, 'UTF-8');
+        $loginUrl = htmlspecialchars((string) $this->di['url']->link('login'), ENT_QUOTES, 'UTF-8');
         $message = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
 
         return <<<HTML

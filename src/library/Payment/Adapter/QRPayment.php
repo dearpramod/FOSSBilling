@@ -117,8 +117,8 @@ class Payment_Adapter_QRPayment
         // Sanitize QR image URL — allow http(s) and data: URIs only
         $safeQrUrl = '';
         if (!empty($qrImageUrl)) {
-            if (preg_match('#^https?://#i', $qrImageUrl) || preg_match('#^data:image/#i', $qrImageUrl)) {
-                $safeQrUrl = htmlspecialchars($qrImageUrl, ENT_QUOTES, 'UTF-8');
+            if (preg_match('#^https?://#i', (string) $qrImageUrl) || preg_match('#^data:image/#i', (string) $qrImageUrl)) {
+                $safeQrUrl = htmlspecialchars((string) $qrImageUrl, ENT_QUOTES, 'UTF-8');
             }
         }
 
@@ -164,7 +164,7 @@ class Payment_Adapter_QRPayment
 
         // Amount badge
         $html .= '<div style="margin-bottom:24px;"><span class="qrpay-badge">';
-        $html .= 'Amount: ' . htmlspecialchars($currency, ENT_QUOTES, 'UTF-8') . ' ' . number_format((float) $amount, 2);
+        $html .= 'Amount: ' . htmlspecialchars((string) $currency, ENT_QUOTES, 'UTF-8') . ' ' . number_format((float) $amount, 2);
         $html .= ' &nbsp;&middot;&nbsp; Invoice #' . $invoiceNr;
         $html .= '</span></div>';
 
@@ -203,9 +203,8 @@ class Payment_Adapter_QRPayment
         }
 
         $html .= '<p class="qrpay-note">After completing payment, please allow some time for verification. Your invoice will be marked as paid once confirmed.</p>';
-        $html .= '</div>';
 
-        return $html;
+        return $html . '</div>';
     }
 
     public function processTransaction($api_admin, $id, $data, $gateway_id): bool

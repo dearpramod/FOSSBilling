@@ -24,7 +24,7 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
         'debug_mode' => false,
     ];
 
-    private const API_URL = 'https://api.connectreseller.com/ConnectReseller/ESHOP/';
+    private const string API_URL = 'https://api.connectreseller.com/ConnectReseller/ESHOP/';
 
     /** Per-request cache of ViewDomain responses, keyed by lowercase domain name. */
     private array $_viewDomainCache = [];
@@ -199,7 +199,7 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
         $params = [
             'ProductType' => 1,
             'Websitename' => $domain->getName(),
-            'Duration' => max(1, (int) ($domain->getRegistrationPeriod() ?? 1)),
+            'Duration' => max(1, $domain->getRegistrationPeriod() ?? 1),
             'IsWhoisProtection' => $domain->getPrivacyEnabled() ? 'true' : 'false',
             'ns1' => $domain->getNs1(),
             'ns2' => $domain->getNs2(),
@@ -320,7 +320,7 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
         $params = [
             'Websitename' => $domain->getName(),
             'OrderType' => 2,
-            'Duration' => max(1, (int) ($domain->getRegistrationPeriod() ?? 1)),
+            'Duration' => max(1, $domain->getRegistrationPeriod() ?? 1),
             'Id' => (int) $customerId,
             'IsWhoisProtection' => $livePrivacy ? 1 : 'false',
             'isEnablePremium' => 0,
@@ -350,7 +350,7 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
         if (empty($epp)) {
             throw new Registrar_Exception('An EPP/authorization code is required to transfer :domain. Please obtain the auth code from the current registrar and try again.', [':domain' => $domain->getName()]);
         }
-        if (strlen($epp) > 256 || !preg_match('/^[\x20-\x7E]+$/', $epp)) {
+        if (strlen((string) $epp) > 256 || !preg_match('/^[\x20-\x7E]+$/', (string) $epp)) {
             throw new Registrar_Exception('The EPP/authorization code contains invalid characters or is too long.');
         }
 
@@ -817,7 +817,7 @@ class Registrar_Adapter_Connectreseller extends Registrar_AdapterAbstract
             $normalized[] = [
                 'id' => $r['DNSZoneRecordID'] ?? $r['dnsZoneRecordId'] ?? null,
                 'zoneId' => $r['DNSZoneID'] ?? $r['dnsZoneId'] ?? null,
-                'type' => strtoupper($r['RecordType'] ?? $r['recordType'] ?? ''),
+                'type' => strtoupper((string) ($r['RecordType'] ?? $r['recordType'] ?? '')),
                 'host' => $r['RecordName'] ?? $r['recordName'] ?? '',
                 'value' => $r['RecordValue'] ?? $r['recordValue'] ?? '',
                 'ttl' => (int) ($r['RecordTTL'] ?? $r['recordTTL'] ?? 43200),

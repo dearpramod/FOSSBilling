@@ -392,9 +392,6 @@ class Service implements InjectionAwareInterface
             $data['plugin'] = $productService->getProductPluginById((int) $model->product_id);
         }
 
-        $client = $this->di['db']->getExistingModelById('Client', $model->client_id, 'Client not found');
-        $data['client'] = $clientService->toApiArray($client, false);
-
         return $data;
     }
 
@@ -535,6 +532,10 @@ class Service implements InjectionAwareInterface
         $meta = (isset($data['meta']) && is_array($data['meta'])) ? $data['meta'] : null;
         $client_id = $data['client_id'] ?? null;
         $invoice_option = $data['invoice_option'] ?? null;
+        $product_category_id = isset($data['product_category_id']) ? (int) $data['product_category_id'] : null;
+        $allowedOrderBy = ['title' => 'co.title', 'price' => 'co.price', 'id' => 'co.id'];
+        $orderByCol = $allowedOrderBy[$data['order_by'] ?? ''] ?? 'co.id';
+        $orderDir = strtoupper((string) ($data['order_direction'] ?? 'DESC')) === 'ASC' ? 'ASC' : 'DESC';
 
         // Build minimal JOIN set — client JOIN only for name searches, meta JOIN only for meta filters.
         // Unconditional JOINs inflate COUNT(*) when meta has multiple rows per order and force the
@@ -546,9 +547,16 @@ class Service implements InjectionAwareInterface
         if ($meta) {
             $query .= ' LEFT JOIN client_order_meta meta ON meta.client_order_id = co.id';
         }
+        if ($product_category_id) {
+            $query .= ' INNER JOIN product p ON p.id = co.product_id AND p.product_category_id = :product_category_id';
+        }
 
         $where = [];
         $bindings = [];
+
+        if ($product_category_id) {
+            $bindings[':product_category_id'] = $product_category_id;
+        }
 
         if ($client_id) {
             $where[] = 'co.client_id = :client_id';
@@ -648,7 +656,7 @@ class Service implements InjectionAwareInterface
         if (!empty($where)) {
             $query = $query . ' WHERE ' . implode(' AND ', $where);
         }
-        $query .= ' ORDER BY co.id DESC';
+        $query .= " ORDER BY $orderByCol $orderDir";
 
         return [$query, $bindings];
     }

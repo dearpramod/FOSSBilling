@@ -60,11 +60,23 @@
 {% set _base_mo_price = 0 %}
 {% if pricing.type == 'recurrent' and pricing.recurrent['1M'] is defined and pricing.recurrent['1M'].enabled %}{% set _base_mo_price = pricing.recurrent['1M'].price %}{% endif %}
 {% set _period_months = {'1W': 0.25, '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36} %}
+{% set _cat_href = '/order'|url %}
+{% set _cat_label = 'Server Plans' %}
+{% if product.product_category_id %}
+    {% set _cat_list = guest.product_category_get_list({'per_page': 200, 'deep': 0}) %}
+    {% for _cat in _cat_list.list %}
+        {% if _cat.id == product.product_category_id %}
+            {% set _cat_slug = _cat.title|lower|replace({' ': '-'})|replace({'/': '-'})|trim('-') %}
+            {% set _cat_href = ('/order/' ~ _cat_slug)|url %}
+            {% set _cat_label = _cat.title %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
 
 <div class="ord-srv-detail">
-    <a href="{{ '/order/vps'|url }}" class="ord-srv-back-link inline-flex items-center gap-1.5 text-sm transition-colors mb-4">
+    <a href="{{ _cat_href }}" class="ord-srv-back-link inline-flex items-center gap-1.5 text-sm transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        Back to Server Plans
+        Back to {{ _cat_label }}
     </a>
     <div class="ord-srv-product-head flex items-start gap-3 mb-6">
         <span class="ord-srv-product-icon" aria-hidden="true">
@@ -179,9 +191,9 @@
             </div>
             {% endif %}
 
-            {# ── Server option pickers — fields configured in admin Settings › Server Options ── #}
+            {# ── Server option pickers — product → category → global → defaults cascade ── #}
             {# NOTE: |json_encode inside x-data="" (HTML attribute) is safe; browser decodes HTML entities before Alpine. #}
-            {% set _srv_fields = guest.serviceserver_options_get %}
+            {% set _srv_fields = guest.serviceserver_product_options_get({'product_id': product.id}) %}
             {% for field in _srv_fields %}
             {% if field.options is defined and field.options is not empty %}
             {% set is_location_field = 'location' in field.id|lower or 'location' in field.label|lower or 'datacenter' in field.label|lower %}
@@ -280,16 +292,22 @@
                                  x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                                  x-transition:leave-end="opacity-0 -translate-y-1 scale-[.98]"
                                  @click="select(opt)"
-                                 class="ord-os-card"
+                                class="ord-os-card"
                                  :class="selected && selected.value === opt.value ? 'ord-os-card-on' : 'ord-os-card-off'">
                                 <span class="ord-os-logo flex-shrink-0" :class="'ord-os-logo-' + osKey(opt.label)" aria-hidden="true">
-                                    <svg x-show="osKey(opt.label) === 'ubuntu'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <img x-show="opt.image_url"
+                                         :src="opt.image_url"
+                                         :alt="opt.label + ' icon'"
+                                         loading="lazy"
+                                         referrerpolicy="no-referrer"
+                                         @error="opt.image_url = ''">
+                                    <svg x-show="!opt.image_url && osKey(opt.label) === 'ubuntu'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                         <circle cx="12" cy="12" r="4"/><circle cx="12" cy="3.75" r="1.5" fill="currentColor" stroke="none"/><circle cx="4.85" cy="16.1" r="1.5" fill="currentColor" stroke="none"/><circle cx="19.15" cy="16.1" r="1.5" fill="currentColor" stroke="none"/><path d="M12 7.8V5.5M8.4 14.1l-2 1.15M15.6 14.1l2 1.15"/>
                                     </svg>
-                                    <svg x-show="osKey(opt.label) === 'debian'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <svg x-show="!opt.image_url && osKey(opt.label) === 'debian'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                         <path d="M16.8 7.1c-1.1-2.25-4.7-2.65-7.15-1.25-2.8 1.6-3.5 5.15-1.65 7.55 1.65 2.15 5.25 2.35 7.1.65 1.45-1.3 1.6-3.5.2-4.55-1.15-.9-3.1-.6-3.75.6-.45.85-.05 1.95.75 2.2"/>
                                     </svg>
-                                    <svg x-show="!['ubuntu','debian'].includes(osKey(opt.label))" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <svg x-show="!opt.image_url && !['ubuntu','debian'].includes(osKey(opt.label))" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                         <path d="M4 6.5h16v11H4z"/><path d="m7.5 10 2 2-2 2M11.5 14h4.5"/>
                                     </svg>
                                 </span>
@@ -389,7 +407,9 @@
                     </span>
                     <div>
                         <h4 class="text-sm font-bold ord-srv-heading">{{ field.label }}</h4>
-                        {% if field.description is defined and field.description %}
+                        {% if is_location_field %}
+                        <p class="ord-srv-dimmed text-xs mt-0.5">Choose the closest datacenter for lower latency and faster response times.</p>
+                        {% elseif field.description is defined and field.description %}
                         <p class="ord-srv-dimmed text-xs mt-0.5">{{ field.description }}</p>
                         {% endif %}
                     </div>
@@ -398,6 +418,73 @@
                 <div class="p-6">
                     <div>
 
+                        {% if is_location_field %}
+                        {# Datacenter cards expose latency and price without opening a generic dropdown. #}
+                        {% if field.options|length > 6 %}
+                        <label class="ord-location-search">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21 21-4.35-4.35M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                            <input type="search" x-model="search" placeholder="Search datacenters…" autocomplete="off">
+                        </label>
+                        {% endif %}
+                        <div class="ord-location-grid" role="radiogroup" aria-label="Available server locations">
+                            <template x-for="grp in grouped()" :key="grp.region">
+                                <div class="ord-location-group">
+                                    <div x-show="grp.region" class="ord-location-region">
+                                        <span x-text="grp.region"></span>
+                                        <span x-text="grp.options.length + (grp.options.length === 1 ? ' location' : ' locations')"></span>
+                                    </div>
+                                    <div class="ord-location-options">
+                                        <template x-for="opt in grp.options" :key="opt.value">
+                                            <button type="button"
+                                                    role="radio"
+                                                    @click="select(opt)"
+                                                    :aria-checked="selected && selected.value === opt.value"
+                                                    class="ord-location-card"
+                                                    :class="selected && selected.value === opt.value ? 'is-selected' : ''">
+                                                <span class="ord-location-pin" aria-hidden="true">
+                                                    <svg x-show="!selected || selected.value !== opt.value"
+                                                         viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M12 21s6-4.35 6-11a6 6 0 1 0-12 0c0 6.65 6 11 6 11Z"/>
+                                                        <circle cx="12" cy="10" r="2"/>
+                                                    </svg>
+                                                    <svg x-show="selected && selected.value === opt.value" x-cloak
+                                                         viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="m5 12 4 4L19 6"/>
+                                                    </svg>
+                                                </span>
+                                                <span class="ord-location-copy">
+                                                    <strong x-text="opt.label"></strong>
+                                                    <small x-text="grp.region || 'Global datacenter'"></small>
+                                                </span>
+                                                <span class="ord-location-meta">
+                                                    <span x-show="opt.badge"
+                                                          class="ord-loc-badge"
+                                                          :class="{
+                                                              'ord-badge-best': opt.badge === 'Best',
+                                                              'ord-badge-good': opt.badge === 'Good',
+                                                              'ord-badge-fair': opt.badge === 'Fair',
+                                                              'ord-badge-distant': opt.badge === 'Distant'
+                                                          }"
+                                                          x-text="opt.badge + (opt.meta ? ' · ' + opt.meta : '')"></span>
+                                                    <span class="ord-location-price"
+                                                          :class="(opt.price_monthly > 0) ? 'is-paid' : 'is-included'"
+                                                          x-text="(opt.price_monthly > 0) ? '+' + $store.fbCurrency.formatMoney(opt.price_monthly) + '/mo' : 'Included'"></span>
+                                                </span>
+                                                <img x-show="opt.image_url"
+                                                     :src="opt.image_url"
+                                                     :alt="opt.label + ' location image'"
+                                                     class="ord-location-image"
+                                                     loading="lazy"
+                                                     referrerpolicy="no-referrer"
+                                                     @error="$el.hidden = true">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="grouped().length === 0" class="ord-location-empty">No matching datacenters found.</div>
+                        </div>
+                        {% else %}
                         {# Trigger button #}
                         <button type="button"
                                 @click="open = !open; if (open) $nextTick(() => $refs.fieldSearch && $refs.fieldSearch.focus())"
@@ -484,6 +571,7 @@
                                      class="px-4 py-8 text-center text-sm ord-srv-dimmed">No options found.</div>
                             </div>
                         </div>
+                        {% endif %}
 
                         {# Hidden input — value submitted with cart config as config[field_id] #}
                         <input type="hidden" name="config[{{ field.id }}]" :value="selected ? selected.value : ''"
@@ -531,18 +619,20 @@
                         <p class="ord-srv-dimmed text-xs mt-0.5">Enhance your server with {{ product.addons|length }} available option{{ product.addons|length == 1 ? '' : 's' }}.</p>
                     </div>
                 </div>
-                <div class="p-4 space-y-2">
+                <div class="ord-addon-list">
                     {% for i, addon in product.addons %}
                     {% set addon_default_period = '' %}
                     {% if addon.pricing.type == 'recurrent' %}{% for acode, aprices in addon.pricing.recurrent %}{% if addon_default_period == '' and aprices.enabled %}{% set addon_default_period = acode %}{% endif %}{% endfor %}{% endif %}
-                    <div @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
-                         class="flex items-center justify-between gap-4 px-4 py-3.5 border rounded-xl cursor-pointer transition-all bg-white"
+                    <button type="button"
+                         @click.stop="toggleAddon({{ addon.id }}, '{{ addon.pricing.type | default('once') }}')"
+                         role="checkbox"
+                         :aria-checked="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'true' : 'false'"
+                         class="ord-addon-choice"
                          :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected
-                             ? 'border-[color:var(--color-primary)] ring-1 ring-[color:var(--color-primary)]/20'
-                             : 'border-slate-200 hover:border-slate-300'">
-                        <div class="flex items-center gap-3 flex-1 min-w-0">
-                            {# Large checkbox — matches Stitch w-6 h-6 #}
-                            <div class="w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                             ? 'is-selected'
+                             : ''">
+                        <span class="ord-addon-select">
+                            <span class="ord-addon-checkbox"
                                  :class="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected ? 'ord-chk-on' : 'ord-chk-off'">
                                 <svg x-show="addons['{{ addon.id }}'] && addons['{{ addon.id }}'].selected" x-cloak
                                      x-transition:enter="transition ease-out duration-150"
@@ -552,26 +642,33 @@
                                      x-transition:leave-start="opacity-100 scale-100"
                                      x-transition:leave-end="opacity-0 scale-50"
                                      class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <div class="min-w-0">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-sm font-semibold ord-srv-heading">{{ addon.title }}</span>
-                                    {% if i == 0 %}<span class="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider" style="background:rgba(var(--color-primary-rgb),0.12);color:var(--color-primary);">Recommended</span>{% endif %}
-                                </div>
-                                {% if addon.description %}<p class="text-xs mt-0.5 leading-relaxed ord-srv-dimmed">{{ addon.description|striptags|slice(0,100) }}{{ addon.description|striptags|length > 100 ? '…' : '' }}</p>{% endif %}
-                            </div>
-                        </div>
-                        <div class="text-right flex-shrink-0 font-bold">
-                            {% if addon.pricing.type == 'once' %}
-                            <span class="text-sm ord-srv-heading">{{ addon.pricing.once.price | money_convert }}</span>
-                            {% elseif addon.pricing.type == 'free' %}
-                            <span class="text-sm text-emerald-500">Free</span>
-                            {% elseif addon.pricing.type == 'recurrent' %}
-                            <span class="text-sm ord-srv-heading"
-                                  x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : (addonRawPrices['{{ addon.id }}'] && addonRawPrices['{{ addon.id }}']['{{ addon_default_period }}'] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}']['{{ addon_default_period }}']) : '')">{{ addon_default_period ? (addon.pricing.recurrent[addon_default_period].price | money_convert) : '&mdash;' }}</span>
+                            </span>
+                            {% if addon.icon_url %}
+                            <span class="ord-addon-icon">
+                                <img src="{{ addon.icon_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+                            </span>
                             {% endif %}
-                        </div>
-                    </div>
+                            <span class="ord-addon-content">
+                                <strong class="ord-srv-heading">{{ addon.title }}</strong>
+                                {% if addon.description %}
+                                <span class="ord-addon-description ord-srv-muted">{{ addon.description|striptags|trim }}</span>
+                                {% endif %}
+                            </span>
+                        </span>
+                        <span class="ord-addon-price">
+                            {% if addon.pricing.type == 'once' %}
+                            <strong class="ord-srv-heading">{{ addon.pricing.once.price | money_convert }}</strong>
+                            <small>one-time</small>
+                            {% elseif addon.pricing.type == 'free' %}
+                            <strong class="text-emerald-500">Free</strong>
+                            <small>included</small>
+                            {% elseif addon.pricing.type == 'recurrent' %}
+                            <strong class="ord-srv-heading"
+                                  x-text="getAddonRawPrice('{{ addon.id }}') !== null ? formatMoney(getAddonRawPrice('{{ addon.id }}')) : '—'">{{ addon_default_period ? (addon.pricing.recurrent[addon_default_period].price | money_convert) : '&mdash;' }}</strong>
+                            <small x-text="getAddonPeriodLabel('{{ addon.id }}')"></small>
+                            {% endif %}
+                        </span>
+                    </button>
                     {% endfor %}
                 </div>
             </section>
@@ -646,13 +743,19 @@
                              x-transition:leave-start="opacity-100 translate-y-0"
                              x-transition:leave-end="opacity-0 -translate-y-1"
                              class="ord-summary-row">
-                            <span class="text-slate-500 ord-srv-muted">{{ addon.title }}</span>
+                            <span class="grid gap-0.5 text-slate-500 ord-srv-muted">
+                                <span>{{ addon.title }}</span>
+                                {% if addon.pricing.type == 'recurrent' %}
+                                <small class="text-[10px] ord-srv-dimmed" x-text="getAddonPeriodLabel('{{ addon.id }}') + ' billing'"></small>
+                                {% endif %}
+                            </span>
                             {% if addon.pricing.type == 'free' %}
                             <span class="font-semibold text-emerald-500">Free</span>
                             {% elseif addon.pricing.type == 'once' %}
                             <span class="font-semibold text-slate-900 ord-srv-heading">{{ addon.pricing.once.price|money_convert }}</span>
                             {% else %}
-                            <span class="font-semibold text-slate-900 ord-srv-heading" x-text="addonRawPrices['{{ addon.id }}'] && selectedPeriod && addonRawPrices['{{ addon.id }}'][selectedPeriod] !== undefined ? formatMoney(addonRawPrices['{{ addon.id }}'][selectedPeriod]) : '—'"></span>
+                            <span class="font-semibold text-slate-900 ord-srv-heading"
+                                  x-text="getAddonRawPrice('{{ addon.id }}') !== null ? formatMoney(getAddonRawPrice('{{ addon.id }}')) : '—'"></span>
                             {% endif %}
                         </div>
                         {% endfor %}
@@ -661,7 +764,7 @@
                             <div class="ord-summary-selection">
                                 <div class="min-w-0">
                                     <span class="ord-srv-dimmed" x-text="selection.label"></span>
-                                    <strong class="ord-srv-heading" x-text="selection.value"></strong>
+                                    <strong class="ord-srv-heading" x-text="selection.optionLabel || selection.value"></strong>
                                 </div>
                                 <span x-show="selection.price > 0" class="ord-summary-option-price"
                                       x-text="'+' + formatMoney(selection.price * (periodMonthsMap[selectedPeriod] || 1))"></span>
@@ -777,10 +880,10 @@
                         </span>
                     </button>
 
-                    {# Guarantee #}
-                    <div class="flex items-center justify-center gap-2 pt-1">
-                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        <span class="text-xs font-semibold text-emerald-600">30-day money-back guarantee</span>
+                    {# Checkout reassurance #}
+                    <div class="ord-srv-checkout-note">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-7a2 2 0 00-2-2h-1V7a5 5 0 00-10 0v3H6a2 2 0 00-2 2v7a2 2 0 002 2zm3-11V7a3 3 0 016 0v3H9z"/></svg>
+                        <span>Secure checkout · Instant provisioning</span>
                     </div>
                 </div>
 
@@ -1298,22 +1401,43 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 /* ── Server product detail layout ── */
 .ord-srv-detail {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   font-family: var(--font-brand-sans, "Inter", ui-sans-serif, system-ui, sans-serif);
 }
 .ord-srv-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: start; }
-.ord-srv-main { display: flex; flex-direction: column; gap: .9rem; }
+.ord-srv-main { display: flex; flex-direction: column; gap: 1rem; }
 .ord-srv-product-head h1,
 .ord-srv-section-hd h4,
 .ord-srv-sidebar-hd h2 {
   font-family: var(--font-brand-display, "Inter Tight", "Inter", sans-serif);
 }
 .ord-srv-product-head h1 { letter-spacing: -.035em; }
+.ord-srv-product-head {
+  position: relative;
+  padding: 1.15rem 1.25rem;
+  overflow: hidden;
+  border: 1px solid rgba(var(--color-primary-rgb),.13);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 92% 15%, rgba(var(--color-secondary-rgb),.10), transparent 32%),
+    linear-gradient(135deg, rgba(var(--color-primary-rgb),.075), rgba(255,255,255,.82) 62%);
+}
+.ord-srv-product-head::after {
+  content: "";
+  position: absolute;
+  right: -2.25rem;
+  bottom: -3rem;
+  width: 8rem;
+  height: 8rem;
+  border: 1px solid rgba(var(--color-primary-rgb),.12);
+  border-radius: 999px;
+  pointer-events: none;
+}
 .ord-srv-progress {
   display: flex;
   align-items: center;
-  max-width: 38rem;
+  width: 100%;
   padding: .75rem 1rem;
   border: 1px solid #e2e8f0;
   border-radius: .85rem;
@@ -1347,6 +1471,13 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 [data-theme="dark"] .ord-srv-progress-item b { background: rgba(255,255,255,.07); }
 [data-theme="dark"] .ord-srv-progress-item.is-active b { background: var(--color-primary); }
 [data-theme="dark"] .ord-srv-progress-line { background: rgba(255,255,255,.09); }
+[data-theme="dark"] .ord-srv-product-head {
+  border-color: rgba(255,255,255,.08);
+  background:
+    radial-gradient(circle at 92% 15%, rgba(var(--color-secondary-rgb),.12), transparent 32%),
+    linear-gradient(135deg, rgba(var(--color-primary-rgb),.10), rgba(255,255,255,.025) 62%);
+}
+[data-theme="dark"] .ord-srv-product-head::after { border-color: rgba(255,255,255,.07); }
 .ord-srv-product-icon,
 .ord-srv-plan-icon {
   display: grid;
@@ -1405,20 +1536,24 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 [data-theme="dark"] .ord-srv-dimmed  { color: #64748b; }
 
 /* ── Section cards — Stitch white cards ── */
-.ord-srv-section-card { background: #fff; border: 1px solid #e2e8f0; border-radius: .9rem; padding: 1.35rem; box-shadow: 0 4px 16px rgba(15,23,42,.035); }
+.ord-srv-section-card { background: #fff; border: 1px solid #dfe7f1; border-radius: 1rem; padding: 1.35rem; box-shadow: 0 8px 26px rgba(15,23,42,.045); }
 [data-theme="dark"] .ord-srv-section-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); box-shadow: none; }
 
 /* Divided section card (slate-50 header bar + content body) */
-.ord-srv-section-card-divided { background: #fff; border: 1px solid #e2e8f0; border-radius: .9rem; overflow: hidden; box-shadow: 0 4px 16px rgba(15,23,42,.035); }
+.ord-srv-section-card-divided { background: #fff; border: 1px solid #dfe7f1; border-radius: 1rem; overflow: hidden; box-shadow: 0 8px 26px rgba(15,23,42,.045); }
 [data-theme="dark"] .ord-srv-section-card-divided { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); box-shadow: none; }
-.ord-srv-section-hd { background: #fff; border-bottom: 1px solid #eef2f7; padding: 1rem 1.15rem; }
+.ord-srv-section-hd {
+  background: linear-gradient(90deg, rgba(var(--color-primary-rgb),.035), #fff 32%);
+  border-bottom: 1px solid #edf2f7;
+  padding: 1.05rem 1.2rem;
+}
 [data-theme="dark"] .ord-srv-section-hd { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.06); }
 .ord-srv-option-card {
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s cubic-bezier(.2,.75,.25,1);
 }
 .ord-srv-option-card:hover {
   border-color: rgba(var(--color-primary-rgb),.24);
-  box-shadow: 0 8px 24px rgba(15,23,42,.05);
+  box-shadow: 0 12px 32px rgba(15,23,42,.065);
 }
 .ord-srv-required-error {
   border-color: #ef4444 !important;
@@ -1427,9 +1562,9 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 
 /* ── Billing period tile cards ── */
 .ord-srv-pricing-card {
-  border-color: #e2e8f0;
-  border-radius: .9rem;
-  box-shadow: 0 4px 16px rgba(15,23,42,.035);
+  border-color: #dfe7f1;
+  border-radius: 1rem;
+  box-shadow: 0 8px 26px rgba(15,23,42,.045);
 }
 .ord-srv-plan-row {
   display: flex;
@@ -1477,7 +1612,10 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 .ord-srv-period-cost {
   min-width: 12rem;
   text-align: right;
-  padding-bottom: .15rem;
+  padding: .65rem .8rem;
+  border: 1px solid rgba(var(--color-primary-rgb),.10);
+  border-radius: .75rem;
+  background: rgba(var(--color-primary-rgb),.035);
 }
 .ord-srv-period-cost > div { white-space: nowrap; }
 .ord-srv-period-cost strong {
@@ -1609,6 +1747,7 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
   border-color: rgba(255,255,255,.13);
 }
 [data-theme="dark"] .ord-srv-period-cost strong { color: #f8fafc; }
+[data-theme="dark"] .ord-srv-period-cost { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.035); }
 [data-theme="dark"] .ord-srv-period-cost > div span,
 [data-theme="dark"] .ord-srv-renewal-note { color: #94a3b8; }
 [data-theme="dark"] .ord-srv-included-note { color: #cbd5e1; border-top-color: rgba(255,255,255,.08); }
@@ -1625,10 +1764,19 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
   min-width: 0;
 }
 .ord-srv-sidebar-card {
+  position: relative;
   background: #fff;
-  border-radius: 1rem;
-  box-shadow: 0 14px 38px rgba(15,23,42,.08), 0 2px 8px rgba(15,23,42,.035);
+  border-radius: 1.1rem;
+  box-shadow: 0 18px 46px rgba(15,23,42,.10), 0 3px 10px rgba(15,23,42,.04);
   transition: box-shadow .2s ease;
+}
+.ord-srv-sidebar-card::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
 }
 .ord-srv-sidebar-card:hover {
   box-shadow: 0 17px 42px rgba(15,23,42,.095), 0 3px 10px rgba(15,23,42,.04);
@@ -1678,8 +1826,10 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
   overflow-wrap: anywhere;
 }
 .ord-summary-total {
-  padding: 1rem 0 .15rem;
+  padding: 1rem;
   border-top: 1px solid #e2e8f0;
+  border-radius: .8rem;
+  background: #f8fafc;
 }
 .ord-summary-selection {
   display: flex;
@@ -1703,6 +1853,7 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 }
 [data-theme="dark"] .ord-summary-selection { background: transparent; border-color: rgba(255,255,255,.07); }
 [data-theme="dark"] .ord-summary-total { border-top-color: rgba(255,255,255,.09); }
+[data-theme="dark"] .ord-summary-total { background: rgba(255,255,255,.035); }
 [data-theme="dark"] .ord-summary-currency {
   color: #94a3b8;
   background: rgba(255,255,255,.04);
@@ -1714,7 +1865,137 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 [data-theme="dark"] .ord-srv-sidebar-hd { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.06); }
 [data-theme="dark"] .ord-srv-sidebar-ft { background: rgba(255,255,255,0.03); border-top-color: rgba(255,255,255,0.06); }
 
-/* Add-on cards */
+/* Add-on choices — content comes directly from the configured add-on. */
+.ord-addon-list {
+  display: grid;
+  gap: .75rem;
+  padding: 1rem;
+}
+.ord-addon-choice {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 1.25rem;
+  padding: 1rem;
+  border: 1px solid #dbe3ec;
+  border-radius: .9rem;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.ord-addon-choice:hover {
+  border-color: rgba(var(--color-primary-rgb),.34);
+  background: #fbfcff;
+  box-shadow: 0 8px 22px rgba(15,23,42,.05);
+  transform: translateY(-1px);
+}
+.ord-addon-choice:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb),.12);
+}
+.ord-addon-choice.is-selected {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb),.045);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb),.08);
+}
+.ord-addon-select {
+  display: flex;
+  align-items: flex-start;
+  gap: .8rem;
+  min-width: 0;
+}
+.ord-addon-checkbox {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: grid;
+  place-items: center;
+  flex: none;
+  margin-top: .08rem;
+  border: 1.5px solid;
+  border-radius: .4rem;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.ord-addon-icon {
+  width: 2.65rem;
+  height: 2.65rem;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: .75rem;
+  background: #f8fafc;
+}
+.ord-addon-icon img {
+  width: 1.85rem;
+  height: 1.85rem;
+  object-fit: contain;
+}
+.ord-addon-content {
+  display: grid;
+  min-width: 0;
+  gap: .3rem;
+}
+.ord-addon-content > strong {
+  font-size: .9rem;
+  line-height: 1.3;
+}
+.ord-addon-description {
+  display: block;
+  max-width: 48rem;
+  font-size: .76rem;
+  line-height: 1.55;
+  white-space: normal;
+}
+.ord-addon-price {
+  display: grid;
+  min-width: 6.5rem;
+  gap: .15rem;
+  text-align: right;
+}
+.ord-addon-price strong {
+  font-size: .9rem;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.ord-addon-price small {
+  color: #94a3b8;
+  font-size: .65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+[data-theme="dark"] .ord-addon-choice {
+  background: rgba(255,255,255,.035);
+  border-color: rgba(255,255,255,.1);
+}
+[data-theme="dark"] .ord-addon-choice:hover {
+  background: rgba(255,255,255,.055);
+  border-color: rgba(255,255,255,.2);
+}
+[data-theme="dark"] .ord-addon-choice.is-selected {
+  background: rgba(var(--color-primary-rgb),.10);
+  border-color: var(--color-primary);
+}
+[data-theme="dark"] .ord-addon-icon {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.09);
+}
+@media (max-width: 639px) {
+  .ord-addon-choice {
+    grid-template-columns: 1fr;
+    gap: .8rem;
+  }
+  .ord-addon-price {
+    padding-left: 2.15rem;
+    text-align: left;
+  }
+}
+
+/* Legacy add-on card primitives */
 .ord-addon-card { border: 1.5px solid rgba(0,0,0,0.1); border-radius: 0.75rem; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: transparent; }
 .ord-addon-card:hover { border-color: rgba(0,0,0,0.22); }
 [data-theme="dark"] .ord-addon-card { border-color: rgba(255,255,255,0.09); }
@@ -1735,6 +2016,16 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 .ord-srv-submit:not(:disabled):active {
   transform: translateY(0);
 }
+.ord-srv-checkout-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  color: #059669;
+  font-size: .75rem;
+  font-weight: 650;
+}
+[data-theme="dark"] .ord-srv-checkout-note { color: #34d399; }
 .ord-coupon-apply {
   transition: transform .15s ease, filter .15s ease, box-shadow .15s ease, opacity .15s ease;
 }
@@ -1750,7 +2041,7 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 /* The summary owns the checkout action at every breakpoint. */
 .ord-srv-mobile-cta { display: none; }
 @media (min-width: 1024px) {
-  .ord-srv-layout { grid-template-columns: minmax(0, 1fr) 350px; gap: 1.25rem; }
+  .ord-srv-layout { grid-template-columns: minmax(0, 1fr) 370px; gap: 1.5rem; }
   .ord-srv-layout > .ord-srv-sidebar {
     position: -webkit-sticky !important;
     position: sticky !important;
@@ -1881,6 +2172,200 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
 }
 
 /* ── Location picker ── */
+.ord-location-search {
+  position: relative;
+  display: block;
+  margin-bottom: .85rem;
+}
+.ord-location-search svg {
+  position: absolute;
+  left: .9rem;
+  top: 50%;
+  width: 1rem;
+  height: 1rem;
+  color: #94a3b8;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ord-location-search input {
+  width: 100%;
+  min-height: 2.85rem;
+  padding: .65rem .85rem .65rem 2.65rem;
+  border: 1px solid #dbe3ec;
+  border-radius: .75rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: .82rem;
+  outline: none;
+}
+.ord-location-search input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb),.11);
+}
+.ord-location-grid,
+.ord-location-group {
+  display: grid;
+  gap: .7rem;
+}
+.ord-location-group + .ord-location-group {
+  margin-top: .45rem;
+}
+.ord-location-region {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: .64rem;
+  font-weight: 750;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.ord-location-region > :last-child {
+  font-size: .6rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: none;
+}
+.ord-location-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+}
+.ord-location-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: .7rem;
+  min-height: 5.6rem;
+  padding: .85rem 3.4rem .85rem .85rem;
+  overflow: hidden;
+  border: 1px solid #dbe3ec;
+  border-radius: .85rem;
+  background: #fff;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.ord-location-card:hover {
+  border-color: rgba(var(--color-primary-rgb),.38);
+  background: #fbfcff;
+  box-shadow: 0 8px 20px rgba(15,23,42,.055);
+  transform: translateY(-1px);
+}
+.ord-location-card:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb),.12);
+}
+.ord-location-card.is-selected {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb),.045);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb),.08);
+}
+.ord-location-pin {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: .7rem;
+  background: #f1f5f9;
+  color: #64748b;
+}
+.ord-location-pin svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 1.8;
+}
+.ord-location-card.is-selected .ord-location-pin {
+  background: var(--color-primary);
+  color: #fff;
+}
+.ord-location-copy {
+  display: grid;
+  min-width: 0;
+  gap: .12rem;
+}
+.ord-location-copy strong {
+  color: #0f172a;
+  font-size: .85rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.ord-location-copy small {
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: .66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ord-location-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .5rem;
+  min-width: 0;
+  padding-top: .55rem;
+  border-top: 1px solid #f1f5f9;
+}
+.ord-location-meta .ord-loc-badge {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  align-items: center;
+  flex: 0 1 auto;
+  font-size: .64rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.ord-location-price {
+  flex: none;
+  margin-left: auto;
+  color: #059669;
+  font-size: .68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ord-location-price.is-paid { color: #d97706; }
+.ord-location-image {
+  position: absolute;
+  top: .8rem;
+  right: .8rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(15,23,42,.08));
+}
+.ord-location-empty {
+  padding: 1.5rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: .8rem;
+  color: #94a3b8;
+  text-align: center;
+  font-size: .78rem;
+}
+[data-theme="dark"] .ord-location-search input,
+[data-theme="dark"] .ord-location-card {
+  color: #e2e8f0;
+  background: rgba(255,255,255,.035);
+  border-color: rgba(255,255,255,.11);
+}
+[data-theme="dark"] .ord-location-card:hover { background: rgba(255,255,255,.055); border-color: rgba(255,255,255,.22); }
+[data-theme="dark"] .ord-location-card.is-selected { background: rgba(var(--color-primary-rgb),.10); border-color: var(--color-primary); }
+[data-theme="dark"] .ord-location-copy strong { color: #f1f5f9; }
+[data-theme="dark"] .ord-location-pin { color: #94a3b8; background: rgba(255,255,255,.06); }
+[data-theme="dark"] .ord-location-card.is-selected .ord-location-pin { color: #fff; background: var(--color-primary); }
+[data-theme="dark"] .ord-location-meta { border-top-color: rgba(255,255,255,.07); }
+@media (max-width: 1199px) {
+  .ord-location-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .ord-location-options { grid-template-columns: 1fr; }
+}
+
 .ord-loc-trigger {
   background: #fff;
   border-color: #e2e8f0;
@@ -1954,6 +2439,12 @@ html[data-theme="light"] .ord-plan-unavail { color: #64748b; }
   transition: color .15s ease, background-color .15s ease, border-color .15s ease;
 }
 .ord-os-logo svg { grid-area: 1 / 1; width: 1.35rem; height: 1.35rem; stroke-width: 1.75; }
+.ord-os-logo img {
+  grid-area: 1 / 1;
+  width: 1.55rem;
+  height: 1.55rem;
+  object-fit: contain;
+}
 .ord-os-card-on .ord-os-logo {
   color: var(--color-primary);
   background: rgba(var(--color-primary-rgb),.07);

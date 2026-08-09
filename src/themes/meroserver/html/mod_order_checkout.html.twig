@@ -420,6 +420,19 @@ function orderCheckout() {
                             {% if item.period|default(false) %}
                             <p class="text-xs text-gray-400 mt-0.5">{{ item.period | period_title }}</p>
                             {% endif %}
+                            {% if item.server_options|default([]) %}
+                            <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                                {% for option in item.server_options %}
+                                <span class="text-xs text-gray-400">
+                                    {{ option.label }}:
+                                    <strong class="font-medium text-gray-300">{{ option.option_label }}</strong>
+                                    {% if option.price > 0 %}
+                                    <span style="color:var(--color-primary);">+{{ option.price | money_convert }}</span>
+                                    {% endif %}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="flex items-center gap-3 flex-shrink-0">
@@ -994,7 +1007,8 @@ function orderCheckout() {
     {% endif %}
     {% set checkout_total   = cart.total + tax_amount %}
     {% set client_balance   = client ? client.client_balance_get_total : 0 %}
-    {% set enough_balance   = client_balance >= checkout_total %}
+    {% set client_currency  = client ? client.profile_get.currency : cart.currency.code %}
+    {% set enough_balance   = client_balance >= checkout_total and client_currency == cart.currency.code %}
 
     {# Filter to real payment gateways that accept the cart currency #}
     {% set available_gateways = [] %}
@@ -1053,6 +1067,19 @@ function orderCheckout() {
                             <p class="text-sm font-semibold text-white truncate">{{ item.title }}</p>
                             {% if item.period|default(false) %}
                             <p class="text-xs text-gray-400 mt-0.5">{{ item.period | period_title }}</p>
+                            {% endif %}
+                            {% if item.server_options|default([]) %}
+                            <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                                {% for option in item.server_options %}
+                                <span class="text-xs text-gray-400">
+                                    {{ option.label }}:
+                                    <strong class="font-medium text-gray-300">{{ option.option_label }}</strong>
+                                    {% if option.price > 0 %}
+                                    <span style="color:var(--color-primary);">+{{ option.price | money_convert }}</span>
+                                    {% endif %}
+                                </span>
+                                {% endfor %}
+                            </div>
                             {% endif %}
                         </div>
                     </div>

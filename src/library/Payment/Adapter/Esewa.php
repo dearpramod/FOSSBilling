@@ -134,7 +134,7 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
             throw new Payment_Exception('eSewa: Missing payment data in callback.');
         }
 
-        $decoded = json_decode(base64_decode($encodedData, true) ?: '', true);
+        $decoded = json_decode(base64_decode((string) $encodedData, true) ?: '', true);
 
         if (!is_array($decoded) || empty($decoded['transaction_uuid'])) {
             $tx->txn_status = 'failed';
@@ -360,9 +360,8 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
         $html .= '</form>';
         $html .= '<p style="margin-top:12px;font-size:12px;color:#aaa;">Transaction ID: ' . htmlspecialchars($transactionUuid, ENT_QUOTES, 'UTF-8') . '</p>';
         $html .= '<script>setTimeout(function(){ document.getElementById("esewa-payment-form").submit(); }, 1500);</script>';
-        $html .= '</div>';
 
-        return $html;
+        return $html . '</div>';
     }
 
     private function generateSignature(string $message): string

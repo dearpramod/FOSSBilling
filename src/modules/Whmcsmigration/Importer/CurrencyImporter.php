@@ -35,6 +35,7 @@ class CurrencyImporter extends AbstractImporter
         return 'id';
     }
 
+    #[\Override]
     protected function analyzeWarnings(): array
     {
         $warnings = [];
