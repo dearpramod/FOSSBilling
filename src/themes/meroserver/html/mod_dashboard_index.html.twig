@@ -184,10 +184,10 @@
                     {% for order in active_orders.list %}
                     <div class="ref-product-row">
                         <div><strong>{{ order.title }}</strong><small>{{ order.service_type|replace({'service': ''})|title }}{% if order.period %} · {{ order.period|period_title }}{% endif %}</small></div>
-                        <span class="ref-status"><i></i> Active</span>
+                        <span class="ref-status">{{ mf.status_badge(order.status) }}</span>
                         {% if is_unverified %}<div class="sb-lock-wrap">{% endif %}
                         <div class="ref-product-actions{% if is_unverified %} opacity-40 pointer-events-none{% endif %}">
-                            <a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-yellow">Login to Control Panel</a>
+                            {% if order.service_type == 'hosting' %}<a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-yellow">Login to Control Panel</a>{% endif %}
                             <a href="{{ '/order/service/manage'|url }}/{{ order.id }}" class="ref-btn ref-btn-light">Manage</a>
                         </div>
                         {% if is_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
