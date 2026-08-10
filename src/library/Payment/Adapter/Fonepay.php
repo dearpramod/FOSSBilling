@@ -240,30 +240,7 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         $invoiceModel = $this->di['db']->getExistingModelById('Invoice', $invoiceId);
 
         try {
-            $invoiceService = $this->di['mod_service']('Invoice');
-            $clientService = $this->di['mod_service']('client');
-            $client = $this->di['db']->getExistingModelById('Client', $invoiceModel->client_id);
-
-            // Credit the invoice total in the invoice's own currency (client balance is
-            // currency-unaware). Then approve + pay-with-credits (or markAsPaid for deposit).
-            $invoiceTotal = (float) $invoiceService->getTotalWithTax($invoiceModel);
-            $clientService->addFunds($client, $invoiceTotal, 'Fonepay payment — ref: ' . $referenceLabel, [
-                'amount' => $invoiceTotal,
-                'description' => 'Fonepay payment — ref: ' . $referenceLabel,
-                'type' => 'transaction',
-                'rel_id' => $tx->id,
-            ]);
-
-            if (!$invoiceModel->approved) {
-                $invoiceService->approveInvoice($invoiceModel, ['use_credits' => false]);
-            }
-
-            if ($invoiceService->isInvoiceTypeDeposit($invoiceModel)) {
-                $invoiceService->markAsPaid($invoiceModel);
-            } else {
-                $invoiceService->payInvoiceWithCredits($invoiceModel);
-            }
-            $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
+            $this->creditInvoice($invoiceModel, $referenceLabel, (int) $tx->id);
         } catch (Exception $e) {
             $this->failTx($tx, 'Post-payment processing error: ' . $e->getMessage());
 
@@ -290,6 +267,159 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         $tx->updated_at = date('Y-m-d H:i:s');
         $this->di['db']->store($tx);
         $this->log($error, 'error');
+    }
+
+    /**
+     * Credit a successful Fonepay payment to the invoice. Shared by processTransaction()
+     * and the cron reconciler. Follows the platform convention: addFunds -> approve ->
+     * payInvoiceWithCredits (or markAsPaid for deposit invoices).
+     */
+    private function creditInvoice(Model_Invoice $invoice, string $referenceLabel, int $relTxId): void
+    {
+        $invoiceService = $this->di['mod_service']('Invoice');
+        $clientService = $this->di['mod_service']('client');
+        $client = $this->di['db']->getExistingModelById('Client', $invoice->client_id);
+
+        // Credit the invoice total in the invoice's own currency (client balance is
+        // currency-unaware).
+        $invoiceTotal = (float) $invoiceService->getTotalWithTax($invoice);
+        $clientService->addFunds($client, $invoiceTotal, 'Fonepay payment — ref: ' . $referenceLabel, [
+            'amount' => $invoiceTotal,
+            'description' => 'Fonepay payment — ref: ' . $referenceLabel,
+            'type' => 'transaction',
+            'rel_id' => $relTxId,
+        ]);
+
+        if (!$invoice->approved) {
+            $invoiceService->approveInvoice($invoice, ['use_credits' => false]);
+        }
+
+        if ($invoiceService->isInvoiceTypeDeposit($invoice)) {
+            $invoiceService->markAsPaid($invoice);
+        } else {
+            $invoiceService->payInvoiceWithCredits($invoice);
+        }
+        $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Cron reconciliation (Phase 3) — settle payments abandoned mid-flow
+    // -------------------------------------------------------------------------
+
+    /**
+     * Re-verify payments that were initiated but never settled in-session (the browser
+     * closed before the WebSocket/redirect fired — common on mobile). Called from cron via
+     * the Fonepaygateway module. Successful ones are credited; stragglers past $maxAge are
+     * discarded so we don't chase them forever.
+     *
+     * @return int number of payments settled this run
+     */
+    public function reconcilePending(int $maxAgeSeconds = 86400): int
+    {
+        $dir = $this->pendingDir();
+        if (!is_dir($dir)) {
+            return 0;
+        }
+
+        $settled = 0;
+        foreach (glob($dir . '/*.json') ?: [] as $file) {
+            $record = json_decode((string) @file_get_contents($file), true);
+            if (!is_array($record) || empty($record['reference_label'])) {
+                @unlink($file);
+
+                continue;
+            }
+
+            $ref = (string) $record['reference_label'];
+            $age = time() - (int) ($record['created_at'] ?? 0);
+
+            try {
+                $status = $this->getPaymentStatus((string) ($record['terminal_id'] ?? ''), $ref);
+            } catch (Throwable $e) {
+                $this->log('Fonepay reconcile: status check failed for ' . $ref . ': ' . $e->getMessage(), 'warn');
+                if ($age > $maxAgeSeconds) {
+                    @unlink($file);
+                }
+
+                continue;
+            }
+
+            $paymentStatus = strtolower((string) ($status['paymentStatus'] ?? 'unknown'));
+
+            if ($paymentStatus === 'success') {
+                if ($this->settlePendingSuccess($record, $status)) {
+                    ++$settled;
+                }
+                @unlink($file);
+            } elseif ($paymentStatus === 'failed' || $age > $maxAgeSeconds) {
+                @unlink($file); // definitively failed, or too old to keep chasing
+            }
+            // else: still pending — leave it for the next run
+        }
+
+        return $settled;
+    }
+
+    /**
+     * Settle a reconciled successful payment: create a transaction record, verify amount +
+     * dedupe, then credit the invoice.
+     *
+     * @param array<string, mixed> $record
+     * @param array<string, mixed> $status
+     */
+    private function settlePendingSuccess(array $record, array $status): bool
+    {
+        $invoiceId = (int) ($record['invoice_id'] ?? 0);
+        $ref = (string) ($record['reference_label'] ?? '');
+        $verifiedAmount = (float) ($status['totalTransactionAmount'] ?? 0);
+        $traceId = (string) ($status['fonepayTraceId'] ?? '');
+        $expected = (float) ($record['expected_amount'] ?? 0);
+
+        if ($invoiceId <= 0) {
+            return false;
+        }
+        if ($expected > 0 && abs($verifiedAmount - $expected) > 0.01) {
+            $this->log('Fonepay reconcile: amount mismatch for ' . $ref . ' (expected ' . $expected . ', got ' . $verifiedAmount . ')', 'error');
+
+            return false;
+        }
+        if ($traceId !== '' && $this->di['db']->findOne('Transaction', 'txn_id = ? AND status = ?', [$traceId, 'processed'])) {
+            return false; // already processed elsewhere
+        }
+
+        try {
+            $invoice = $this->di['db']->load('Invoice', $invoiceId);
+            if (!$invoice instanceof Model_Invoice || $invoice->status === Model_Invoice::STATUS_PAID) {
+                return false;
+            }
+
+            $tx = $this->di['db']->dispense('Transaction');
+            $tx->invoice_id = $invoiceId;
+            $tx->gateway_id = (int) ($this->config['gateway_id'] ?? 0);
+            $tx->type = 'transaction';
+            $tx->txn_id = $traceId !== '' ? $traceId : $ref;
+            $tx->txn_status = 'success';
+            $tx->amount = $verifiedAmount;
+            $tx->currency = 'NPR';
+            $tx->status = 'received';
+            $tx->created_at = date('Y-m-d H:i:s');
+            $tx->updated_at = date('Y-m-d H:i:s');
+            $this->di['db']->store($tx);
+
+            $this->creditInvoice($invoice, $ref, (int) $tx->id);
+
+            $tx->status = 'processed';
+            $tx->updated_at = date('Y-m-d H:i:s');
+            $this->di['db']->store($tx);
+
+            $this->log('Fonepay reconcile: settled invoice #' . $invoiceId . ' from pending payment ' . $ref, 'info');
+
+            return true;
+        } catch (Throwable $e) {
+            $this->log('Fonepay reconcile: settle failed for ' . $ref . ': ' . $e->getMessage(), 'error');
+
+            return false;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -328,6 +458,7 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
 
         $qrImg = $this->renderQrDataUri($qrString);
         $websocketUrl = (string) ($qr['websocketId'] ?? $qr['thirdpartyQRWebSocketUrl'] ?? '');
+        $bankHtml = $this->renderBankButtons($this->getBankList(), $qrString);
 
         // redirect_url already carries gateway_id, invoice_id, invoice_hash & redirect=1.
         // Appending the reference lets processTransaction() resolve the intent and verify
@@ -347,6 +478,7 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
                 <p style="margin:10px 0 4px;font-size:12px;color:#9ca3af;">Reference: {$refHtml}</p>
                 <div id="fonepay-status" style="margin-top:12px;font-size:14px;color:#6b7280;">Waiting for payment…</div>
                 <button type="button" id="fonepay-check" style="margin-top:12px;display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:#CC0001;color:#fff;border:0;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">I have paid — check status</button>
+                {$bankHtml}
                 <script>
                 (function(){
                     var callbackUrl = {$callbackJs};
@@ -408,9 +540,95 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         return substr('INV' . (int) $invoice->id . 'R' . $suffix, 0, 30);
     }
 
+    /**
+     * Render the "pay with your mobile banking app" deep-link buttons (mobile UX).
+     *
+     * Each button opens the bank's app via its intentScheme deep link, carrying the QR
+     * payload — e.g. LXBLNPKA://payment/?qrPayload=<qrMessage>. On desktop these custom
+     * schemes simply do nothing (harmless); the QR above remains the primary path.
+     * Settlement still happens via the WebSocket / status API — the deep link only hands
+     * the payment off to the bank app.
+     *
+     * @param array<int, array<string, mixed>> $banks
+     */
+    private function renderBankButtons(array $banks, string $qrMessage): string
+    {
+        $payload = rawurlencode($qrMessage);
+        $items = '';
+        foreach ($banks as $bank) {
+            $scheme = trim((string) ($bank['intentScheme'] ?? ''));
+            if ($scheme === '') {
+                continue;
+            }
+            $name = htmlspecialchars((string) ($bank['bankName'] ?? 'Bank'), ENT_QUOTES, 'UTF-8');
+            $icon = (string) ($bank['bankIcon'] ?? '');
+            $deeplink = htmlspecialchars(rtrim($scheme, '/') . '/?qrPayload=' . $payload, ENT_QUOTES, 'UTF-8');
+            $img = '';
+            if (preg_match('#^https?://#i', $icon)) {
+                $img = '<img src="' . htmlspecialchars($icon, ENT_QUOTES, 'UTF-8') . '" alt="" style="width:22px;height:22px;object-fit:contain;border-radius:4px;flex-shrink:0;" onerror="this.style.display=\'none\'"/>';
+            }
+            $items .= '<a href="' . $deeplink . '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #eee;border-radius:10px;text-decoration:none;color:#111;font-size:14px;">' . $img . '<span>' . $name . '</span></a>';
+        }
+
+        if ($items === '') {
+            return '';
+        }
+
+        return '<details style="margin-top:16px;text-align:left;">'
+            . '<summary style="cursor:pointer;text-align:center;color:#CC0001;font-weight:600;font-size:14px;list-style:none;">Or pay with your mobile banking app →</summary>'
+            . '<div style="display:grid;gap:8px;margin-top:12px;max-height:260px;overflow:auto;">' . $items . '</div>'
+            . '</details>';
+    }
+
     // -------------------------------------------------------------------------
     // Fonepay API calls
     // -------------------------------------------------------------------------
+
+    /**
+     * Bank list for mobile deep-linking. Cached ~1h (it changes rarely) and best-effort —
+     * a failure just hides the bank buttons and leaves the QR as the payment path.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getBankList(): array
+    {
+        $cacheKey = 'banks_' . hash('sha256', $this->getBaseUrl());
+        try {
+            $item = $this->getIntentCache()->getItem($cacheKey);
+            if ($item->isHit()) {
+                return (array) $item->get();
+            }
+        } catch (Throwable) {
+        }
+
+        $banks = [];
+        try {
+            $response = $this->getHttpClient()->request('GET', $this->getBaseUrl() . self::API_PATH . '/banks/list', [
+                'headers' => [
+                    'Authorization' => $this->bearer($this->login()),
+                    'paymentMode' => 'INTENT',
+                ],
+            ]);
+            $json = json_decode($response->getContent(false), true);
+            if (is_array($json['bankDetails'] ?? null)) {
+                $banks = $json['bankDetails'];
+            }
+        } catch (Throwable $e) {
+            $this->log('Fonepay bank list unavailable: ' . $e->getMessage(), 'warn');
+
+            return [];
+        }
+
+        try {
+            $item = $this->getIntentCache()->getItem($cacheKey);
+            $item->set($banks);
+            $item->expiresAfter(3600);
+            $this->getIntentCache()->save($item);
+        } catch (Throwable) {
+        }
+
+        return $banks;
+    }
 
     /** @return array<string, mixed> */
     private function generateIntentQr(float $amount, string $billId, string $terminalId, string $referenceLabel): array
@@ -677,47 +895,6 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         return 'token_' . hash('sha256', (string) ($this->config['merchant_username'] ?? '') . '|' . $this->getBaseUrl());
     }
 
-    private function storePaymentIntent(string $ref, int $invoiceId, float $expectedAmount, string $terminalId, string $prn, int $ttl = 3600): void
-    {
-        try {
-            $cache = $this->getIntentCache();
-            $item = $cache->getItem($this->intentKey($ref));
-            $item->set([
-                'invoice_id' => $invoiceId,
-                'expected_amount' => $expectedAmount,
-                'terminal_id' => $terminalId,
-                'prn' => $prn,
-                'created_at' => time(),
-            ]);
-            $item->expiresAfter($ttl);
-            $cache->save($item);
-        } catch (Throwable $e) {
-            $this->log('Fonepay: failed to store intent for ' . $ref . ': ' . $e->getMessage(), 'warn');
-        }
-    }
-
-    /** @return array<string, mixed>|null */
-    private function loadPaymentIntent(string $ref): ?array
-    {
-        try {
-            $item = $this->getIntentCache()->getItem($this->intentKey($ref));
-            if ($item->isHit()) {
-                return $item->get();
-            }
-        } catch (Throwable) {
-        }
-
-        return null;
-    }
-
-    private function deletePaymentIntent(string $ref): void
-    {
-        try {
-            $this->getIntentCache()->deleteItem($this->intentKey($ref));
-        } catch (Throwable) {
-        }
-    }
-
     private function getIntentCache(): Symfony\Component\Cache\Adapter\AdapterInterface
     {
         if ($this->intentCache === null) {
@@ -728,9 +905,60 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         return $this->intentCache;
     }
 
-    private function intentKey(string $ref): string
+    // Pending payments are stored as individual JSON files so the cron reconciler can
+    // enumerate them (the Symfony cache hashes keys and is not enumerable). JWT tokens and
+    // the bank list still live in getIntentCache().
+
+    private function pendingDir(): string
     {
-        return 'intent_' . hash('sha256', $ref);
+        $dataPath = defined('BB_PATH_DATA') ? BB_PATH_DATA : sys_get_temp_dir();
+
+        return $dataPath . '/cache/fonepay-pending';
+    }
+
+    private function pendingFile(string $ref): string
+    {
+        return $this->pendingDir() . '/' . hash('sha256', $ref) . '.json';
+    }
+
+    private function storePaymentIntent(string $ref, int $invoiceId, float $expectedAmount, string $terminalId, string $prn): void
+    {
+        try {
+            $dir = $this->pendingDir();
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0o770, true);
+            }
+            file_put_contents($this->pendingFile($ref), json_encode([
+                'reference_label' => $ref,
+                'invoice_id' => $invoiceId,
+                'expected_amount' => $expectedAmount,
+                'terminal_id' => $terminalId,
+                'prn' => $prn,
+                'created_at' => time(),
+            ]));
+        } catch (Throwable $e) {
+            $this->log('Fonepay: failed to store pending payment for ' . $ref . ': ' . $e->getMessage(), 'warn');
+        }
+    }
+
+    /** @return array<string, mixed>|null */
+    private function loadPaymentIntent(string $ref): ?array
+    {
+        $file = $this->pendingFile($ref);
+        if (!is_file($file)) {
+            return null;
+        }
+        $data = json_decode((string) file_get_contents($file), true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    private function deletePaymentIntent(string $ref): void
+    {
+        $file = $this->pendingFile($ref);
+        if (is_file($file)) {
+            @unlink($file);
+        }
     }
 
     private function log(string $message, string $level = 'info'): void

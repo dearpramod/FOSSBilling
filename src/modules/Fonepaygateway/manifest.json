@@ -1,0 +1,13 @@
+{
+    "id": "fonepaygateway",
+    "type": "mod",
+    "name": "Fonepay Gateway Support",
+    "description": "Cron reconciliation for the Fonepay Checkout (Intent) payment gateway. On each cron run it re-verifies payments that completed at Fonepay but were abandoned before the browser returned (common on mobile deep-link), and settles the matching invoices. The gateway itself is the Fonepay payment adapter; this module only provides the background sweep.",
+    "homepage_url": "https://yoho.cloud",
+    "author": "MeroPanel",
+    "author_url": "https://yoho.cloud",
+    "license": "Apache-2.0",
+    "version": "1.0.0",
+    "minimum_fossbilling_version": "0.8.5",
+    "icon_url": "icon.svg"
+}
