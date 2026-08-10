@@ -370,11 +370,18 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                 'rel_id' => $tx->id,
             ]);
 
+            // Approve the invoice first. payInvoiceWithCredits() -> tryPayWithCredits()
+            // returns false and does nothing on an UNAPPROVED invoice, which would leave
+            // the client credited but the invoice unpaid and the order unprovisioned.
+            // Mirrors the official Stripe/PayPalEmail adapters.
+            if (!$invoice->approved) {
+                $invoiceService->approveInvoice($invoice, ['use_credits' => false]);
+            }
+
             if ($isDepositInvoice) {
-                $invoice->status = 'paid';
-                $invoice->paid_at = date('Y-m-d H:i:s');
-                $invoice->updated_at = date('Y-m-d H:i:s');
-                $this->di['db']->store($invoice);
+                // Deposit ("add funds") invoice — markAsPaid records it properly
+                // (approved flag, paid serie, item marking) instead of a raw status write.
+                $invoiceService->markAsPaid($invoice);
                 $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
             } else {
                 $invoiceService->payInvoiceWithCredits($invoice);
@@ -662,71 +669,6 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         }
 
         return $info;
-    }
-
-    /**
-     * Build Khalti product_details array from invoice line items.
-     *
-     * Khalti uses these for merchant dashboard display and analytics.
-     * The sum of all item total_price values must equal the initiate amount exactly.
-     * We fall back to a single catch-all item when DB items don't sum cleanly.
-     *
-     * @param int $totalPaisa Total amount in paisa (already converted to NPR)
-     */
-    private function buildProductDetails(Model_Invoice $invoice, int $totalPaisa): array
-    {
-        $rows = $this->di['db']->getAll(
-            'SELECT title, quantity, price FROM invoice_item WHERE invoice_id = :id',
-            [':id' => $invoice->id]
-        );
-
-        if (empty($rows)) {
-            return [];
-        }
-
-        $items = [];
-        $sumPaisa = 0;
-
-        // Use the item count to distribute the total proportionally in paisa,
-        // then adjust the last item to absorb any rounding delta.
-        $totalNpr = $totalPaisa / 100;
-        $invoiceService = $this->di['mod_service']('Invoice');
-        $invoiceTotal = (float) $invoiceService->getTotalWithTax($invoice);
-        $conversionFactor = $invoiceTotal > 0 ? ($totalNpr / $invoiceTotal) : 1.0;
-
-        foreach ($rows as $i => $row) {
-            $qty = max(1, (int) ($row['quantity'] ?? 1));
-            $unitPriceNpr = round((float) ($row['price'] ?? 0) * $conversionFactor, 2);
-            $unitPricePaisa = (int) round($unitPriceNpr * 100);
-            $itemTotalPaisa = $unitPricePaisa * $qty;
-
-            $items[] = [
-                'identity' => 'ITEM-' . ($i + 1),
-                'name' => mb_substr((string) ($row['title'] ?? 'Item'), 0, 100),
-                'total_price' => $itemTotalPaisa,
-                'quantity' => $qty,
-                'unit_price' => $unitPricePaisa,
-            ];
-            $sumPaisa += $itemTotalPaisa;
-        }
-
-        // Adjust last item so the sum matches exactly, then force quantity=1 so that
-        // unit_price * quantity == total_price exactly — Khalti returns HTTP 500 when
-        // this invariant is violated (their validator crashes instead of returning 400).
-        $diff = $totalPaisa - $sumPaisa;
-        if ($diff !== 0 && !empty($items)) {
-            $last = &$items[count($items) - 1];
-            $last['total_price'] += $diff;
-        }
-        foreach ($items as &$item) {
-            if ($item['quantity'] !== 1 && ($item['unit_price'] * $item['quantity']) !== $item['total_price']) {
-                $item['quantity'] = 1;
-                $item['unit_price'] = $item['total_price'];
-            }
-        }
-        unset($item);
-
-        return $items;
     }
 
     /**
