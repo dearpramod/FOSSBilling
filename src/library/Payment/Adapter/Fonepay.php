@@ -11,11 +11,12 @@ declare(strict_types=1);
  *   3. Render the QR for the customer to scan/pay with any Fonepay bank/wallet app
  *   4. Verify server-side via thirdPartyDynamicQrGetStatus (authoritative) -> credit invoice
  *
- * PHASE 1 (this file): config, signature/JWT login, generate-intent-qr, QR render,
- * and server-side status verification + crediting. The real-time browser WebSocket
- * (websocketId) that auto-triggers verification, plus mobile bank-list deep-linking and
- * cron reconciliation, are PHASE 2/3 — for now the QR page verifies via a manual
- * "Check payment status" action and a light auto-poll against the status API.
+ * PHASE 1+2 (this file): config, signature/JWT login, generate-intent-qr, QR render,
+ * the real-time browser WebSocket (websocketId) that settles the payment the instant it
+ * completes, and authoritative server-side verification (thirdPartyDynamicQrGetStatus)
+ * + crediting via the standard ipn.php callback. A manual "check status" button is the
+ * fallback when the WebSocket is unavailable. PHASE 3 (not yet): mobile bank-list
+ * deep-linking and a cron reconciliation sweep for payments abandoned mid-flow.
  *
  * Amounts: Fonepay processes NPR as a DECIMAL amount (e.g. 100.00), min 1, max 9,999,999.
  * Signature: Base64(RSA-SHA256(exact_request_body)) using the merchant PKCS8 private key.
@@ -159,9 +160,10 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
     }
 
     /**
-     * Server-side verification + crediting. Triggered by the return/callback URL
-     * (manual "Check status" / auto-poll in Phase 1; browser WebSocket in Phase 2).
-     * The authoritative source is the Fonepay status API — browser signals are never trusted.
+     * Server-side verification + crediting. Reached via ipn.php when the client is sent to
+     * the callback URL — driven by the real-time Fonepay WebSocket, or the manual "check
+     * status" button as a fallback. The authoritative source is the Fonepay status API;
+     * the browser WebSocket signal is never trusted on its own.
      */
     public function processTransaction($api_admin, $id, $data, $gateway_id): void
     {
@@ -325,12 +327,18 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         $this->storePaymentIntent($referenceLabel, (int) $invoice->id, $amount, $terminalId, (string) ($qr['prn'] ?? $referenceLabel));
 
         $qrImg = $this->renderQrDataUri($qrString);
+        $websocketUrl = (string) ($qr['websocketId'] ?? $qr['thirdpartyQRWebSocketUrl'] ?? '');
 
-        // Callback URL for the status check (notify_url already carries bb_gateway_id).
-        $statusUrl = htmlspecialchars(($this->config['notify_url'] ?? '') . '&reference_label=' . urlencode($referenceLabel), ENT_QUOTES, 'UTF-8');
+        // redirect_url already carries gateway_id, invoice_id, invoice_hash & redirect=1.
+        // Appending the reference lets processTransaction() resolve the intent and verify
+        // against the authoritative status API; ipn.php then redirects to the paid invoice.
+        $callbackUrl = ($this->config['redirect_url'] ?? '') . '&reference_label=' . urlencode($referenceLabel);
+
         $amountHtml = number_format($amount, 2);
         $refHtml = htmlspecialchars($referenceLabel, ENT_QUOTES, 'UTF-8');
         $qrImgHtml = htmlspecialchars($qrImg, ENT_QUOTES, 'UTF-8');
+        $callbackJs = json_encode($callbackUrl);
+        $wsJs = json_encode($websocketUrl);
 
         return <<<HTML
             <div id="fonepay-block" style="text-align:center;padding:16px 0;font-family:inherit;">
@@ -341,25 +349,38 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
                 <button type="button" id="fonepay-check" style="margin-top:12px;display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:#CC0001;color:#fff;border:0;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">I have paid — check status</button>
                 <script>
                 (function(){
-                    var url = "{$statusUrl}";
+                    var callbackUrl = {$callbackJs};
+                    var wsUrl = {$wsJs};
                     var statusEl = document.getElementById('fonepay-status');
                     var btn = document.getElementById('fonepay-check');
-                    var done = false, tries = 0;
-                    function check(manual){
-                        if (done) return;
-                        if (manual) { statusEl.textContent = 'Checking…'; }
-                        fetch(url, { credentials: 'same-origin' })
-                            .then(function(r){ return r.text(); })
-                            .then(function(t){
-                                // ipn.php redirects to the paid invoice on success; a redirect/paid
-                                // page won't contain our marker, so reload to pick up the new state.
-                                if (t.indexOf('invoice') !== -1 && t.indexOf('paid') !== -1) { done = true; window.top.location.reload(); }
-                            })
-                            .catch(function(){});
+                    var done = false;
+                    // Navigate through ipn.php: it re-verifies with the Fonepay status API,
+                    // settles the invoice, then redirects to the paid invoice page.
+                    function settle(){ if (done) { return; } done = true; (window.top || window).location.href = callbackUrl; }
+
+                    // Real-time: connect to the Fonepay QR WebSocket and settle the moment the
+                    // payment completes. The browser signal is NEVER trusted on its own — the
+                    // server re-verifies via the status API before crediting.
+                    if (wsUrl && wsUrl.slice(0, 6) === 'wss://' && ('WebSocket' in window)) {
+                        try {
+                            var ws = new WebSocket(wsUrl);
+                            ws.onmessage = function(ev){
+                                try {
+                                    var msg = JSON.parse(ev.data);
+                                    var ts = msg.transactionStatus;
+                                    if (typeof ts === 'string') { ts = JSON.parse(ts); }
+                                    if (ts && (ts.paymentSuccess === true || ts.paymentSuccess === 'true')) {
+                                        statusEl.textContent = 'Payment received — finalising…';
+                                        setTimeout(settle, 1200); // let the acquirer settle before we verify
+                                    } else if (ts && (ts.QRVerified === true || ts.QRVerified === 'true' || ts.message === 'VERIFIED')) {
+                                        statusEl.textContent = 'QR scanned — approve the payment in your bank app…';
+                                    }
+                                } catch (e) {}
+                            };
+                            ws.onerror = function(){ statusEl.textContent = 'Live updates unavailable — tap the button below after you pay.'; };
+                        } catch (e) {}
                     }
-                    btn.addEventListener('click', function(){ check(true); });
-                    // light auto-poll (Phase 2 replaces this with the Fonepay WebSocket)
-                    var timer = setInterval(function(){ tries++; if (tries > 40 || done){ clearInterval(timer); return; } check(false); }, 4000);
+                    btn.addEventListener('click', settle);
                 })();
                 </script>
             </div>
