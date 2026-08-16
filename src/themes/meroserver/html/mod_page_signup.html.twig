@@ -21,7 +21,7 @@
        LEFT PANEL — "Need help choosing?" support panel
        ══════════════════════════════════════════════════════════════ #}
     <aside class="auth-aside auth-signup-aside hidden lg:flex lg:w-[34%] flex-col items-center justify-center px-10 py-16 relative overflow-hidden"
-         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+         style="background: linear-gradient(135deg, rgb(var(--brand-400)) 0%, var(--color-primary) 30%, var(--color-secondary) 70%, rgb(var(--brand2-900)) 100%);">
 
         <div class="auth-panel-brand auth-signup-panel-brand relative z-10">
             {% if brand_logo %}
@@ -70,7 +70,7 @@
                 <li><span>✓</span> Expert support when needed</li>
             </ul>
 
-            <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
+            <a href="{{ settings.link_support|default('/support/contact') }}"
                class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90"
                style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; box-shadow: 0 4px 18px rgba(var(--color-primary-rgb),.30);">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -463,7 +463,7 @@
                            class="mt-0.5 w-4 h-4 rounded border-gray-300 cursor-pointer"
                            style="accent-color: var(--color-primary);">
                     <label for="tos" class="text-sm text-gray-500 leading-relaxed cursor-pointer">
-                        I agree to the <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank"
+                        I agree to the <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" target="_blank"
                            class="font-semibold hover:underline underline-offset-2 transition-colors"
                            style="color: var(--color-primary);">Terms of Service</a>
                     </label>
@@ -536,6 +536,18 @@
 
 {% block js %}
 <script>
+// Return only a same-origin relative path from ?redirect= (open-redirect safe,
+// mirrors Sociallogin's sanitizeReturnTo); fall back to the given default.
+function meroSafeRedirect(fallback) {
+    try {
+        var p = new URLSearchParams(window.location.search).get('redirect');
+        if (p && p.charAt(0) === '/' && p.charAt(1) !== '/'
+            && p.indexOf('://') === -1 && /^[/a-zA-Z0-9\-_.~%?=&]+$/.test(p)) {
+            return p;
+        }
+    } catch (e) { /* fall through */ }
+    return fallback;
+}
 document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('signup-form');
     if (!form) return;
@@ -658,8 +670,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var formData = Object.fromEntries(new FormData(form));
         formData.auto_login = 1;
+        // Return target precedence mirrors upstream FOSSBilling: a safe ?redirect=
+        // relative path (needed for the SPA domain flow, which official's session
+        // redirect_uri cannot express) takes priority; otherwise fall back to the
+        // official session-set `redirect_uri` global, then the dashboard.
+        var dest = meroSafeRedirect('{{ (redirect_uri|default('dashboard'))|url|e('js') }}');
         API.guest.post('client/create', formData,
-            function () { window.location = '{{ 'dashboard'|url }}'; },
+            function () { window.location = dest; },
             function (res) {
                 if (btn) { btn.disabled = false; btn.textContent = 'Create Account'; }
                 StablePanel.message(res.message || 'Registration failed. Please try again.', 'error');

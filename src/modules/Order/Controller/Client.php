@@ -49,7 +49,88 @@ class Client implements \FOSSBilling\InjectionAwareInterface
 
     public function get_domain_registration(\Box_App $app): string
     {
-        return $app->render('mod_order_domain_plans');
+        return $app->render('mod_order_domain_plans', [
+            'hosting_bundles' => $this->getFreeDomainHostingBundles(),
+        ]);
+    }
+
+    /**
+     * Active hosting products that grant a free domain registration, shaped for the
+     * domain-flow "get it free with hosting" upsell step. The free-domain config
+     * (free_domain / free_tlds / free_domain_periods) is stripped from the guest
+     * product API (getPublicConfig), so it is read here server-side. Prices are the
+     * base-currency amount for the qualifying free period; the template applies the
+     * money_convert filter. Local patch — re-audit after FOSSBilling upgrades.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getFreeDomainHostingBundles(): array
+    {
+        try {
+            $productService = $this->di['mod_service']('product');
+            $products = $this->di['em']->getRepository(\Box\Mod\Product\Entity\Product::class)
+                ->findBy(['type' => \Box\Mod\Product\Service::HOSTING]);
+        } catch (\Throwable $e) {
+            $this->di['logger']->setChannel('order')->info('Free-domain bundle lookup failed: ' . $e->getMessage());
+
+            return [];
+        }
+
+        $periodOrder = ['1M', '2M', '3M', '4M', '5M', '6M', '7M', '8M', '9M', '10M', '11M', '1Y', '2Y', '3Y', '4Y', '5Y'];
+        $periodLabels = ['1M' => '1 month', '3M' => '3 months', '6M' => '6 months', '1Y' => '1 year', '2Y' => '2 years', '3Y' => '3 years'];
+
+        $bundles = [];
+        foreach ($products as $product) {
+            if ($product->getStatus() !== 'enabled' || $product->isHidden()) {
+                continue;
+            }
+
+            $config = json_decode($product->getConfig() ?? '', true) ?: [];
+            // Must grant a free registration AND allow the register action.
+            if (empty($config['free_domain']) || empty($config['allow_domain_register'])) {
+                continue;
+            }
+
+            $freeTlds = array_values($config['free_tlds'] ?? []);
+            $freePeriods = $config['free_domain_periods'] ?? [];
+            if ($freeTlds === [] || $freePeriods === []) {
+                continue;
+            }
+
+            try {
+                $pricing = $productService->getProductPricingArray($product);
+            } catch (\Throwable) {
+                continue;
+            }
+            $recurrent = $pricing['recurrent'] ?? [];
+
+            // Shortest qualifying free period that actually has enabled pricing.
+            $period = null;
+            foreach ($periodOrder as $p) {
+                if (in_array($p, $freePeriods, true) && !empty($recurrent[$p]['enabled'])) {
+                    $period = $p;
+
+                    break;
+                }
+            }
+            if ($period === null) {
+                continue;
+            }
+
+            $bundles[] = [
+                'id' => (int) $product->getId(),
+                'title' => $product->getTitle(),
+                'description' => $product->getDescription(),
+                'free_tlds' => $freeTlds,
+                'free_period' => $period,
+                'free_period_label' => $periodLabels[$period] ?? $period,
+                'price_raw' => (float) ($recurrent[$period]['price'] ?? 0),
+            ];
+        }
+
+        usort($bundles, static fn ($a, $b) => $a['price_raw'] <=> $b['price_raw']);
+
+        return $bundles;
     }
 
     public function get_domain_transfer(\Box_App $app): string

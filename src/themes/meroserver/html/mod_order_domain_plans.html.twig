@@ -2,6 +2,7 @@
 
 {% block meta_title %}Domain Registration — Find Your Perfect Domain{% endblock %}
 {% block page_header %}Domain Registration{% endblock %}
+{% block order_skeleton_variant %}list{% endblock %}
 
 {% set tlds = guest.servicedomain_tlds({}) %}
 {% set _dp = guest.product_get_list({'type': 'domain'}) %}
@@ -22,6 +23,7 @@
   {% set clientCurrencyCode = '' %}
 {% endif %}
 {% set _rc = guest.extension_is_on({'mod': 'antispam'}) ? guest.antispam_recaptcha : {} %}
+{% set _sp = _rc.captcha_provider|default('recaptcha_v2') %}
 {% set social = guest.extension_is_on({'type': 'mod', 'id': 'sociallogin'}) ? guest.sociallogin_get_config : {} %}
 
 {% block content %}
@@ -133,7 +135,7 @@
   {# ══════════════════════════════════════════════════════════════
      Phase 1 — Search & Browse
   ══════════════════════════════════════════════════════════════ #}
-  <div x-show="!wizardActive">
+  <div x-show="!wizardActive && !showUpsell">
 
     {# ── Hero ─────────────────────────────────────────────────── #}
     <div class="relative -mx-8 -mt-5 sm:-mx-10 lg:-mx-16 px-8 sm:px-10 lg:px-16 pb-14 pt-14 mb-8"
@@ -269,10 +271,27 @@
         </div>
       </div>
 
-      {# Skeleton rows #}
-      <div class="space-y-2">
+      {# Skeleton rows — mirror the real results layout (bordered card · divided rows ·
+         TLD badge / domain name / price + button) so results swap in with no layout shift. #}
+      <div class="divide-y divide-slate-100 dark:divide-white/[0.05] rounded-2xl border border-slate-200 dark:border-white/[0.08] overflow-hidden">
         <template x-for="i in [1,2,3,4,5]" :key="i">
-          <div class="skeleton h-16 w-full"></div>
+          <div class="flex items-center gap-3.5 px-4 py-3.5">
+            {# TLD icon badge #}
+            <div class="skeleton flex-shrink-0 w-10 h-10"></div>
+            {# Domain name + sub-line #}
+            <div class="flex-1 min-w-0 space-y-2">
+              <div class="skeleton h-3.5" :style="'width:' + [55,44,62,38,50][(i-1)%5] + '%'"></div>
+              <div class="skeleton h-2.5 w-24"></div>
+            </div>
+            {# Price — two lines on desktop, single on mobile (mirrors the real row) #}
+            <div class="hidden sm:flex flex-col items-end gap-1.5">
+              <div class="skeleton h-2.5 w-10"></div>
+              <div class="skeleton h-3 w-16"></div>
+            </div>
+            <div class="skeleton sm:hidden flex-shrink-0 h-3 w-14"></div>
+            {# Register button #}
+            <div class="skeleton flex-shrink-0 h-8 w-20"></div>
+          </div>
         </template>
       </div>
     </div>
@@ -319,7 +338,7 @@
                 </div>
                 <span class="sm:hidden text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap"
                       x-text="fmtPrice(r.price) + '/yr'"></span>
-                <button @click="startWizard(r)"
+                <button @click="chooseDomain(r)"
                         class="px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:opacity-90 whitespace-nowrap bg-primary">
                   Register
                 </button>
@@ -405,7 +424,7 @@
                 </button>
               </template>
               <template x-if="s.checking || s.available !== null">
-                <button @click="!s.checking && s.available && startWizard(s)"
+                <button @click="!s.checking && s.available && chooseDomain(s)"
                         :disabled="s.checking || !s.available"
                         class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
                         :class="!s.checking && s.available
@@ -610,12 +629,87 @@
 
 
   {# ══════════════════════════════════════════════════════════════
+     Phase 1.5 — Free-domain hosting upsell
+     Shown after an available domain is chosen when a hosting plan
+     grants that TLD a free domain. Skipped entirely otherwise.
+  ══════════════════════════════════════════════════════════════ #}
+  <div x-show="showUpsell" x-cloak class="max-w-5xl mx-auto">
+
+    {# Back to search #}
+    <div class="mb-6">
+      <button @click="showUpsell = false"
+              class="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm group">
+        <div class="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </div>
+        Back to search
+      </button>
+    </div>
+
+    {# Header #}
+    <div class="text-center mb-8 max-w-2xl mx-auto">
+      <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white leading-tight">
+        Launch your website with
+        <span class="text-primary" x-text="selSld + selTld"></span>
+        <span class="whitespace-nowrap">— domain free</span>
+      </h2>
+      <p class="text-sm text-gray-500 mt-2">Pick a hosting plan and your domain is included free — or continue with just the domain.</p>
+    </div>
+
+    {# Plan cards (each shows only when it covers the selected TLD) #}
+    <div class="flex flex-wrap justify-center gap-5 max-w-3xl mx-auto">
+      {% for b in hosting_bundles %}
+      <div x-show="isBundleEligible({{ b.id }})" x-cloak
+           class="w-full sm:w-[340px] rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.02] p-6 flex flex-col">
+        <div class="flex items-start justify-between gap-3 mb-1">
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white">{{ b.title|trim }}</h3>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap">Domain FREE · {{ b.free_period_label }}</span>
+        </div>
+        {% if b.description %}
+        <div class="text-xs text-gray-500 mb-4 max-h-44 overflow-hidden [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-0.5 [&_li]:marker:text-emerald-500 [&_p]:my-1 [&_p:empty]:hidden">{{ b.description|markdown }}</div>
+        {% else %}
+        <div class="mb-4"></div>
+        {% endif %}
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-slate-900 dark:text-white">{{ b.price_raw | money_convert }}</span>
+          <span class="text-xs text-gray-500">/ {{ b.free_period_label }}</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1 mb-5 text-xs">
+          <span class="text-gray-500">Domain</span>
+          <span class="text-gray-400 line-through" x-text="fmtPrice(selPriceRaw * (selYears || 1))"></span>
+          <span class="text-emerald-600 dark:text-emerald-400 font-semibold">FREE</span>
+        </div>
+        <button @click="chooseBundle({{ b.id }}, '{{ b.free_period }}')" :disabled="bundleLoading"
+                class="mt-auto w-full py-3 rounded-xl text-sm font-semibold text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
+                style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),0.25);">
+          <span x-show="!bundleLoading">Get {{ b.title|trim }}</span>
+          <span x-show="bundleLoading" x-cloak>Adding…</span>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Error #}
+    <p x-show="bundleError" x-cloak class="mt-4 text-center text-sm text-red-400" x-text="bundleError"></p>
+
+    {# Continue with just the domain #}
+    <div class="mt-8 text-center">
+      <button @click="continueDomainOnly()"
+              class="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-slate-900 dark:hover:text-white transition-colors">
+        Continue with just the domain
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+
+  {# ══════════════════════════════════════════════════════════════
      Phase 2 — Registration Wizard
   ══════════════════════════════════════════════════════════════ #}
   <div x-show="wizardActive" x-cloak>
 
     {# ── Back button ───────────────────────────────────────────── #}
-    <div class="max-w-6xl mx-auto mb-6">
+    <div class="max-w-3xl mx-auto mb-6">
       <button @click="exitWizard()"
               class="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm group">
         <div class="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
@@ -628,7 +722,7 @@
     </div>
 
     {# ── Selected domain card ──────────────────────────────────── #}
-    <div class="wizard-domain-card max-w-6xl mx-auto mb-7 p-5 rounded-2xl border"
+    <div class="wizard-domain-card max-w-3xl mx-auto mb-7 p-5 rounded-2xl border"
          style="border-color: rgba(var(--color-primary-rgb),0.25); background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.07) 0%, rgba(var(--color-primary-rgb),0.03) 100%);">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -671,7 +765,7 @@
     </div>
 
     {# ── Step progress indicator ───────────────────────────────── #}
-    <div class="max-w-6xl mx-auto mb-8">
+    <div class="max-w-3xl mx-auto mb-8">
       <div class="flex items-center">
         {% for stepNum, stepLabel in {1: 'Configure Domain', 2: 'Checkout'} %}
         {% set stepIdx = stepNum %}
@@ -709,7 +803,7 @@
     {# ════════════════════════════════════════
        Step 1 — Configure Domain
     ════════════════════════════════════════ #}
-    <div x-show="wizardStep === 1" class="max-w-6xl mx-auto">
+    <div x-show="wizardStep === 1" class="max-w-3xl mx-auto">
       <div class="rounded-2xl border border-white/[0.08] overflow-hidden"
            style="background: rgba(255,255,255,0.025);">
         <div class="px-6 pt-6 pb-4 border-b border-white/[0.06]">
@@ -940,100 +1034,186 @@
     {# ════════════════════════════════════════
        Step 2 — Contact Info
     ════════════════════════════════════════ #}
-    <div x-show="wizardStep === 2" class="max-w-6xl mx-auto">
+    <div x-show="wizardStep === 2" class="max-w-3xl mx-auto">
 
       {# ── Auth gate: shown when NOT logged in ──────────────────── #}
-      <div x-show="!isLoggedIn" class="rounded-2xl border border-white/[0.08] overflow-hidden"
+      <div x-show="!isLoggedIn" class="max-w-2xl mx-auto rounded-2xl border border-white/[0.08] overflow-hidden"
            style="background: rgba(255,255,255,0.025);">
-        <div class="px-6 pt-6 pb-4 border-b border-white/[0.06]">
-          <h3 class="text-base font-bold text-white">Contact Information</h3>
-          <p class="text-xs text-gray-500 mt-0.5">Sign in or create an account to continue with your registration</p>
+        <div class="px-5 py-4 border-b border-white/[0.06]">
+          <h3 class="text-sm font-bold text-white">Contact Information</h3>
+          <p class="text-xs text-gray-500 mt-0.5">Sign in or create an account to continue</p>
         </div>
 
-        <div class="p-6 space-y-4">
+        <div class="p-4 space-y-3">
 
-          {# Google sign-in #}
+          {# Google sign-in — compact single-line #}
           {% if social.google_enabled|default(false) %}
-          <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request.uri|default('/')|url_encode)|url }}"
-             class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-white/[0.08] bg-white/[0.02] hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all group">
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                 style="background: rgba(255,255,255,0.06);">
-              <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              </svg>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-white">Continue with Google</p>
-              <p class="text-xs text-gray-500 mt-0.5">Sign in with your Google account</p>
-            </div>
-            <svg class="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          <a :href="googleLoginBase + encodeURIComponent(returnPath())"
+             class="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-white/[0.1] bg-white/[0.02] text-sm font-semibold text-white transition-all cursor-pointer hover:border-indigo-500/40 hover:bg-indigo-500/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
+            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
             </svg>
+            Continue with Google
           </a>
 
           {# Divider #}
           <div class="flex items-center gap-3">
             <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
-            <span class="text-xs text-gray-600">or</span>
+            <span class="text-[11px] uppercase tracking-wide text-gray-500">or</span>
             <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
           </div>
           {% endif %}
 
-          {# Sign In option — brand-highlighted per Stitch design #}
-          <button @click="showLoginModal = true; loginError = '';"
-                  class="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left group"
-                  style="border-color:rgba(var(--color-primary-rgb),0.35);background:rgba(var(--color-primary-rgb),0.07);"
-                  onmouseenter="this.style.borderColor='rgba(var(--color-primary-rgb),0.55)';this.style.background='rgba(var(--color-primary-rgb),0.12)'"
-                  onmouseleave="this.style.borderColor='rgba(var(--color-primary-rgb),0.35)';this.style.background='rgba(var(--color-primary-rgb),0.07)'">
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm"
-                 style="background:var(--color-primary);">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
-              </svg>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-white">Sign in with existing account</p>
-              <p class="text-xs text-gray-400 mt-0.5">Use your stored contact details automatically</p>
-            </div>
-            <svg class="w-4 h-4 text-gray-500 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
-
-          {# Divider #}
-          <div class="flex items-center gap-3">
-            <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
-            <span class="text-xs text-gray-600">or</span>
-            <div class="flex-1 h-px bg-slate-200 dark:bg-white/[0.06]"></div>
+          {# ── Inline auth (stays in the domain flow — no navigation) ── #}
+          {# Segmented toggle: Sign in / Create account #}
+          <div class="grid grid-cols-2 gap-1 p-1 rounded-xl border border-white/[0.06] bg-white/[0.03]">
+            <button type="button" @click="authMode='signin'; loginError=''"
+                    class="py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                    :class="authMode==='signin' ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'"
+                    :style="authMode==='signin' ? 'background:var(--color-primary)' : ''">Sign in</button>
+            <button type="button" @click="authMode='register'; loginError=''"
+                    class="py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                    :class="authMode==='register' ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'"
+                    :style="authMode==='register' ? 'background:var(--color-primary)' : ''">Create account</button>
           </div>
 
-          {# Register option #}
-          <a :href="signupUrl + '?redirect=' + encodeURIComponent(window.location.href)"
-             class="flex items-center gap-4 p-4 rounded-xl border-2 border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04] transition-all group">
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                 style="background: rgba(var(--color-primary-rgb),0.12);">
-              <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-              </svg>
+          {# Shared error #}
+          <div x-show="loginError" x-cloak class="flex items-center gap-2 p-3 rounded-xl bg-red-500/8 border border-red-500/25 text-red-300 text-xs">
+            <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+            <span x-text="loginError"></span>
+          </div>
+
+          {# ── Sign in form ── #}
+          <form x-show="authMode==='signin'" @submit.prevent="submitLogin()" class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Email address</label>
+              <input type="email" x-model="loginEmail" autocomplete="email" placeholder="you@example.com"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
             </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-white">Create a new account</p>
-              <p class="text-xs text-gray-500 mt-0.5">Free — takes less than 2 minutes</p>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+              <input type="password" x-model="loginPassword" autocomplete="current-password" placeholder="••••••••" @keydown.enter="submitLogin()"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
             </div>
-            <svg class="w-4 h-4 text-gray-600 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
-          </a>
+            <div class="flex justify-end">
+              <a href="{{ '/password-reset'|url }}" class="text-[11px] text-gray-500 hover:text-white transition-colors">Forgot password?</a>
+            </div>
+            <button type="submit" :disabled="loginLoading || !loginEmail || !loginPassword"
+                    class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
+                    style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),0.25);">
+              <svg x-show="loginLoading" x-cloak class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+              <span x-text="loginLoading ? 'Signing in…' : 'Sign in & continue'"></span>
+            </button>
+          </form>
+
+          {# ── Create account form (doubles as registrant contact) ── #}
+          <form x-show="authMode==='register'" x-cloak @submit.prevent="registerInline()" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">First name <span class="text-red-400">*</span></label>
+                <input type="text" x-model="regFirstName" autocomplete="given-name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Last name</label>
+                <input type="text" x-model="regLastName" autocomplete="family-name"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Email address <span class="text-red-400">*</span></label>
+              <input type="email" x-model="regEmail" autocomplete="email" placeholder="you@example.com"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Address <span class="text-red-400">*</span></label>
+              <input type="text" x-model="regAddress1" autocomplete="address-line1" placeholder="Street address"
+                     class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">City <span class="text-red-400">*</span></label>
+                <input type="text" x-model="regCity" autocomplete="address-level2"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">State / Province</label>
+                <input type="text" x-model="regState" autocomplete="address-level1"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Postcode</label>
+                <input type="text" x-model="regPostcode" autocomplete="postal-code"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Country <span class="text-red-400">*</span></label>
+                <select x-model="regCountry"
+                        class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors cursor-pointer">
+                  <option value="" class="bg-[#0f172a]">Select country…</option>
+                  {% for code, name in guest.system_countries %}
+                  <option value="{{ code }}" class="bg-[#0f172a]">{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Code <span class="text-red-400">*</span></label>
+                <input type="text" x-model="regPhoneCc" placeholder="977"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone <span class="text-red-400">*</span></label>
+                <input type="tel" x-model="regPhone" autocomplete="tel-national"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Password <span class="text-red-400">*</span></label>
+                <input type="password" x-model="regPassword" autocomplete="new-password" placeholder="Min. 8 characters"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Confirm <span class="text-red-400">*</span></label>
+                <input type="password" x-model="regPasswordConfirm" autocomplete="new-password" placeholder="Re-enter password" @keydown.enter="registerInline()"
+                       class="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-white text-sm outline-none focus:border-indigo-500/50 transition-colors placeholder-gray-600" />
+              </div>
+            </div>
+            <button type="submit" :disabled="regLoading"
+                    class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
+                    style="background:linear-gradient(135deg,var(--color-primary),var(--color-secondary));box-shadow:0 4px 16px rgba(var(--color-primary-rgb),0.25);">
+              <svg x-show="regLoading" x-cloak class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+              <span x-text="regLoading ? 'Creating account…' : 'Create account & continue'"></span>
+            </button>
+            <p class="text-[11px] text-gray-500 text-center">These details become your registrant contact — no need to re-enter.</p>
+          </form>
+
+          {# ── Antispam captcha (shared by both forms; rendered widget for turnstile / hcaptcha / recaptcha v2) ── #}
+          {% if _rc.enabled and _sp != 'recaptcha_v3' %}
+          <div class="flex justify-center pt-1">
+            {% if _sp == 'turnstile' and _rc.turnstile_site_key %}
+            <div class="cf-turnstile" data-sitekey="{{ _rc.turnstile_site_key }}" data-theme="auto"></div>
+            {% elseif _sp == 'hcaptcha' and _rc.hcaptcha_site_key %}
+            <div class="h-captcha" data-sitekey="{{ _rc.hcaptcha_site_key }}"></div>
+            {% elseif _sp == 'recaptcha_v2' and _rc.publickey %}
+            <div class="g-recaptcha" data-sitekey="{{ _rc.publickey }}"></div>
+            {% endif %}
+          </div>
+          {% endif %}
 
         </div>
 
         {# Card footer — ToS note + help link #}
-        <div class="px-6 py-3 border-t border-white/[0.05] flex items-center justify-between" style="background:rgba(255,255,255,0.015);">
-          <p class="text-xs text-gray-600">By continuing, you agree to our <a href="{{ '/tos'|url }}" class="hover:underline" style="color:var(--color-primary);">Terms of Service</a>.</p>
-          <a href="{{ '/support'|url }}" class="text-xs font-medium text-gray-500 hover:text-white transition-colors">Need help?</a>
+        <div class="px-5 py-2.5 border-t border-white/[0.05] flex items-center justify-between gap-3" style="background:rgba(255,255,255,0.015);">
+          <p class="text-[11px] text-gray-600">By continuing you agree to our <a href="{{ '/tos'|url }}" class="hover:underline" style="color:var(--color-primary);">Terms</a>.</p>
+          <a href="{{ '/support'|url }}" class="text-[11px] font-medium text-gray-500 hover:text-white transition-colors whitespace-nowrap">Need help?</a>
         </div>
       </div>
 
@@ -1682,7 +1862,7 @@
 
         {# Google sign-in #}
         {% if social.google_enabled|default(false) %}
-        <a href="{{ ('sociallogin/google?context=login&return_to=' ~ request.uri|default('/')|url_encode)|url }}"
+        <a :href="googleLoginBase + encodeURIComponent(returnPath())"
            class="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border border-white/[0.12] text-gray-200 text-sm font-semibold hover:bg-white/[0.08] transition-all"
            style="background:rgba(255,255,255,0.05);">
           <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -1752,12 +1932,22 @@
 {% endblock %}
 
 {% block js %}
-{% if _rc.enabled and _rc.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc.publickey %}
+{% set _sp = _rc.captcha_provider|default('recaptcha_v2') %}
+{% if _rc.enabled %}
+  {% if _sp == 'turnstile' and _rc.turnstile_site_key %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% elseif _sp == 'hcaptcha' and _rc.hcaptcha_site_key %}
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+  {% elseif _sp == 'recaptcha_v3' and _rc.publickey %}
 <script src="https://www.google.com/recaptcha/api.js?render={{ _rc.publickey }}" async defer></script>
+  {% elseif _sp == 'recaptcha_v2' and _rc.publickey %}
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  {% endif %}
 {% endif %}
 <script>
 (function () {
   const PRODUCT_ID        = {{ domain_product_id|default('null') }};
+  const HOSTING_BUNDLES   = {{ hosting_bundles|default([])|json_encode|raw }};
   const CURR_CODE         = '{{ currencyCode|escape('js') }}';
   const CURR_PREFIX       = '{{ currPrefix|escape('js') }}';
   const CURR_SUFFIX       = '{{ currSuffix|escape('js') }}';
@@ -1770,6 +1960,8 @@
   const TLD_DATA          = {{ tlds|json_encode|raw }};
   const IS_LOGGED_IN      = {{ clientLoggedIn ? 'true' : 'false' }};
   const SIGNUP_URL        = '{{ 'signup'|url }}';
+  const LOGIN_URL         = '{{ 'login'|url }}';
+  const GOOGLE_LOGIN_BASE = '{{ ('sociallogin/google?context=login&return_to=')|url|escape('js') }}';
   const DOMAIN_ADDONS = (function () {
     const _raw = [
       {% for addon in domain_addons %}
@@ -1883,11 +2075,31 @@
 
       /* ── Auth ── */
       isLoggedIn:    IS_LOGGED_IN,
+      /* ── Free-domain hosting upsell ── */
+      showUpsell:    false,
+      upsellDomain:  null,
+      bundleLoading: false,
+      bundleError:   '',
+
       showLoginModal: false,
+      authMode:      'signin',
       loginEmail:    '',
       loginPassword: '',
       loginLoading:  false,
       loginError:    '',
+      regFirstName:  '',
+      regLastName:   '',
+      regEmail:      '',
+      regAddress1:   '',
+      regCity:       '',
+      regState:      '',
+      regPostcode:   '',
+      regCountry:    '',
+      regPhoneCc:    '',
+      regPhone:      '',
+      regPassword:   '',
+      regPasswordConfirm: '',
+      regLoading:    false,
 
       /* ── Contact ── */
       registrantEnabled: false,
@@ -1922,6 +2134,8 @@
 
       /* ── URLs (must be data props — Alpine evaluates :href in data scope) ── */
       signupUrl:   SIGNUP_URL,
+      loginUrl:    LOGIN_URL,
+      googleLoginBase: GOOGLE_LOGIN_BASE,
       checkoutUrl: CHECKOUT,
 
       /* ── Currency ── */
@@ -1945,14 +2159,36 @@
       addons: {},  // { addonId: { selected: bool } }
 
       /* ──────────────────────────────── */
-      init() {
+      async init() {
         const params = new URLSearchParams(window.location.search);
         const sld    = params.get('register_sld');
         const tld    = params.get('register_tld');
+        const resume = params.get('resume') === '1';
         if (sld) {
           this.query = sld + (tld || '');
-          this.$nextTick(() => this.search());
+          await this.$nextTick();
+          await this.search();
+          // Returning from the login/registration step (resume=1): re-select the
+          // domain the user had chosen and, if they are now signed in, jump them
+          // straight to the contact step so the flow continues where it left off.
+          if (resume) {
+            const r = this.results && this.results[0];
+            if (r && r.available) {
+              this.startWizard(r);
+              if (this.isLoggedIn) this.goToStep2();
+            }
+          }
         }
+      },
+
+      /* Same-origin relative return path carrying the currently selected domain,
+         so the login/registration step can send the user back to it (resume=1). */
+      returnPath() {
+        const qs = new URLSearchParams();
+        if (this.selSld) qs.set('register_sld', this.selSld);
+        if (this.selTld) qs.set('register_tld', this.selTld);
+        qs.set('resume', '1');
+        return window.location.pathname + '?' + qs.toString();
       },
 
       onInput() {
@@ -2124,6 +2360,59 @@
         });
       },
 
+      // Entry point from a search result: if any hosting plan grants this TLD a free
+      // domain, show the upsell step; otherwise go straight to domain-only registration.
+      chooseDomain(r) {
+        this.selSld        = r.sld || this.parsedSld;
+        this.selTld        = r.tld;
+        this.selYears      = r.registerYears || Math.max(1, r.minYears || 1);
+        this.selPriceRaw   = r.price;
+        this.selRenewPrice = r.renewPrice;
+        this.upsellDomain  = r;
+        this.bundleError   = '';
+        const eligible = HOSTING_BUNDLES.some(b => this.selTld && b.free_tlds.includes(this.selTld));
+        if (eligible) {
+          this.showUpsell = true;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          this.startWizard(r);
+        }
+      },
+
+      isBundleEligible(id) {
+        const b = HOSTING_BUNDLES.find(x => x.id === id);
+        return !!(b && this.selTld && b.free_tlds.includes(this.selTld));
+      },
+
+      continueDomainOnly() {
+        this.showUpsell = false;
+        if (this.upsellDomain) this.startWizard(this.upsellDomain);
+      },
+
+      // Add the hosting plan with the selected domain nested under it (register).
+      // Native free_domain zeroes the domain price at cart time; only the plan is charged.
+      chooseBundle(id, period) {
+        if (this.bundleLoading) return;
+        this.bundleLoading = true;
+        this.bundleError   = '';
+        const years = /Y$/.test(period) ? Math.max(1, parseInt(period, 10)) : 1;
+        API.guest.post(
+          'cart/add_item',
+          {
+            id:       id,
+            multiple: 1,
+            period:   period,
+            domain: { action: 'register', register_sld: this.selSld, register_tld: this.selTld, register_years: years },
+          },
+          () => { window.location.href = CHECKOUT; },
+          (err) => {
+            this.bundleError   = (err && (err.message || err)) || 'Could not add this plan to your cart. Please try again.';
+            this.bundleLoading = false;
+          },
+          true
+        );
+      },
+
       startWizard(r) {
         this.selSld        = r.sld   || this.parsedSld;
         this.selTld        = r.tld;
@@ -2168,13 +2457,40 @@
         );
       },
 
-      submitLogin() {
+      // Returns the antispam token as a { fieldName: token } object matching the
+      // configured provider (Turnstile / hCaptcha / reCAPTCHA v2 read a rendered
+      // widget; reCAPTCHA v3 executes invisibly). Empty object when captcha is off.
+      // Antispam guards client/login & client/create — see Antispam/Service.php.
+      async _captchaField(action) {
+        {% set _sp = _rc.captcha_provider|default('recaptcha_v2') %}
+        {% if not _rc.enabled %}
+        return {};
+        {% elseif _sp == 'turnstile' %}
+        return { 'cf-turnstile-response': (typeof turnstile !== 'undefined' && turnstile.getResponse()) || '' };
+        {% elseif _sp == 'hcaptcha' %}
+        return { 'h-captcha-response': (typeof hcaptcha !== 'undefined' && hcaptcha.getResponse()) || '' };
+        {% elseif _sp == 'recaptcha_v3' and _rc.publickey %}
+        const _t = await new Promise(function (resolve) {
+          if (typeof grecaptcha !== 'undefined') {
+            grecaptcha.ready(function () {
+              grecaptcha.execute('{{ _rc.publickey }}', { action: action }).then(resolve).catch(function () { resolve(''); });
+            });
+          } else { resolve(''); }
+        });
+        return { 'g-recaptcha-response': _t };
+        {% else %}
+        return { 'g-recaptcha-response': (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse()) || '' };
+        {% endif %}
+      },
+
+      async submitLogin() {
         if (!this.loginEmail || !this.loginPassword) return;
         this.loginLoading = true;
         this.loginError   = '';
+        const captcha = await this._captchaField('LOGIN');
         API.guest.post(
           'client/login',
-          { email: this.loginEmail, password: this.loginPassword },
+          Object.assign({ email: this.loginEmail, password: this.loginPassword }, captcha),
           () => {
             // After login the server calls session_regenerate_id(), so the session ID
             // changes. The CSRF token embedded in the page meta tag was computed from
@@ -2205,6 +2521,91 @@
           (err) => {
             this.loginError  = (err && (err.message || err)) || 'Invalid email or password.';
             this.loginLoading = false;
+          },
+          false
+        );
+      },
+
+      async registerInline() {
+        this.loginError = '';
+        if (!this.regFirstName || !this.regEmail || !this.regCountry
+            || !this.regAddress1 || !this.regCity || !this.regPhone || !this.regPassword) {
+          this.loginError = 'Please fill in all required (*) fields.';
+          return;
+        }
+        if (this.regPassword.length < 8) {
+          this.loginError = 'Password must be at least 8 characters.';
+          return;
+        }
+        if (this.regPassword !== this.regPasswordConfirm) {
+          this.loginError = 'Passwords do not match.';
+          return;
+        }
+        this.regLoading = true;
+        const email = this.regEmail, password = this.regPassword;
+        const captcha = await this._captchaField('REGISTER');
+        // Create the account, then log in and continue IN-FLOW (mirrors submitLogin's
+        // CSRF refresh) so the selected domain / wizard state is never lost.
+        API.guest.post(
+          'client/create',
+          Object.assign({
+            first_name:       this.regFirstName,
+            last_name:        this.regLastName,
+            email:            email,
+            address_1:        this.regAddress1,
+            city:             this.regCity,
+            state:            this.regState,
+            postcode:         this.regPostcode,
+            country:          this.regCountry,
+            phone_cc:         this.regPhoneCc,
+            phone:            this.regPhone,
+            password:         password,
+            password_confirm: this.regPasswordConfirm,
+          }, captcha),
+          () => {
+            API.guest.post(
+              'client/login',
+              { email: email, password: password },
+              () => {
+                // Pre-fill the registrant contact from what the user just entered so the
+                // guarded loadContactFromAccount() (skips when contact.email is set) keeps it.
+                this.contact = {
+                  first_name: this.regFirstName, last_name: this.regLastName, email: email,
+                  company: '', address_1: this.regAddress1, city: this.regCity,
+                  state: this.regState, country: this.regCountry, postcode: this.regPostcode,
+                  phone_cc: this.regPhoneCc, phone: this.regPhone,
+                };
+                fetch(window.location.href, { credentials: 'same-origin' })
+                  .then(r => r.text())
+                  .then(html => {
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const t = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                    if (t) { const m = document.querySelector('meta[name="csrf-token"]'); if (m) m.setAttribute('content', t); }
+                  })
+                  .catch(() => { /* non-fatal */ })
+                  .finally(() => {
+                    this.isLoggedIn = true;
+                    this.registrantEnabled = true;
+                    this.regLoading = false;
+                    this.regPassword = '';
+                    this.regPasswordConfirm = '';
+                    this.loginError = '';
+                    this.loadContactFromAccount();
+                  });
+              },
+              () => {
+                // Account created but auto sign-in failed — hand off to the Sign in tab.
+                this.regLoading = false;
+                this.authMode   = 'signin';
+                this.loginEmail = email;
+                this.loginError = 'Account created — please sign in to continue.';
+              },
+              false
+            );
+          },
+          (err) => {
+            this.loginError  = (err && (err.message || err)) || 'Registration failed. Please try again.';
+            this.regLoading  = false;
           },
           false
         );

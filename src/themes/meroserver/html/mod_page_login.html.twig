@@ -20,7 +20,7 @@
        PROMO PANEL — displayed on the right at desktop widths
        ══════════════════════════════════════════════════════════════ #}
     <aside class="auth-aside auth-login-aside hidden lg:flex lg:w-[44%] relative overflow-hidden flex-col login-left-panel"
-         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+         style="background: linear-gradient(145deg, var(--color-primary) 0%, var(--color-secondary) 55%, var(--color-primary) 100%);">
 
         {# Orb — top left #}
         <div class="auth-login-orb auth-login-orb-top absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full pointer-events-none"
@@ -41,9 +41,9 @@
             <circle cx="616" cy="414" r="5"/>
             <defs>
                 <linearGradient id="auth-login-line" x1="40" y1="690" x2="680" y2="90" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#5271ff" stop-opacity=".1"/>
-                    <stop offset=".5" stop-color="#7dd3fc" stop-opacity=".55"/>
-                    <stop offset="1" stop-color="#c7d2fe" stop-opacity=".08"/>
+                    <stop stop-color="var(--color-primary)" stop-opacity=".1"/>
+                    <stop offset=".5" stop-color="rgb(var(--brand-200))" stop-opacity=".55"/>
+                    <stop offset="1" stop-color="rgb(var(--brand-100))" stop-opacity=".08"/>
                 </linearGradient>
             </defs>
         </svg>
@@ -199,9 +199,21 @@
             </p>
 
             <script>
+            // Return only a same-origin relative path from ?redirect= (open-redirect
+            // safe, mirrors Sociallogin's sanitizeReturnTo); fall back to default.
+            function meroSafeRedirect(fallback) {
+                try {
+                    var p = new URLSearchParams(window.location.search).get('redirect');
+                    if (p && p.charAt(0) === '/' && p.charAt(1) !== '/'
+                        && p.indexOf('://') === -1 && /^[/a-zA-Z0-9\-_.~%?=&]+$/.test(p)) {
+                        return p;
+                    }
+                } catch (e) { /* fall through */ }
+                return fallback;
+            }
             function loginFormData() {
                 const _apiUrl     = '{{ 'api/guest/client/login'|url|e('js') }}';
-                const _redirectUrl = '{{ (redirect_uri|default('dashboard'))|url|e('js') }}';
+                const _redirectUrl = meroSafeRedirect('{{ (redirect_uri|default('dashboard'))|url|e('js') }}');
                 {% if guest.extension_is_on({'mod': 'antispam'}) %}
                     {% set _rc2 = guest.antispam_recaptcha %}
                     {% if _rc2.enabled and _rc2.captcha_provider|default('recaptcha_v2') == 'recaptcha_v3' and _rc2.publickey %}
@@ -492,7 +504,7 @@ document.addEventListener('DOMContentLoaded', function () {
         API.guest.post('client/login',
             new FormData(form).serializeObject(),
             function () {
-                window.location = '{{ redirect_uri|default('dashboard')|url }}';
+                window.location = meroSafeRedirect('{{ redirect_uri|default('dashboard')|url|e('js') }}');
             },
             function (res) {
                 StablePanel.message(res.message, 'error');
