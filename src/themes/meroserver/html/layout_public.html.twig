@@ -244,7 +244,7 @@
             <!-- ── Desktop center nav ── -->
             <div class="hidden lg:flex items-center gap-1">
                 {% if settings.nav_home_show|default('1') != '0' %}
-                <a href="{{ (settings.nav_home_url|default('/'))|url }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_home_label|default('Home') }}</a>
+                <a href="{{ settings.nav_home_url|default('/') }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_home_label|default('Home') }}</a>
                 {% endif %}
 
                 <!-- Services dropdown -->
@@ -281,11 +281,12 @@
                             {%- set _sorted_nav_cats = serviceCategories.list|sort((a, b) => (_nav_type_order[a.type]|default(99)) <=> (_nav_type_order[b.type]|default(99))) -%}
                             {% for category in _sorted_nav_cats %}
                                 {%- set _ci = _nav_type_icons[category.type]|default({'color': 'text-indigo-400', 'bg': 'bg-indigo-500/10', 'icon': 'apps'}) -%}
-                                {# Categories have no slug in the API array — derive it from the title, matching Order\Controller\Client::titleToSlug() #}
-                                {%- set catHref = ('/order/' ~ (category.title|lower|replace({' ': '-', '/': '-'})|trim('-')))|url -%}
+                                {# Categories have no slug in the API array — derive it from the title, matching Order\Controller\Client::titleToSlug().
+                                   Domain categories route to the dedicated /order/domain-registration wizard, not the title slug (which would be /order/domain-names → 404). #}
+                                {%- set catHref = ((category.type == 'domain') ? '/order/domain-registration' : ('/order/' ~ (category.title|lower|replace({' ': '-', '/': '-'})|trim('-'))))|url -%}
                                 <a href="{{ catHref }}" @click="open=false"
                                    class="dropdown-link flex items-center gap-3 px-4 py-2.5 text-sm transition-all">
-                                    <span class="w-7 h-7 rounded-lg {{ _ci.bg }} {{ _ci.color }} flex items-center justify-center flex-shrink-0">
+                                    <span class="public-services-menu-icon w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0">
                                         <svg class="icon" style="width:0.875rem;height:0.875rem"><use href="#{{ _ci.icon }}" /></svg>
                                     </span>
                                     <span class="font-medium">{{ category.title }}</span>
@@ -338,7 +339,7 @@
                             {% set sLabel = attribute(settings, 'nav_custom' ~ n ~ '_sub' ~ s ~ '_label') %}
                             {% set sUrl   = attribute(settings, 'nav_custom' ~ n ~ '_sub' ~ s ~ '_url') %}
                             {% if sLabel and sUrl %}
-                            <a href="{{ sUrl|url }}" @click="open=false" class="dropdown-link flex items-center px-4 py-2.5 text-sm transition-all">
+                            <a href="{{ sUrl }}" @click="open=false" class="dropdown-link flex items-center px-4 py-2.5 text-sm transition-all">
                                 <span class="font-medium">{{ sLabel }}</span>
                             </a>
                             {% endif %}
@@ -346,18 +347,18 @@
                         </div>
                     </div>
                     {% elseif cUrl %}
-                    <a href="{{ cUrl|url }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ cLabel }}</a>
+                    <a href="{{ cUrl }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ cLabel }}</a>
                     {% endif %}
                 {% endif %}
                 {% endfor %}{% endif %}
                 {% if settings.nav_contact_show|default('1') != '0' %}
-                <a href="{{ (settings.nav_contact_url|default(settings.link_support|default('/support/contact')))|url }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_contact_label|default('Contact') }}</a>
+                <a href="{{ settings.nav_contact_url|default('/support/contact-us') }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_contact_label|default('Contact') }}</a>
                 {% endif %}
                 {% if settings.nav_support_show|default('1') != '0' %}
-                <a href="{{ (settings.nav_support_url|default('/support'))|url }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_support_label|default('Support') }}</a>
+                <a href="{{ settings.nav_support_url|default('/support') }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_support_label|default('Support') }}</a>
                 {% endif %}
                 {% if settings.nav_news_show|default('1') != '0' %}
-                <a href="{{ (settings.nav_news_url|default('/news'))|url }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_news_label|default('News') }}</a>
+                <a href="{{ settings.nav_news_url|default('/news') }}" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all nav-link">{{ settings.nav_news_label|default('News') }}</a>
                 {% endif %}
             </div>
 
@@ -571,7 +572,7 @@
 
             <!-- Home -->
             {% if settings.nav_home_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_home_url|default('/'))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
+            <a href="{{ settings.nav_home_url|default('/') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
                 <span class="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center flex-shrink-0">
                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
                 </span>
@@ -644,7 +645,7 @@
                         {% set sLabel = attribute(settings, 'nav_custom' ~ n ~ '_sub' ~ s ~ '_label') %}
                         {% set sUrl   = attribute(settings, 'nav_custom' ~ n ~ '_sub' ~ s ~ '_url') %}
                         {% if sLabel and sUrl %}
-                        <a href="{{ sUrl|url }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 nav-link">
+                        <a href="{{ sUrl }}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 nav-link">
                             <span class="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0"></span>
                             {{ sLabel }}
                         </a>
@@ -653,7 +654,7 @@
                     </div>
                 </div>
                 {% elseif cUrl %}
-                <a href="{{ cUrl|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
+                <a href="{{ cUrl }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
                     <span class="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center flex-shrink-0">
                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                     </span>
@@ -665,7 +666,7 @@
 
             <!-- Contact -->
             {% if settings.nav_contact_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_contact_url|default(settings.link_support|default('/support/contact')))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
+            <a href="{{ settings.nav_contact_url|default('/support/contact-us') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
                 <span class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
                     <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                 </span>
@@ -675,7 +676,7 @@
 
             <!-- Support -->
             {% if settings.nav_support_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_support_url|default('/support'))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
+            <a href="{{ settings.nav_support_url|default('/support') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
                 <span class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
                     <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                 </span>
@@ -685,7 +686,7 @@
 
             <!-- News -->
             {% if settings.nav_news_show|default('1') != '0' %}
-            <a href="{{ (settings.nav_news_url|default('/news'))|url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
+            <a href="{{ settings.nav_news_url|default('/news') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 nav-link">
                 <span class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
                     <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
                 </span>
@@ -914,7 +915,7 @@
                 <span class="ref-portal-status"><i></i>All systems operational</span>
                 <div>
                     <a href="{{ '/order'|url }}" class="ref-portal-primary">View hosting plans <b>→</b></a>
-                    <a href="{{ (settings.link_support|default('/support/contact'))|url }}" class="ref-portal-secondary">Talk to support</a>
+                    <a href="{{ settings.link_support|default('/support/contact-us') }}" class="ref-portal-secondary">Talk to support</a>
                 </div>
             </div>
         </section>
@@ -936,11 +937,11 @@
             <div>
                 <h3>Resources</h3>
                 {% if _news_on and settings.nav_news_show|default('1') != '0' %}
-                    <a href="{{ (settings.nav_news_url|default('') ?: '/news')|url }}">{{ settings.nav_news_label|default('') ?: 'News' }}</a>
+                    <a href="{{ settings.nav_news_url|default('') ?: '/news' }}">{{ settings.nav_news_label|default('') ?: 'News' }}</a>
                 {% endif %}
                 {% if guest.extension_is_on({'mod': 'support'}) %}
                     <a href="{{ '/support/kb'|url }}">Knowledge Base</a>
-                    <a href="{{ (settings.nav_support_url|default('') ?: '/support')|url }}">{{ settings.nav_support_label|default('') ?: 'Support' }}</a>
+                    <a href="{{ settings.nav_support_url|default('') ?: '/support' }}">{{ settings.nav_support_label|default('') ?: 'Support' }}</a>
                 {% endif %}
                 {% if settings.support_chat_url|default('') %}
                     <a href="{{ settings.support_chat_url }}" target="_blank" rel="noopener">{{ settings.support_chat_label|default('') ?: 'Live Support' }}</a>
@@ -949,8 +950,8 @@
             </div>
             <div>
                 <h3>{{ settings.footer_company_heading|default('') ?: 'Company' }}</h3>
-                <a href="{{ (settings.footer_about_url|default('') ?: '/page/about-us')|url }}">{{ settings.footer_about_label|default('') ?: 'About Us' }}</a>
-                <a href="{{ (settings.nav_contact_url|default('') ?: settings.link_support|default('') ?: '/support/contact')|url }}">{{ settings.footer_contact_label|default('') ?: 'Contact' }}</a>
+                <a href="{{ settings.footer_about_url|default('') ?: '/page/about-us' }}">{{ settings.footer_about_label|default('') ?: 'About Us' }}</a>
+                <a href="{{ settings.nav_contact_url|default('') ?: '/support/contact-us' }}">{{ settings.footer_contact_label|default('') ?: 'Contact' }}</a>
                 <a href="{{ '/support'|url }}">Network Status</a>
                 {% if settings.footer_phone|default('') %}<a href="tel:{{ settings.footer_phone|replace({' ': ''}) }}">{{ settings.footer_phone }}</a>{% endif %}
                 {% if settings.footer_email|default('') %}<a href="mailto:{{ settings.footer_email }}">{{ settings.footer_email }}</a>{% endif %}
@@ -958,9 +959,9 @@
             </div>
             <div>
                 <h3>{{ settings.footer_legal_heading|default('') ?: 'Legal' }}</h3>
-                <a href="{{ (settings.link_terms|default('') ?: '/page/terms-and-conditions')|url }}">{{ settings.footer_terms_label|default('') ?: 'Terms of Service' }}</a>
-                <a href="{{ (settings.link_privacy|default('') ?: '/page/privacy-policy')|url }}">{{ settings.footer_privacy_label|default('') ?: 'Privacy Policy' }}</a>
-                <a href="{{ (settings.link_cookie|default('') ?: '/page/cookie-policy')|url }}">{{ settings.footer_cookie_label|default('') ?: 'Cookie Policy' }}</a>
+                <a href="{{ settings.link_terms|default('') ?: '/page/terms-and-conditions' }}">{{ settings.footer_terms_label|default('') ?: 'Terms of Service' }}</a>
+                <a href="{{ settings.link_privacy|default('') ?: '/page/privacy-policy' }}">{{ settings.footer_privacy_label|default('') ?: 'Privacy Policy' }}</a>
+                <a href="{{ settings.link_cookie|default('') ?: '/page/cookie-policy' }}">{{ settings.footer_cookie_label|default('') ?: 'Cookie Policy' }}</a>
             </div>
             <div><h3>Program</h3><a href="{{ '/partnership-program'|url }}">Partners</a><a href="{{ '/partnership-program'|url }}">Affiliates</a><a href="{{ '/support'|url }}">Customer Support</a></div>
         </section>
@@ -986,9 +987,9 @@
             </div>
             <div class="ref-portal-footer-meta">
                 <nav aria-label="Legal">
-                    <a href="{{ (settings.link_cookie|default('') ?: '/page/cookie-policy')|url }}">Cookie Preferences</a>
-                    <a href="{{ (settings.link_terms|default('') ?: '/page/terms-and-conditions')|url }}">Terms</a>
-                    <a href="{{ (settings.link_privacy|default('') ?: '/page/privacy-policy')|url }}">Privacy</a>
+                    <a href="{{ settings.link_cookie|default('') ?: '/page/cookie-policy' }}">Cookie Preferences</a>
+                    <a href="{{ settings.link_terms|default('') ?: '/page/terms-and-conditions' }}">Terms</a>
+                    <a href="{{ settings.link_privacy|default('') ?: '/page/privacy-policy' }}">Privacy</a>
                 </nav>
                 {% set _has_social = settings.social_facebook|default('') or settings.social_twitter|default('') or settings.social_instagram|default('') %}
                 {% if _has_social %}

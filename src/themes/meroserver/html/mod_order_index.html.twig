@@ -2,6 +2,7 @@
 
 {% block meta_title %}Order Services{% endblock %}
 {% block page_header %}Order Services{% endblock %}
+{% block order_skeleton_variant %}list{% endblock %}
 
 {% block content %}
 {% set categories = guest.product_category_get_list({'per_page': 100}) %}
@@ -513,8 +514,8 @@
             </div>
             <h3 class="text-base font-semibold text-slate-900 mb-2">No products available yet</h3>
             <p class="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Our plans are being configured. Contact us for a custom server tailored to your needs.</p>
-            {%- set _support_link = settings.link_support|default('/support/contact') -%}
-            {%- set _support_href = (_support_link matches '/^https?:\\/\\//') ? '/support/contact'|url : _support_link|url -%}
+            {%- set _support_link = settings.link_support|default('/support/contact-us') -%}
+            {%- set _support_href = (_support_link matches '/^https?:\\/\\//') ? '/support/contact-us'|url : _support_link|url -%}
             <a href="{{ _support_href }}"
                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold"
                style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
@@ -529,8 +530,8 @@
 
 </div>{# end catalog shell #}
 
-{%- set _help_link = settings.link_support|default('/support/contact') -%}
-{%- set _help_href = (_help_link matches '/^https?:\\/\\//') ? '/support/contact'|url : _help_link|url -%}
+{%- set _help_link = settings.link_support|default('/support/contact-us') -%}
+{%- set _help_href = (_help_link matches '/^https?:\\/\\//') ? '/support/contact-us'|url : _help_link|url -%}
 <div class="mt-8 p-5 sm:p-8 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col md:flex-row items-center justify-between gap-5">
     <div class="flex items-center gap-5">
         <div class="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-md flex-shrink-0">

@@ -174,18 +174,56 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         $eventParams = ['ip' => $this->ip, 'email' => $client->email];
         $this->di['events_manager']->fire(['event' => 'onBeforeClientLogin', 'params' => $eventParams]);
 
+        // Regenerate the session on login (session-fixation hardening) and carry
+        // the pre-login guest cart across. The cart is keyed by session_id, so
+        // without regenerate + transfer the new session would show an empty cart —
+        // wiping an in-progress order. Mirrors the email/password login
+        // (Client\Api\Guest::login) and the OAuth complete_login(). The transfer
+        // must run BEFORE onAfterClientLogin: the Cart login listener calls
+        // getSessionCart(), which would otherwise persist an empty cart under the
+        // new session and shadow the real one.
+        $oldSession = $this->di['session']->getId();
+        $this->di['session']->regenerateId();
         $this->di['session']->set('client_id', $client->id);
         $this->di['logger']->info('Client #%s logged in via Google Identity Services (GSI)', $client->id);
+
+        $this->di['mod_service']('cart')->transferFromOtherSession($oldSession);
 
         $this->di['events_manager']->fire([
             'event' => 'onAfterClientLogin',
             'params' => ['id' => $client->id, 'ip' => $this->ip],
         ]);
 
+        // Honor the order-flow return destination (e.g. /order/checkout) so the
+        // user resumes checkout instead of being dropped on the dashboard.
+        $returnTo = $this->sanitizeReturnTo((string) ($data['return_to'] ?? ''));
+        $afterLoginUrl = $returnTo !== ''
+            ? $this->di['url']->link(ltrim($returnTo, '/'))
+            : $this->di['url']->link('dashboard');
+
         return [
             'action' => 'redirect',
-            'url' => $this->di['url']->link('dashboard'),
+            'url' => $afterLoginUrl,
         ];
+    }
+
+    /**
+     * Validate that a return_to value is a local path (no scheme/host) to prevent
+     * open redirect. Mirrors Sociallogin\Controller\Client::sanitizeReturnTo().
+     */
+    private function sanitizeReturnTo(string $raw): string
+    {
+        $path = trim($raw);
+
+        if ($path === '' || !str_starts_with($path, '/') || str_contains($path, '://') || str_starts_with($path, '//')) {
+            return '';
+        }
+
+        if (!preg_match('#^[/a-zA-Z0-9\-_.~%?=&]+$#', $path)) {
+            return '';
+        }
+
+        return $path;
     }
 
     /**
@@ -228,19 +266,24 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         $eventParams = ['ip' => $this->ip, 'email' => $client->email];
         $this->di['events_manager']->fire(['event' => 'onBeforeClientLogin', 'params' => $eventParams]);
 
+        // Regenerate the session on login (session-fixation hardening) — mirrors the official
+        // Client\Api\Guest::login and handle_credential(). The guest cart lives under the pre-OAuth
+        // session (old_session_id from the signed state) and is re-keyed to the regenerated session
+        // below, before onAfterClientLogin.
+        $this->di['session']->regenerateId();
         $this->di['session']->set('client_id', $client->id);
         $this->di['logger']->info('Client #%s linked and logged in via Google OAuth', $client->id);
+
+        // Transfer the guest cart BEFORE firing onAfterClientLogin — see complete_login().
+        $oldSessionId = trim((string) ($data['old_session_id'] ?? ''));
+        if ($oldSessionId !== '' && preg_match('/^[a-zA-Z0-9,\-]{10,128}$/', $oldSessionId)) {
+            $this->di['mod_service']('cart')->transferFromOtherSession($oldSessionId);
+        }
 
         $this->di['events_manager']->fire([
             'event' => 'onAfterClientLogin',
             'params' => ['id' => $client->id, 'ip' => $this->ip],
         ]);
-
-        // Transfer the guest cart to the authenticated session.
-        $oldSessionId = trim((string) ($data['old_session_id'] ?? ''));
-        if ($oldSessionId !== '' && preg_match('/^[a-zA-Z0-9,\-]{10,128}$/', $oldSessionId)) {
-            $this->di['mod_service']('cart')->transferFromOtherSession($oldSessionId);
-        }
 
         return true;
     }
@@ -335,19 +378,23 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         $eventParams = ['ip' => $this->ip, 'email' => $client->email];
         $this->di['events_manager']->fire(['event' => 'onBeforeClientLogin', 'params' => $eventParams]);
 
+        // Regenerate the session on login (session-fixation hardening) — mirrors the official
+        // Client\Api\Guest::login and handle_credential(). Cart re-keyed from the signed-state
+        // old_session_id below, before onAfterClientLogin.
+        $this->di['session']->regenerateId();
         $this->di['session']->set('client_id', $client->id);
         $this->di['logger']->info('Client #%s registered and logged in via Google OAuth', $client->id);
+
+        // Transfer the guest cart BEFORE firing onAfterClientLogin — see complete_login().
+        $oldSessionId = trim((string) ($data['old_session_id'] ?? ''));
+        if ($oldSessionId !== '' && preg_match('/^[a-zA-Z0-9,\-]{10,128}$/', $oldSessionId)) {
+            $this->di['mod_service']('cart')->transferFromOtherSession($oldSessionId);
+        }
 
         $this->di['events_manager']->fire([
             'event' => 'onAfterClientLogin',
             'params' => ['id' => $client->id, 'ip' => $this->ip],
         ]);
-
-        // Transfer the guest cart to the authenticated session.
-        $oldSessionId = trim((string) ($data['old_session_id'] ?? ''));
-        if ($oldSessionId !== '' && preg_match('/^[a-zA-Z0-9,\-]{10,128}$/', $oldSessionId)) {
-            $this->di['mod_service']('cart')->transferFromOtherSession($oldSessionId);
-        }
 
         return true;
     }
@@ -391,20 +438,29 @@ class Guest extends \FOSSBilling\Api\AbstractApi
         $eventParams = ['ip' => $this->ip, 'email' => $client->email];
         $this->di['events_manager']->fire(['event' => 'onBeforeClientLogin', 'params' => $eventParams]);
 
+        // Regenerate the session on login (session-fixation hardening) — mirrors the official
+        // Client\Api\Guest::login and handle_credential(). The cart is re-keyed from the
+        // signed-state old_session_id below, before onAfterClientLogin.
+        $this->di['session']->regenerateId();
         $this->di['session']->set('client_id', $client->id);
         $this->di['logger']->info('Client #%s logged in via Google OAuth', $client->id);
+
+        // Transfer the guest cart (pre-login session) to the now-authenticated
+        // session BEFORE firing onAfterClientLogin. The Cart module's login
+        // listener calls getSessionCart(), which auto-creates and persists an
+        // empty cart under the current session when none exists — if it ran
+        // before the transfer, that empty cart would shadow the real guest cart
+        // and the cart would appear wiped. The old session ID is passed from the
+        // OAuth state through the inline JS body.
+        $oldSessionId = trim((string) ($data['old_session_id'] ?? ''));
+        if ($oldSessionId !== '' && preg_match('/^[a-zA-Z0-9,\-]{10,128}$/', $oldSessionId)) {
+            $this->di['mod_service']('cart')->transferFromOtherSession($oldSessionId);
+        }
 
         $this->di['events_manager']->fire([
             'event' => 'onAfterClientLogin',
             'params' => ['id' => $client->id, 'ip' => $this->ip],
         ]);
-
-        // Transfer the guest cart (pre-login session) to the now-authenticated session.
-        // The old session ID is passed from the OAuth state through the inline JS body.
-        $oldSessionId = trim((string) ($data['old_session_id'] ?? ''));
-        if ($oldSessionId !== '' && preg_match('/^[a-zA-Z0-9,\-]{10,128}$/', $oldSessionId)) {
-            $this->di['mod_service']('cart')->transferFromOtherSession($oldSessionId);
-        }
 
         return true;
     }

@@ -58,6 +58,12 @@ ErrorDocument 500 /index.php?_errcode=500
     RewriteCond %{REQUEST_URI} ^/(index\.php|ipn\.php|install/index\.php|install/install\.php) [NC]
     RewriteRule ^ - [L]
 
+    # Block direct access to the runtime data directory (cache, logs, sessions,
+    # uploads). Mirrors the nginx `location ^~ /data/ { return 403; }` rule and
+    # the router.php built-in-server guard so all three servers behave the same.
+    RewriteCond %{REQUEST_URI} ^/data/ [NC]
+    RewriteRule ^(.*)$ index.php?_url=/$1&_errcode=403 [L]
+
     # Block direct access to sensitive files and file types.
     RewriteCond %{REQUEST_URI} /themes/[^/]+/config/ [NC]
     RewriteRule ^(.*)$ index.php?_url=/$1&_errcode=404 [L]
@@ -77,6 +83,9 @@ ErrorDocument 500 /index.php?_errcode=500
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    # HSTS: only honored by browsers over HTTPS (ignored on plain HTTP), so safe to
+    # send unconditionally. 1-year max-age, no preload until the domain is submitted.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
     # CSP: unsafe-inline retained for Alpine.js inline scripts and injected GTM snippets.
     # Tighten to nonce-based if those are ever refactored.
     Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://js.hcaptcha.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src 'self' https:; form-action 'self' https:; base-uri 'self';"

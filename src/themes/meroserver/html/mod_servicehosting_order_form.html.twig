@@ -299,7 +299,19 @@
       <div id="transfer-price-row" style="display:none;" class="text-sm text-slate-700">
         Transfer price: <strong id="transfer-price-value" style="color:var(--color-primary);"></strong>
       </div>
-      <p class="text-xs text-slate-500">Enter the domain you want to transfer. Your current registrar will provide an EPP / Auth code.</p>
+
+      {# EPP / Auth code — stored on the domain service and handed to the registrar
+         (Servicedomain sets it via setEpp on the transfer). Optional server-side,
+         but the transfer stalls at the registrar without it, so collect it here. #}
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">EPP / Auth code</label>
+        <input type="text" name="domain[transfer_code]" id="transfer-code"
+               value="{{ request.transfer_code|default('') }}"
+               autocomplete="off" spellcheck="false"
+               class="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 transition-colors"
+               placeholder="e.g. Ab3#Xy9!kL2…">
+        <p class="text-xs text-slate-500 mt-1.5">The authorization code (also called EPP code or transfer key) from your current registrar. Case-sensitive — you can find it in your registrar's control panel.</p>
+      </div>
     </div>
 
     {# ── Own domain panel ── #}

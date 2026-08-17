@@ -369,7 +369,7 @@
                     {% if social.google_enabled|default(false) %}
                     <div id="google-gsi-container" class="auth-google-container">
                         <a id="google-fallback-btn"
-                           href="{{ 'sociallogin/google'|url }}"
+                           href="{{ 'sociallogin/google?context=login'|url }}"
                            class="auth-google-btn">
                             <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -425,12 +425,27 @@
     var apiUrl   = '{{ constant('SYSTEM_URL')|trim('/')|e('js') }}/api/guest/sociallogin/handle_credential';
     var loginUrl = '{{ 'login'|url|e('js') }}';
 
+    // Preserve the in-progress destination (e.g. /order/checkout) from ?redirect=
+    // so Google sign-in resumes the flow instead of dropping the user on the
+    // dashboard. Same open-redirect guard as meroSafeRedirect / sanitizeReturnTo.
+    var returnTo = (function () {
+        try {
+            var p = new URLSearchParams(window.location.search).get('redirect');
+            if (p && p.charAt(0) === '/' && p.charAt(1) !== '/'
+                && p.indexOf('://') === -1 && /^[/a-zA-Z0-9\-_.~%?=&]+$/.test(p)) {
+                return p;
+            }
+        } catch (e) { /* ignore */ }
+        return '';
+    }());
+
     function handleCredential(credentialResponse) {
         fetch(apiUrl, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'credential=' + encodeURIComponent(credentialResponse.credential) + '&context=login'
+                  + (returnTo ? '&return_to=' + encodeURIComponent(returnTo) : '')
         })
         .then((r) => r.json())
         .then((data) => {
@@ -457,6 +472,12 @@
     var fallback  = document.getElementById('google-fallback-btn');
     var container = document.getElementById('google-gsi-container');
     var loaded    = false;
+
+    // Carry the same return destination through the OAuth-redirect fallback link.
+    if (fallback && returnTo) {
+        fallback.href += (fallback.href.indexOf('?') === -1 ? '?' : '&')
+                       + 'return_to=' + encodeURIComponent(returnTo);
+    }
 
     var script    = document.createElement('script');
     script.src    = 'https://accounts.google.com/gsi/client';

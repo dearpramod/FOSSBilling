@@ -85,7 +85,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                     [
                         'label' => 'Manual NPR conversion rate',
                         'required' => false,
-                        'hint' => 'NPR per 1 unit of your system\'s default currency (e.g. enter 135 if 1 USD = 135 NPR). Overrides the rate from Admin → System → Currencies. Leave blank to use the currency table rate.',
+                        'hint' => 'NPR for 1 unit of your default currency — or, when NPR IS your default currency, NPR for 1 unit of the invoice currency (e.g. enter 135 if 1 USD = 135 NPR). Overrides the currency table. Leave blank to use the currency table rate.',
                     ],
                 ],
             ],
@@ -221,37 +221,106 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         /** @var Model_Invoice $invoice */
         $invoice = $this->di['db']->getExistingModelById('Invoice', $invoiceId);
 
-        // Use stored snapshot — never recompute exchange rates at callback time
-        $expectedAmountPaisa = $intent['expected_paisa'] ?? (int) round($this->getAmountInPaisa($invoice));
-        $paisaDiff = abs($verifiedAmount - $expectedAmountPaisa);
+        // Enforce the amount only against the snapshot taken at initiation — the exact NPR paisa
+        // we asked Khalti to charge. Never recompute the conversion at callback time: the USD→NPR
+        // rate may have drifted since initiation, and getAmountInPaisa() can even throw when a rate
+        // is mis/unconfigured — either of which would wrongly reject (or crash) an already-paid
+        // callback. When the snapshot is gone (intent expired/evicted), Khalti's Lookup API has
+        // already verified the payment and the purchase_order_id binding below ties it to this
+        // invoice, so trust the Lookup-verified total_amount rather than hard-fail on a guess.
+        $expectedAmountPaisa = $intent['expected_paisa'] ?? null;
 
-        $this->log(sprintf(
-            'Khalti amount check: invoice_id=%s, expected=%d paisa, received=%d paisa, diff=%d',
-            $invoiceId,
-            $expectedAmountPaisa,
-            $verifiedAmount,
-            $paisaDiff
-        ));
-
-        if ($paisaDiff > 1) {
-            $tx->invoice_id = (int) $invoiceId;
-            $tx->txn_id = $verifiedTxnId ?? $pidx;
-            $tx->txn_status = 'failed';
-            $tx->amount = $verifiedAmount / 100;
-            $tx->currency = 'NPR';
-            $tx->error = sprintf(
-                'SECURITY: Amount mismatch. Expected=%d paisa, received=%d paisa, diff=%d. invoice_id=%s',
+        if ($expectedAmountPaisa !== null) {
+            $this->log(sprintf(
+                'Khalti amount check: invoice_id=%s, expected=%d paisa, received=%d paisa',
+                $invoiceId,
                 $expectedAmountPaisa,
-                $verifiedAmount,
-                $paisaDiff,
-                $invoiceId
-            );
-            $tx->status = 'error';
-            $tx->updated_at = date('Y-m-d H:i:s');
-            $this->di['db']->store($tx);
-            $this->log('Khalti SECURITY: Amount mismatch for invoice #' . $invoiceId, 'error');
+                $verifiedAmount
+            ));
 
-            throw new Payment_Exception('Khalti: Payment amount does not match invoice total. This transaction has been flagged.');
+            // Delegate to the core validator used by the official Stripe/PayPalEmail adapters:
+            // it rejects underpayment (0.01 tolerance == 1 paisa) and only warns on overpayment,
+            // so a slightly-over or misdirected payment is flagged but still provisions the order.
+            // Both amounts are NPR here (gateway currency == the snapshot currency).
+            try {
+                $this->di['mod_service']('Invoice')->validatePaymentAmount($verifiedAmount / 100, (int) $expectedAmountPaisa / 100);
+            } catch (FOSSBilling\Exception $e) {
+                $tx->invoice_id = (int) $invoiceId;
+                $tx->txn_id = $verifiedTxnId ?? $pidx;
+                $tx->txn_status = 'failed';
+                $tx->amount = $verifiedAmount / 100;
+                $tx->currency = 'NPR';
+                $tx->error = 'SECURITY: ' . $e->getMessage() . ' (invoice_id=' . $invoiceId . ')';
+                $tx->status = 'error';
+                $tx->updated_at = date('Y-m-d H:i:s');
+                $this->di['db']->store($tx);
+                $this->log('Khalti SECURITY: Amount mismatch for invoice #' . $invoiceId, 'error');
+
+                throw new Payment_Exception('Khalti: Payment amount does not match invoice total. This transaction has been flagged.');
+            }
+        } else {
+            // Intent snapshot is cold (expired/evicted, or the reconciliation cron re-verifying an
+            // abandoned payment). We lost the exact paisa we asked Khalti to charge, so RE-DERIVE it
+            // rather than fail open. getAmountInPaisa() is conversion-free/exact for NPR invoices but
+            // can throw (unconfigured rate) or drift for converted invoices — handle each explicitly.
+            try {
+                $recomputedPaisa = $this->getAmountInPaisa($invoice);
+            } catch (Exception $e) {
+                // Cannot establish ANY expected amount (e.g. the invoice currency's rate is now
+                // unconfigured). Do not trust the gateway-reported total — hold for operator review.
+                $tx->invoice_id = (int) $invoiceId;
+                $tx->txn_id = $verifiedTxnId ?? $pidx;
+                $tx->txn_status = 'failed';
+                $tx->amount = $verifiedAmount / 100;
+                $tx->currency = 'NPR';
+                $tx->error = 'SECURITY: intent snapshot cold and amount could not be recomputed for verification (' . $e->getMessage() . '). Held for operator review. invoice_id=' . $invoiceId;
+                $tx->status = 'error';
+                $tx->updated_at = date('Y-m-d H:i:s');
+                $this->di['db']->store($tx);
+                $this->log('Khalti SECURITY: cold intent + recompute failed for invoice #' . $invoiceId . ' pidx=' . $pidx . ' — held for review.', 'error');
+
+                throw new Payment_Exception('Khalti: Payment received but the amount could not be verified. It has been flagged for manual review.');
+            }
+
+            if (strtoupper((string) ($invoice->currency ?? 'NPR')) === 'NPR') {
+                // NPR invoice: recompute is exact (no FX), so enforce it exactly like the warm path.
+                $this->log(sprintf(
+                    'Khalti amount check (cold intent, NPR): invoice_id=%s, recomputed=%d paisa, received=%d paisa',
+                    $invoiceId,
+                    $recomputedPaisa,
+                    $verifiedAmount
+                ), 'warn');
+
+                try {
+                    $this->di['mod_service']('Invoice')->validatePaymentAmount($verifiedAmount / 100, (int) $recomputedPaisa / 100);
+                } catch (FOSSBilling\Exception $e) {
+                    $tx->invoice_id = (int) $invoiceId;
+                    $tx->txn_id = $verifiedTxnId ?? $pidx;
+                    $tx->txn_status = 'failed';
+                    $tx->amount = $verifiedAmount / 100;
+                    $tx->currency = 'NPR';
+                    $tx->error = 'SECURITY: ' . $e->getMessage() . ' (cold intent, invoice_id=' . $invoiceId . ')';
+                    $tx->status = 'error';
+                    $tx->updated_at = date('Y-m-d H:i:s');
+                    $this->di['db']->store($tx);
+                    $this->log('Khalti SECURITY: Amount mismatch (cold intent) for invoice #' . $invoiceId, 'error');
+
+                    throw new Payment_Exception('Khalti: Payment amount does not match invoice total. This transaction has been flagged.');
+                }
+            } else {
+                // Converted (non-NPR) invoice: the USD→NPR rate may have legitimately drifted between
+                // initiation and this callback, so a strict compare against the recompute would falsely
+                // reject a real payment. Trust Khalti's server-verified total (the purchase_order_id
+                // binding below still ties it to THIS invoice), but log the recomputed reference so an
+                // operator can reconcile any material discrepancy.
+                $this->log(sprintf(
+                    'Khalti: intent cold for converted invoice_id=%s pidx=%s — recomputed≈%d paisa vs Lookup-verified total=%d paisa; trusting Lookup total (rate may have drifted). Flagged for review.',
+                    $invoiceId,
+                    $pidx,
+                    $recomputedPaisa,
+                    $verifiedAmount
+                ), 'warn');
+            }
         }
 
         // Map Khalti status values to FOSSBilling transaction states.
@@ -344,6 +413,19 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             throw new Payment_Exception('Khalti: Payment was made for a different order. This transaction has been flagged.');
         }
 
+        // Atomically claim this transaction before crediting — mirrors the official Stripe
+        // adapter (Payment_Adapter_Stripe::processTransaction). A conditional UPDATE flips the
+        // row to 'processing' only if no other worker holds it, so a concurrent replay of the
+        // same return_url (customer refresh/double-click, or a deliberate parallel callback on
+        // the same tx id) cannot pass the earlier duplicate-txn_id window and double-credit the
+        // client. Another worker that already claimed it returns early without crediting.
+        $transactionService = $this->di['mod_service']('Invoice', 'Transaction');
+        if (!$transactionService->claimForProcessing((int) $tx->id)) {
+            $this->log('Khalti: tx #' . $id . ' already claimed for processing — skipping duplicate concurrent callback. pidx=' . $pidx, 'warn');
+
+            return;
+        }
+
         $tx->invoice_id = (int) $invoiceId;
         $tx->txn_id = $verifiedTxnId ?? $pidx;
         $tx->txn_status = 'complete';
@@ -381,8 +463,11 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             if ($isDepositInvoice) {
                 // Deposit ("add funds") invoice — markAsPaid records it properly
                 // (approved flag, paid serie, item marking) instead of a raw status write.
+                // Do NOT auto-settle pending invoices from the new balance here: a top-up
+                // should only add funds, matching the official Stripe adapter (which calls
+                // markAsPaid alone for deposits). The client's balance is applied to open
+                // invoices through the normal payment flow / cron, not as a side effect.
                 $invoiceService->markAsPaid($invoice);
-                $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
             } else {
                 $invoiceService->payInvoiceWithCredits($invoice);
                 $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
@@ -708,7 +793,8 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
      */
     private function convertToNpr(string $currency, float $amount): float
     {
-        if (strtoupper($currency) === 'NPR') {
+        $currency = strtoupper($currency);
+        if ($currency === 'NPR') {
             return $amount;
         }
 
@@ -717,29 +803,54 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
         $defaultCurrency = $repo->findDefault();
         $baseCurrency = $defaultCurrency ? strtoupper((string) $defaultCurrency->getCode()) : 'NPR';
 
+        $manualRate = isset($this->config['manual_npr_rate']) ? (float) $this->config['manual_npr_rate'] : 0.0;
+
+        // --- Default currency IS NPR ------------------------------------------------
+        // toBaseCurrency() already yields NPR here. But if the invoice currency's rate is
+        // still FOSSBilling's default of 1.0 (i.e. never configured), the "conversion" is a
+        // no-op that returns the foreign amount unchanged — which then trips the minimum-amount
+        // check with a misleading "invoice too small" message (e.g. USD 1.13 shown as NPR 1.13).
+        if ($baseCurrency === 'NPR') {
+            // With an NPR base there is no non-NPR pivot currency to route through, so a manual
+            // rate here means "NPR for 1 unit of the invoice currency" (single-foreign-currency
+            // escape hatch). It overrides the currency table.
+            if ($manualRate > 0) {
+                return $amount * $manualRate;
+            }
+
+            // Detect the unconfigured 1:1 rate and fail with a clear, actionable error instead
+            // of silently under-charging.
+            $rateFrom = $repo->getRateByCode($currency);
+            if ($rateFrom === null || abs($rateFrom - 1.0) < 1e-9) {
+                throw new Payment_Exception('Khalti: The ' . $currency . ' → NPR exchange rate is not configured (it is still 1:1). Set the ' . $currency . ' conversion rate under Admin → System → Currencies, or enter a Manual NPR rate in the Khalti gateway settings.');
+            }
+
+            try {
+                return $currencyService->toBaseCurrency($currency, $amount);
+            } catch (FOSSBilling\Exception $e) {
+                throw new Payment_Exception('Khalti: Cannot convert ' . $currency . ' to NPR — ' . $e->getMessage() . '. Please verify your currency rates under Admin → System → Currencies.');
+            }
+        }
+
+        // --- Default currency is something else (e.g. USD) --------------------------
         // Step 1: invoice currency → base currency.
         // toBaseCurrency() throws \FOSSBilling\Exception on a missing or zero rate,
         // which we convert to Payment_Exception so getHtml() can surface a clear error.
         try {
             $amountInBase = $currencyService->toBaseCurrency($currency, $amount);
         } catch (FOSSBilling\Exception $e) {
-            throw new Payment_Exception('Khalti: Cannot convert ' . strtoupper($currency) . ' to NPR — ' . $e->getMessage() . '. Please verify your currency rates under Admin → System → Currencies.');
+            throw new Payment_Exception('Khalti: Cannot convert ' . $currency . ' to NPR — ' . $e->getMessage() . '. Please verify your currency rates under Admin → System → Currencies.');
         }
 
-        if ($baseCurrency === 'NPR') {
-            return $amountInBase;
-        }
-
-        // Step 2: base currency → NPR.
-        // Manual rate from gateway settings takes priority over the currency table,
-        // allowing NPR conversion even when NPR is not added as a system currency.
-        $manualRate = isset($this->config['manual_npr_rate']) ? (float) $this->config['manual_npr_rate'] : 0.0;
+        // Step 2: base currency → NPR. A manual rate ("NPR per 1 unit of the base currency")
+        // takes priority over the currency table and is applied to the base-currency amount, so
+        // non-default invoice currencies (e.g. EUR under a USD base) are still pivoted correctly.
         if ($manualRate > 0) {
             return $amountInBase * $manualRate;
         }
 
-        // Fall back to the currency table. Throw rather than silently returning the
-        // base-currency amount as NPR (which caused false "invoice too small" errors).
+        // Throw rather than silently returning the base-currency amount as NPR
+        // (which caused false "invoice too small" errors).
         $nprRate = $repo->getRateByCode('NPR');
         if ($nprRate === null || $nprRate <= 0) {
             throw new Payment_Exception('Khalti: NPR exchange rate is not configured. Set a manual rate in the Khalti gateway settings or add NPR as a currency under Admin → System → Currencies.');

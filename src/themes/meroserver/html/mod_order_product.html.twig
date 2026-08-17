@@ -303,8 +303,8 @@
 
             <p class="text-xs text-gray-600 text-center mt-3">
                 By completing your order, you agree to our
-                <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" target="_blank" class="text-gray-500 hover:opacity-70">Terms of Service</a>
-                and <a href="{{ (settings.link_privacy|default('/page/privacy-policy'))|url }}" target="_blank" class="text-gray-500 hover:opacity-70">Privacy Policy</a>.
+                <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" target="_blank" class="text-gray-500 hover:opacity-70">Terms of Service</a>
+                and <a href="{{ settings.link_privacy|default('/page/privacy-policy') }}" target="_blank" class="text-gray-500 hover:opacity-70">Privacy Policy</a>.
             </p>
         </div>
     </div>
@@ -521,10 +521,12 @@
                         <p class="text-[10px] text-slate-400">Trusted by thousands of customers worldwide</p>
                     </div>
                     <p class="text-xs text-slate-400 text-center">
-                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-slate-500 underline hover:text-indigo-600">Terms of Service</a>
+                        By ordering, you agree to our <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" class="text-slate-500 underline hover:text-indigo-600">Terms of Service</a>
                     </p>
                 </div>
             </div>
+
+            {% include 'partial_payment_options.html.twig' %}
         </div>
     </div>
 
@@ -1240,7 +1242,7 @@
                         </div>
 
                         <p class="text-xs text-gray-600 text-center">
-                            By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
+                            By ordering, you agree to our <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
                         </p>
 
                     </div>{# /step 3 #}
@@ -1533,7 +1535,7 @@
                                         30-day money-back guarantee
                                     </p>
                                     <p class="text-xs text-gray-600 text-center">
-                                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
+                                        By ordering, you agree to our <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
                                     </p>
                                 </div>
                             </div>
@@ -1926,7 +1928,7 @@
                     </a>
 
                     <p class="text-xs text-gray-600 text-center mt-3">
-                        By ordering, you agree to our <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
+                        By ordering, you agree to our <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" class="text-gray-500 hover:opacity-70">Terms of Service</a>
                     </p>
                 </div>
 

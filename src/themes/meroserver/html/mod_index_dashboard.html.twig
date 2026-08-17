@@ -7,7 +7,7 @@
 {% if settings.homepage_mode|default('') == 'store' %}
 <script>window.location.replace('{{ '/order'|url }}');</script>
 {% elseif settings.homepage_mode|default('') == 'custom' and settings.homepage_custom_url|default('') is not empty %}
-<script>window.location.replace('{{ settings.homepage_custom_url|default('')|url }}');</script>
+<script>window.location.replace('{{ settings.homepage_custom_url|default('')|e('js') }}');</script>
 {% endif %}
 
 {% set home_news_enabled = guest.extension_is_on({'mod': 'news'}) %}
@@ -156,7 +156,8 @@
 <section class="ref-home-products">
     {% for category in home_categories %}
         {% set category_slug = category.title|lower|replace({' ': '-', '/': '-'})|trim('-') %}
-        {% set category_href = ('/order/' ~ category_slug)|url %}
+        {# Domain categories route to the dedicated wizard, not the title slug (/order/domain-names → 404). #}
+        {% set category_href = ((category.type == 'domain') ? '/order/domain-registration' : ('/order/' ~ category_slug))|url %}
         {% set product_starting_prices = category.products
             |map(product => product.price_starting_from|default(0))
             |filter(price => price > 0) %}
@@ -210,14 +211,14 @@
     {% endfor %}
 </section>
 
-<section class="ref-home-hardware" data-reveal="up">
-    <span data-reveal-child>Everything you need to ship and scale</span>
-    <div>
-        <b data-reveal-child style="--reveal-index: 0"><i>01</i> Deploy from Git</b>
-        <b data-reveal-child style="--reveal-index: 1"><i>02</i> Managed runtimes</b>
-        <b data-reveal-child style="--reveal-index: 2"><i>03</i> Autoscale services</b>
-        <b data-reveal-child style="--reveal-index: 3"><i>04</i> Observe in real time</b>
-        <b data-reveal-child style="--reveal-index: 4"><i>05</i> Secure by default</b>
+<section class="ref-home-stats" aria-label="Platform reliability at a glance">
+    <div class="ref-home-container">
+        <div class="ref-home-stats-grid">
+            <div data-reveal="up" style="--reveal-index: 0"><strong>99.9%</strong><span>Uptime SLA</span></div>
+            <div data-reveal="up" style="--reveal-index: 1"><strong>&lt;60s</strong><span>Average setup</span></div>
+            <div data-reveal="up" style="--reveal-index: 2"><strong>24/7</strong><span>Local support</span></div>
+            <div data-reveal="up" style="--reveal-index: 3"><strong>500+</strong><span>Customers served</span></div>
+        </div>
     </div>
 </section>
 
@@ -245,89 +246,6 @@
     </div>
 </section>
 
-{# ═══════════════════════════════════════════════════════════════════
-   WHY CHOOSE US — Glass feature cards
-   ═══════════════════════════════════════════════════════════════════ #}
-<section class="ref-home-features py-20 border-t border-white/5 relative overflow-hidden">
-    {# Subtle ambient glow #}
-    <div class="absolute inset-0 pointer-events-none">
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full blur-[160px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.08) 0%, transparent 70%);"></div>
-    </div>
-
-    <div class="ref-home-container relative">
-        <div class="text-center mb-12" data-reveal="up">
-            <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">
-                Speed. <em class="italic">Reliability.</em> Efficiency.
-            </h2>
-            <p class="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-                Enterprise-grade infrastructure with blazing-fast NVMe storage, 24/7 support, and seamless migration — all at competitive prices.
-            </p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {% set cards = [
-                {
-                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>',
-                    'hover_border': 'hover:border-indigo-500/25',
-                    'icon_bg': 'bg-indigo-500/10', 'icon_border': 'border-indigo-500/20', 'icon_color': 'text-indigo-400',
-                    'link_color': 'text-indigo-400', 'link_hover': 'hover:text-indigo-300',
-                    'title': 'All Products',
-                    'desc': 'Web hosting, VPS, and domains — browse everything in one place.',
-                    'link': '/order'|url,
-                    'link_text': 'Browse Store'
-                },
-                {
-                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>',
-                    'hover_border': 'hover:border-violet-500/25',
-                    'icon_bg': 'bg-violet-500/10', 'icon_border': 'border-violet-500/20', 'icon_color': 'text-violet-400',
-                    'link_color': 'text-violet-400', 'link_hover': 'hover:text-violet-300',
-                    'title': 'Domain Names',
-                    'desc': 'Register or transfer your perfect domain with instant activation.',
-                    'link': '/order/domain-registration'|url,
-                    'link_text': 'Search Domains'
-                },
-                {
-                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>',
-                    'hover_border': 'hover:border-emerald-500/25',
-                    'icon_bg': 'bg-emerald-500/10', 'icon_border': 'border-emerald-500/20', 'icon_color': 'text-emerald-400',
-                    'link_color': 'text-emerald-400', 'link_hover': 'hover:text-emerald-300',
-                    'title': 'News & Updates',
-                    'desc': 'Stay informed with product releases, maintenance, and company news.',
-                    'link': '/news'|url,
-                    'link_text': 'Read News'
-                },
-                {
-                    'icon': '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>',
-                    'hover_border': 'hover:border-amber-500/25',
-                    'icon_bg': 'bg-amber-500/10', 'icon_border': 'border-amber-500/20', 'icon_color': 'text-amber-400',
-                    'link_color': 'text-amber-400', 'link_hover': 'hover:text-amber-300',
-                    'title': 'Knowledgebase',
-                    'desc': 'Step-by-step guides, tutorials, and how-tos to help you get started.',
-                    'link': '/support/kb'|url,
-                    'link_text': 'Explore KB'
-                }
-            ] %}
-
-            {% for card in cards %}
-            <div class="ref-home-feature-card rounded-2xl bg-white/[0.03] border border-white/[0.07] p-6 flex flex-col transition-all {{ card.hover_border }} hover:bg-white/[0.05] hover:-translate-y-0.5 group"
-                 data-reveal="up" style="--reveal-index: {{ loop.index0 }}">
-                <div class="ref-home-feature-icon w-11 h-11 rounded-xl {{ card.icon_bg }} border {{ card.icon_border }} flex items-center justify-center mb-5">
-                    <svg class="w-5 h-5 {{ card.icon_color }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ card.icon|raw }}</svg>
-                </div>
-
-                <h3 class="text-base font-bold text-white mb-2">{{ card.title }}</h3>
-                <p class="text-sm text-gray-500 leading-relaxed flex-1 mb-5">{{ card.desc }}</p>
-
-                <a href="{{ card.link }}" class="inline-flex items-center gap-1.5 text-sm font-semibold {{ card.link_color }} {{ card.link_hover }} transition-colors group/link">
-                    {{ card.link_text }}
-                    <svg class="w-3.5 h-3.5 group-hover/link:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-                </a>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-
 <section id="mero-how-it-works" class="ref-home-steps">
     <div class="ref-home-container">
         <div class="ref-home-section-heading ref-home-section-heading-light" data-reveal="up">
@@ -341,58 +259,6 @@
             <li data-reveal="up" style="--reveal-index: 2"><b>03</b><span><strong>Deploy securely.</strong><small>Launch with SSL, monitoring, and sensible defaults.</small></span></li>
             <li data-reveal="up" style="--reveal-index: 3"><b>04</b><span><strong>Grow without friction.</strong><small>Scale resources whenever your traffic demands it.</small></span></li>
         </ol>
-    </div>
-</section>
-
-{# ═══════════════════════════════════════════════════════════════════
-   CTA BANNER
-   ═══════════════════════════════════════════════════════════════════ #}
-<section class="ref-home-final-cta py-16 border-t border-white/5 pub-cta-section">
-    <div class="ref-home-container">
-        <div class="pub-cta-card ref-home-cta-motion relative rounded-2xl overflow-hidden border border-indigo-500/15 p-10 sm:p-14 text-center"
-             data-reveal="scale"
-             style="background: linear-gradient(135deg, rgba(var(--color-primary-rgb),0.08) 0%, rgba(var(--color-secondary-rgb),0.04) 100%);">
-            <div class="ref-home-cta-glow absolute inset-0 pointer-events-none">
-                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full blur-[100px]" style="background: radial-gradient(ellipse, rgba(var(--color-primary-rgb),0.14) 0%, transparent 70%);"></div>
-            </div>
-            <div class="relative">
-                <h2 class="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3">Ready to Get Started?</h2>
-                <p class="text-gray-400 text-sm mb-6 max-w-md mx-auto">Deploy in under 60 seconds. No credit card required for free-tier plans.</p>
-                <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
-                    <a href="{{ 'order'|url }}"
-                       class="px-7 py-3 rounded-xl text-white font-semibold text-sm inline-flex items-center gap-2 transition-all"
-                       style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); box-shadow: 0 6px 24px rgba(var(--color-primary-rgb),0.3);">
-                        Start Now
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </a>
-                    <a href="{{ (settings.link_support|default('/support/contact'))|url }}"
-                       class="pub-ghost-btn px-7 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 font-medium text-sm transition-all">
-                        Contact Sales
-                    </a>
-                </div>
-                <div class="flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-center">
-                    <div>
-                        <p class="text-lg font-bold text-white">99.9%</p>
-                        <p class="text-xs text-gray-500">Uptime</p>
-                    </div>
-                    <div class="hidden sm:block w-px h-5 bg-white/10"></div>
-                    <div>
-                        <p class="text-lg font-bold text-white">&lt;60s</p>
-                        <p class="text-xs text-gray-500">Setup</p>
-                    </div>
-                    <div class="hidden sm:block w-px h-5 bg-white/10"></div>
-                    <div>
-                        <p class="text-lg font-bold text-white">24/7</p>
-                        <p class="text-xs text-gray-500">Support</p>
-                    </div>
-                    <div class="hidden sm:block w-px h-5 bg-white/10"></div>
-                    <div>
-                        <p class="text-lg font-bold text-white">500+</p>
-                        <p class="text-xs text-gray-500">Customers</p>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </section>
 

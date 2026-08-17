@@ -891,11 +891,16 @@
                 <div class="px-5 py-3 border-t border-slate-100 ord-srv-sidebar-ft">
                     <p class="text-[10px] text-slate-400 text-center leading-relaxed">
                         By ordering, you agree to our
-                        <a href="{{ (settings.link_terms|default('/page/terms-and-conditions'))|url }}" class="ord-srv-terms-link text-slate-500 underline">Terms of Service</a>
+                        <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" class="ord-srv-terms-link text-slate-500 underline">Terms of Service</a>
                         and Privacy Policy. All taxes are calculated at checkout.
                     </p>
                 </div>
             </div>
+
+            {# Payment methods available from System Configuration.
+               The aside is the sticky element, so this scrolls/pins together
+               with the order summary automatically. #}
+            {% include 'partial_payment_options.html.twig' %}
         </aside>
 
     </div>
