@@ -214,12 +214,46 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
             return;
         }
 
-        // Amount check against the snapshot taken at initiation.
+        // Amount check. Warm path: enforce against the initiation snapshot (the exact NPR we asked
+        // Fonepay to charge). Cold path (intent file evicted, or a reconciler-adjacent callback):
+        // do NOT fail open — re-derive the expected NPR from the invoice and enforce it. Mirrors the
+        // Khalti adapter's cold-intent hardening.
         $expected = (float) ($intent['expected_amount'] ?? 0);
-        if ($expected > 0 && abs($verifiedAmount - $expected) > 0.01) {
-            $this->failTx($tx, sprintf('SECURITY: amount mismatch. expected=%.2f NPR, received=%.2f NPR, ref=%s', $expected, $verifiedAmount, $referenceLabel));
+        if ($expected > 0) {
+            if (abs($verifiedAmount - $expected) > 0.01) {
+                $this->failTx($tx, sprintf('SECURITY: amount mismatch. expected=%.2f NPR, received=%.2f NPR, ref=%s', $expected, $verifiedAmount, $referenceLabel));
 
-            throw new Payment_Exception('Fonepay: payment amount does not match the invoice. Flagged.');
+                throw new Payment_Exception('Fonepay: payment amount does not match the invoice. Flagged.');
+            }
+        } else {
+            /** @var Model_Invoice $invoiceForAmount */
+            $invoiceForAmount = $this->di['db']->getExistingModelById('Invoice', $invoiceId);
+
+            try {
+                $recomputed = round($this->getAmountInNpr($invoiceForAmount), 2);
+            } catch (Exception $e) {
+                // Cannot establish any expected amount (e.g. the invoice currency's rate is now
+                // unconfigured). Do not trust the gateway-reported total — hold for operator review.
+                $this->failTx($tx, 'SECURITY: intent cold and amount could not be recomputed for verification (' . $e->getMessage() . '). Held for operator review. ref=' . $referenceLabel);
+
+                throw new Payment_Exception('Fonepay: payment received but the amount could not be verified. It has been flagged for manual review.');
+            }
+
+            if (strtoupper((string) ($invoiceForAmount->currency ?? 'NPR')) === 'NPR') {
+                // NPR invoice: recompute is conversion-free/exact — enforce like the warm path.
+                if (abs($verifiedAmount - $recomputed) > 0.01) {
+                    $this->failTx($tx, sprintf('SECURITY: amount mismatch (cold intent). recomputed=%.2f NPR, received=%.2f NPR, ref=%s', $recomputed, $verifiedAmount, $referenceLabel));
+
+                    throw new Payment_Exception('Fonepay: payment amount does not match the invoice. Flagged.');
+                }
+                $this->log(sprintf('Fonepay amount check (cold intent, NPR): ref=%s recomputed=%.2f received=%.2f', $referenceLabel, $recomputed, $verifiedAmount), 'warn');
+            } else {
+                // Converted (non-NPR) invoice: the FX rate may have legitimately drifted between
+                // initiation and this callback, so a strict compare would falsely reject a real
+                // payment. Trust Fonepay's server-verified amount but log the recomputed reference
+                // for reconciliation.
+                $this->log(sprintf('Fonepay: intent cold for converted invoice #%s ref=%s — recomputed~%.2f NPR vs verified %.2f NPR; trusting verified amount (rate may have drifted). Flagged for review.', $invoiceId, $referenceLabel, $recomputed, $verifiedAmount), 'warn');
+            }
         }
 
         // Duplicate guard on the Fonepay trace id.
