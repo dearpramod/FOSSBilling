@@ -190,8 +190,8 @@ class Payment_Adapter_BankTransfer
         $contactName = $c('contact_name');
         $contactEmail = $c('contact_email');
         $contactPhone = $c('contact_phone');
-        $whatsappLink = $c('whatsapp_link');
-        $viberLink = $c('viber_link');
+        $whatsappLink = $this->sanitizeContactLink($this->config['whatsapp_link'] ?? '');
+        $viberLink = $this->sanitizeContactLink($this->config['viber_link'] ?? '');
 
         $svgBank = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M3 10h18"/><path d="M12 3l9 7H3l9-7z"/><path d="M5 10v8"/><path d="M9 10v8"/><path d="M15 10v8"/><path d="M19 10v8"/></svg>';
         $svgClipboard = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>';
@@ -295,6 +295,23 @@ class Payment_Adapter_BankTransfer
         $html .= '<p class="bt-note">After completing the transfer, please allow some time for verification. Your invoice will be marked as paid once the payment is confirmed.</p>';
 
         return $html . '</div>';
+    }
+
+    /**
+     * Only allow http(s)/viber schemes through to href="" — these fields are admin-configured
+     * free text (whatsapp_link / viber_link), not restricted to a URL type, so an unvalidated
+     * javascript: URI here would execute in every client's authenticated portal session the
+     * moment they click the WhatsApp/Viber button on the payment page.
+     */
+    private function sanitizeContactLink(string $url): string
+    {
+        $url = trim($url);
+
+        if ($url === '' || !preg_match('#^(https?://|viber://)#i', $url)) {
+            return '';
+        }
+
+        return htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
     }
 
     public function processTransaction($api_admin, $id, $data, $gateway_id): bool

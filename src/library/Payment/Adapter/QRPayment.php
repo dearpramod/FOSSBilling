@@ -98,8 +98,8 @@ class Payment_Adapter_QRPayment
         $contactName = htmlspecialchars($this->config['contact_name'] ?? '', ENT_QUOTES, 'UTF-8');
         $contactEmail = htmlspecialchars($this->config['contact_email'] ?? '', ENT_QUOTES, 'UTF-8');
         $contactPhone = htmlspecialchars($this->config['contact_phone'] ?? '', ENT_QUOTES, 'UTF-8');
-        $whatsappLink = htmlspecialchars($this->config['whatsapp_link'] ?? '', ENT_QUOTES, 'UTF-8');
-        $viberLink = htmlspecialchars($this->config['viber_link'] ?? '', ENT_QUOTES, 'UTF-8');
+        $whatsappLink = $this->sanitizeContactLink($this->config['whatsapp_link'] ?? '');
+        $viberLink = $this->sanitizeContactLink($this->config['viber_link'] ?? '');
 
         $amount = $invoice['total'];
         $currency = $invoice['currency'];
@@ -205,6 +205,24 @@ class Payment_Adapter_QRPayment
         $html .= '<p class="qrpay-note">After completing payment, please allow some time for verification. Your invoice will be marked as paid once confirmed.</p>';
 
         return $html . '</div>';
+    }
+
+    /**
+     * Only allow http(s)/viber schemes through to href="" — these fields are admin-configured
+     * free text (whatsapp_link / viber_link), not restricted to a URL type, so an unvalidated
+     * javascript: URI here would execute in every client's authenticated portal session the
+     * moment they click the WhatsApp/Viber button on the payment page. Mirrors the qr_image_url
+     * scheme allowlist above.
+     */
+    private function sanitizeContactLink(string $url): string
+    {
+        $url = trim($url);
+
+        if ($url === '' || !preg_match('#^(https?://|viber://)#i', $url)) {
+            return '';
+        }
+
+        return htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
     }
 
     public function processTransaction($api_admin, $id, $data, $gateway_id): bool
