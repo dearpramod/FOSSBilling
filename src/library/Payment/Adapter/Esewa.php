@@ -187,6 +187,26 @@ class Payment_Adapter_Esewa implements InjectionAwareInterface
         /** @var Model_Invoice $invoice */
         $invoice = $this->di['db']->getExistingModelById('Invoice', $invoiceId);
 
+        // Security: bb_invoice_id is unsigned browser input (eSewa's signature never covers
+        // it), so it alone must never decide which invoice gets credited. generateForm()
+        // embeds the invoice identity inside transaction_uuid ("INV-{serie}{nr}-{time}"),
+        // which IS part of the signed/verified eSewa response — bind the two together so a
+        // client can't pay their own invoice and redirect the credit to a different
+        // same-amount invoice (theirs or another client's) by editing bb_invoice_id.
+        $expectedUuidPrefix = 'INV-' . $invoice->serie . sprintf('%05d', $invoice->nr) . '-';
+        if (!str_starts_with($transactionUuid, $expectedUuidPrefix)) {
+            $tx->invoice_id = (int) $invoiceId;
+            $tx->txn_id = $transactionCode ?: $transactionUuid;
+            $tx->txn_status = 'failed';
+            $tx->error = 'Security: transaction_uuid does not match the requested invoice. Expected prefix ' . $expectedUuidPrefix . ', got ' . $transactionUuid . '.';
+            $tx->status = 'error';
+            $tx->updated_at = date('Y-m-d H:i:s');
+            $this->di['db']->store($tx);
+            $this->log('eSewa SECURITY: transaction_uuid/invoice binding mismatch for invoice #' . $invoiceId . '. Expected prefix=' . $expectedUuidPrefix . ', got=' . $transactionUuid, 'error');
+
+            throw new Payment_Exception('eSewa: This transaction does not match the requested invoice. This transaction has been flagged.');
+        }
+
         if ($tx->status === 'processed') {
             $this->log('eSewa: Callback received for already-processed tx #' . $id . '. Skipping.');
 
