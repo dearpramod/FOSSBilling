@@ -280,6 +280,7 @@ test('converts an aggregated invoice row to an api summary', function (): void {
         'id' => 42,
         'serie' => 'INV-',
         'nr' => '42',
+        'hash' => 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
         'client_id' => 7,
         'currency' => 'USD',
         'taxrate' => '20',
@@ -300,6 +301,7 @@ test('converts an aggregated invoice row to an api summary', function (): void {
         ->toMatchArray([
             'id' => 42,
             'serie_nr' => 'INV-00042',
+            'hash' => 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
             'client' => ['id' => 7],
             'subtotal' => 25.0,
             'tax' => 2.0,

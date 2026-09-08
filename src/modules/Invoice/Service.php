@@ -244,6 +244,7 @@ class Service implements InjectionAwareInterface
             'id' => $row['id'],
             'serie' => $row['serie'],
             'nr' => $row['nr'],
+            'hash' => $row['hash'],
             'serie_nr' => $row['serie'] . sprintf('%0' . $this->getInvoiceNumberPadding() . 's', $invoiceNumber),
             'client_id' => $clientId,
             'client' => $clientId === null ? null : ['id' => $clientId],
