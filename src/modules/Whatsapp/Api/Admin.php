@@ -21,6 +21,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      */
     public function log_get_list(array $data): array
     {
+        $this->checkPermissions('whatsapp', 'manage_settings');
+
         return $this->getService()->getMessageLog($data);
     }
 
@@ -32,6 +34,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['id' => 'Log entry ID is required'])]
     public function log_delete(array $data): bool
     {
+        $this->checkPermissions('whatsapp', 'manage_settings');
+
         return $this->getService()->deleteLogEntry((int) $data['id']);
     }
 
@@ -43,6 +47,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['phone' => 'Phone number is required'])]
     public function send_test(array $data): array
     {
+        $this->checkPermissions('whatsapp', 'manage_settings');
+
         return $this->getService()->sendTest($data['phone']);
     }
 
@@ -57,6 +63,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     ])]
     public function send(array $data): array
     {
+        $this->checkPermissions('whatsapp', 'manage_settings');
+
         return $this->getService()->sendMessage($data['phone'], $data['message']);
     }
 }

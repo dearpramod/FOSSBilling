@@ -21,6 +21,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['order_id' => 'Order ID is required'])]
     public function get(array $data): array
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $model = $this->getService()->getServiceByOrderId((int) $data['order_id']);
 
         if ($model === null) {
@@ -49,6 +51,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      */
     public function options_get(array $data = []): array
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $config = $this->getDi()['mod_config']('Serviceserver');
         $json = $config['option_fields'] ?? null;
 
@@ -69,6 +73,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['options_json' => 'options_json is required'])]
     public function options_save(array $data): bool
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $this->decodeAndValidateOptionsJson((string) ($data['options_json'] ?? ''));
 
         $config = $this->getDi()['mod_config']('Serviceserver');
@@ -84,6 +90,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      */
     public function location_get_list(array $data = []): array
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $config = $this->getDi()['mod_config']('Serviceserver');
         $json = $config['locations'] ?? null;
 
@@ -101,6 +109,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
      */
     public function location_save(array $data): bool
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         if (empty($data['locations_json'])) {
             throw new \FOSSBilling\InformationException('locations_json is required');
         }
@@ -140,6 +150,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['product_id' => 'product_id is required', 'options_json' => 'options_json is required'])]
     public function product_options_save(array $data): bool
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $productId = (int) ($data['product_id'] ?? 0);
         $decoded = $this->decodeAndValidateOptionsJson((string) ($data['options_json'] ?? ''));
 
@@ -180,6 +192,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['category_id' => 'category_id is required'])]
     public function category_options_get(array $data): array
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $categoryId = (int) ($data['category_id'] ?? 0);
 
         if (!$categoryId) {
@@ -206,6 +220,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['category_id' => 'category_id is required', 'options_json' => 'options_json is required'])]
     public function category_options_save(array $data): bool
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $categoryId = (int) ($data['category_id'] ?? 0);
 
         if (!$categoryId) {
@@ -277,6 +293,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     #[RequiredParams(['order_id' => 'Order ID is required'])]
     public function update(array $data): bool
     {
+        $this->checkPermissions('serviceserver', 'manage_settings');
+
         $model = $this->getService()->getServiceByOrderId((int) $data['order_id']);
 
         if ($model === null) {
