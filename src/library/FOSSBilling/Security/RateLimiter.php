@@ -82,6 +82,10 @@ class RateLimiter implements InjectionAwareInterface
                 'client_email_resend_account' => ['policy' => 'fixed_window', 'limit' => 5, 'interval' => '1 hour'],
                 'profile_password_change_ip' => ['policy' => 'fixed_window', 'limit' => 30, 'interval' => '1 hour'],
                 'profile_password_change_account' => ['policy' => 'fixed_window', 'limit' => 5, 'interval' => '1 hour'],
+                // Sociallogin's handle_credential() proxies every call to Google's tokeninfo
+                // endpoint before any account lookup, so an unbounded caller could burn Google
+                // quota. A real sign-in is a single click, well under the cap.
+                'sociallogin_credential_ip' => ['policy' => 'fixed_window', 'limit' => 30, 'interval' => '1 hour'],
             ],
         ];
     }
