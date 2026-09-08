@@ -95,6 +95,7 @@ class Service implements InjectionAwareInterface, WidgetProviderInterface
         // identifier characters used by Tawk. Invalid values disable live chat.
         $validProperty = preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $tawkProperty) === 1;
         $validWidget = preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $tawkWidget) === 1;
+
         return [
             'tawk_property_id' => $validProperty ? $tawkProperty : '',
             'tawk_widget_id' => $validWidget ? $tawkWidget : '',

@@ -225,13 +225,13 @@ class Service implements InjectionAwareInterface
             $tax = ($taxRate > 0 && $taxableSubtotal !== 0.0) ? round($taxableSubtotal * $taxRate / 100, 2) : 0.0;
 
             $result[] = [
-                'id'         => $row['id'],
-                'hash'       => $row['hash'],
-                'serie'      => $row['serie'],
-                'nr'         => $row['nr'],
-                'currency'   => $row['currency'],
-                'total'      => round((float) $row['subtotal'] + $tax, 2),
-                'status'     => $row['status'],
+                'id' => $row['id'],
+                'hash' => $row['hash'],
+                'serie' => $row['serie'],
+                'nr' => $row['nr'],
+                'currency' => $row['currency'],
+                'total' => round((float) $row['subtotal'] + $tax, 2),
+                'status' => $row['status'],
                 'created_at' => $row['created_at'],
             ];
         }

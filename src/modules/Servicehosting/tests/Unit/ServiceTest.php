@@ -13,6 +13,7 @@ declare(strict_types=1);
 use Box\Mod\Servicehosting\Service;
 
 use function Tests\Helpers\container;
+use function Tests\Helpers\createEntity;
 use function Tests\Helpers\moduleService;
 
 test('batch enriches hosting accounts with orders and clients', function (): void {
@@ -198,6 +199,91 @@ test('action renew order without active service', function (): void {
     $service->setDi($di);
     expect(fn (): bool => $service->action_renew($orderModel))
         ->toThrow(FOSSBilling\Exception::class, sprintf('Order %d has no active service', $orderModel->id));
+});
+
+test('action activate creates the account when it has not been provisioned yet', function (): void {
+    $orderModel = new Model_ClientOrder();
+    $orderModel->loadBean(new Tests\Helpers\DummyBean());
+
+    $model = new Model_ServiceHosting();
+    $model->loadBean(new Tests\Helpers\DummyBean());
+    $model->sld = 'example';
+    $model->tld = '.com';
+
+    $hostingServerModel = new Model_ServiceHostingServer();
+    $hostingServerModel->loadBean(new Tests\Helpers\DummyBean());
+
+    $orderServiceMock = Mockery::mock(Box\Mod\Order\Service::class);
+    $orderServiceMock->shouldReceive('getOrderService')->atLeast()->once()->andReturn($model);
+    $orderServiceMock->shouldReceive('getConfig')->atLeast()->once()->andReturn([]);
+
+    $dbMock = Mockery::mock('\Box_Database');
+    $dbMock->shouldReceive('getExistingModelById')->atLeast()->once()->with('ServiceHostingServer', Mockery::any(), Mockery::any())->andReturn($hostingServerModel);
+    $dbMock->shouldReceive('store')->atLeast()->once();
+
+    $di = container();
+    $di['db'] = $dbMock;
+    $di['mod_service'] = $di->protect(fn (): Mockery\MockInterface => $orderServiceMock);
+
+    $serverManagerMock = Mockery::mock('\Server_Manager_Custom');
+    $serverManagerMock->shouldReceive('getPasswordLength')->atLeast()->once()->andReturn(12);
+    $serverManagerMock->shouldReceive('generateUsername')->atLeast()->once()->with('example.com')->andReturn('example');
+
+    $adapterMock = Mockery::mock('\Server_Manager_Custom');
+    $adapterMock->shouldReceive('createAccount')->once();
+
+    $serviceMock = Mockery::mock(Service::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $serviceMock->shouldReceive('getServerManager')->atLeast()->once()->andReturn($serverManagerMock);
+    $serviceMock->shouldReceive('_getAM')->once()->andReturn([$adapterMock, new Server_Account()]);
+    $serviceMock->setDi($di);
+
+    $result = $serviceMock->action_activate($orderModel);
+
+    expect($result)->toBe(['username' => 'example'])
+        ->and($model->username)->toBe('example');
+});
+
+test('action activate does not recreate an account that was already provisioned', function (): void {
+    // Regression test: if a previous activation attempt already created the
+    // account on the server (its username was persisted), retrying must not
+    // call createAccount() again - the account already exists remotely and
+    // doing so only fails with a duplicate-account server error.
+    $orderModel = new Model_ClientOrder();
+    $orderModel->loadBean(new Tests\Helpers\DummyBean());
+
+    $model = new Model_ServiceHosting();
+    $model->loadBean(new Tests\Helpers\DummyBean());
+    $model->sld = 'example';
+    $model->tld = '.com';
+    $model->username = 'example';
+
+    $hostingServerModel = new Model_ServiceHostingServer();
+    $hostingServerModel->loadBean(new Tests\Helpers\DummyBean());
+
+    $orderServiceMock = Mockery::mock(Box\Mod\Order\Service::class);
+    $orderServiceMock->shouldReceive('getOrderService')->atLeast()->once()->andReturn($model);
+    $orderServiceMock->shouldReceive('getConfig')->atLeast()->once()->andReturn([]);
+
+    $dbMock = Mockery::mock('\Box_Database');
+    $dbMock->shouldReceive('getExistingModelById')->atLeast()->once()->with('ServiceHostingServer', Mockery::any(), Mockery::any())->andReturn($hostingServerModel);
+    $dbMock->shouldReceive('store')->atLeast()->once();
+
+    $di = container();
+    $di['db'] = $dbMock;
+    $di['mod_service'] = $di->protect(fn (): Mockery\MockInterface => $orderServiceMock);
+
+    $serverManagerMock = Mockery::mock('\Server_Manager_Custom');
+    $serverManagerMock->shouldReceive('getPasswordLength')->atLeast()->once()->andReturn(12);
+    $serverManagerMock->shouldNotReceive('generateUsername');
+
+    $serviceMock = Mockery::mock(Service::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $serviceMock->shouldReceive('getServerManager')->atLeast()->once()->andReturn($serverManagerMock);
+    $serviceMock->shouldNotReceive('_getAM');
+    $serviceMock->setDi($di);
+
+    $result = $serviceMock->action_activate($orderModel);
+
+    expect($result)->toBe(['username' => 'example']);
 });
 
 test('action suspend', function (): void {
@@ -1277,4 +1363,131 @@ test('_performOnService accepts one-time active order with null expires_at', fun
     $oneTimeOrder->expires_at = null;
 
     expect($reflection->invoke($service, $oneTimeOrder))->toBeTrue();
+});
+
+test('clientSettableConfigKeys returns the hosting allowlist', function (): void {
+    $service = new Service();
+    $allowed = $service->clientSettableConfigKeys();
+
+    expect($allowed)->toBeArray();
+    // Client may choose billing period, domain options, quantity, and
+    // whether multiple items are allowed in a single cart-add. Admin-
+    // controlled fields (hosting_plan_id, server_id, reseller, ...) are
+    // deliberately absent and will be stripped by the central filter in
+    // Product\Service::prepareCartProductConfig before attachOrderConfig runs.
+    expect($allowed)->toContain('period');
+    expect($allowed)->toContain('domain');
+    expect($allowed)->toContain('quantity');
+    expect($allowed)->toContain('multiple');
+    expect($allowed)->not->toContain('hosting_plan_id');
+    expect($allowed)->not->toContain('server_id');
+    expect($allowed)->not->toContain('reseller');
+});
+
+test('validateOrderData rejects admin-controlled values differing from product config', function (string $field, mixed $injectedValue): void {
+    $service = new Service();
+    $product = createEntity(Box\Mod\Product\Entity\Product::class, [
+        'config' => json_encode(['server_id' => 1, 'hosting_plan_id' => 2, 'reseller' => false]),
+    ]);
+    $data = [
+        'server_id' => 1,
+        'hosting_plan_id' => 2,
+        'reseller' => false,
+        'sld' => 'great',
+        'tld' => 'com',
+    ];
+
+    $data[$field] = $injectedValue;
+
+    try {
+        $service->validateOrderData($data, $product);
+        expect(true)->toBeFalse('Expected FOSSBilling\InformationException was not thrown.');
+    } catch (FOSSBilling\InformationException $e) {
+        expect($e->getMessage())->toBe('The requested configuration does not match the selected product.');
+        expect($e->getCode())->toBe(705);
+    }
+})->with([
+    ['hosting_plan_id', 999],
+    ['server_id', 42],
+    ['reseller', true],
+]);
+
+test('validateOrderData accepts values matching product config', function (): void {
+    $service = new Service();
+    $product = createEntity(Box\Mod\Product\Entity\Product::class, [
+        'config' => json_encode(['server_id' => 1, 'hosting_plan_id' => 2, 'reseller' => false]),
+    ]);
+    $data = [
+        'server_id' => 1,
+        'hosting_plan_id' => 2,
+        'reseller' => false,
+        'sld' => 'great',
+        'tld' => 'com',
+    ];
+
+    $service->validateOrderData($data, $product);
+    expect(true)->toBeTrue();
+});
+
+test('getOrderableHpPairs returns only plans referenced by enabled products', function (): void {
+    $service = new Service();
+
+    $hostingProduct = createEntity(Box\Mod\Product\Entity\Product::class, [
+        'config' => json_encode(['server_id' => 1, 'hosting_plan_id' => 3]),
+    ]);
+    $unrelatedProduct = createEntity(Box\Mod\Product\Entity\Product::class, [
+        'config' => '{}',
+    ]);
+
+    $plan = new Model_ServiceHostingHp();
+    $plan->loadBean(new Tests\Helpers\DummyBean());
+    $plan->id = 3;
+    $plan->name = 'Gold';
+
+    $productRepo = Mockery::mock(Box\Mod\Product\Repository\ProductRepository::class);
+    $productRepo->shouldReceive('findBy')
+        ->once()
+        ->with([
+            'type' => Box\Mod\Product\Service::HOSTING,
+            'active' => true,
+            'status' => 'enabled',
+            'isAddon' => false,
+        ])
+        ->andReturn([$hostingProduct, $unrelatedProduct]);
+
+    $emMock = Mockery::mock(Doctrine\ORM\EntityManagerInterface::class);
+    $emMock->shouldReceive('getRepository')
+        ->with(Box\Mod\Product\Entity\Product::class)
+        ->andReturn($productRepo);
+
+    $dbMock = Mockery::mock('\Box_Database');
+    $dbMock->shouldReceive('find')
+        ->once()
+        ->with('ServiceHostingHp', 'id IN (:hp_id_0)', ['hp_id_0' => 3])
+        ->andReturn([$plan]);
+
+    $di = container();
+    $di['em'] = $emMock;
+    $di['db'] = $dbMock;
+    $service->setDi($di);
+
+    expect($service->getOrderableHpPairs())->toBe([3 => 'Gold']);
+});
+
+test('getOrderableHpPairs returns empty array when no products reference plans', function (): void {
+    $service = new Service();
+
+    $productRepo = Mockery::mock(Box\Mod\Product\Repository\ProductRepository::class);
+    $productRepo->shouldReceive('findBy')->once()->andReturn([]);
+
+    $emMock = Mockery::mock(Doctrine\ORM\EntityManagerInterface::class);
+    $emMock->shouldReceive('getRepository')
+        ->with(Box\Mod\Product\Entity\Product::class)
+        ->andReturn($productRepo);
+
+    $di = container();
+    $di['em'] = $emMock;
+    $service->setDi($di);
+
+    expect($service->getOrderableHpPairs())->toBe([]);
 });

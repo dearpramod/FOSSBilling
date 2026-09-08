@@ -18,6 +18,22 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 /* @var Symfony\Component\HttpFoundation\Request $request */
 global $request;
 
+// A gateway may HTML-encode its redirect query string (seen on Khalti connectIPS
+// cancel), or the server may run with arg_separator.output='&amp;'. Either way PHP
+// then keys every param after the first as "amp;invoice_id" etc., so invoice_id,
+// redirect and pidx are lost downstream, producing "Transaction invoice ID is
+// missing" plus a raw JSON page instead of a redirect. Normalize the query string
+// before anything reads it. Guarded on the &amp; marker so normal callbacks/JSON
+// webhooks are left untouched.
+if ($request instanceof Symfony\Component\HttpFoundation\Request) {
+    $rawQueryString = (string) $request->server->get('QUERY_STRING');
+    if (str_contains($rawQueryString, '&amp;')) {
+        parse_str(str_replace('&amp;', '&', $rawQueryString), $normalizedQueryParams);
+        $request->query->replace($normalizedQueryParams);
+        $_GET = $normalizedQueryParams;
+    }
+}
+
 $di = include Path::join(PATH_ROOT, 'di.php');
 $di['translate']();
 $apiResponseFactory = new ApiResponseFactory();
@@ -108,7 +124,7 @@ if ($request->query->has('redirect') && $resolvedInvoiceHash !== null) {
         try {
             $txRecord = $di['db']->load('Transaction', $output);
             $txProcessed = $txRecord && $txRecord->status === 'processed';
-        } catch (\Throwable) {
+        } catch (Throwable) {
         }
     }
     $redirectParams['status'] = $txProcessed ? 'ok' : 'cancel';

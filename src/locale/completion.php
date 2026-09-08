@@ -1,14 +1,14 @@
 <?php
 /**
  * FOSSBilling translations
- * Dated: Mon Jun 22 08:48:05 UTC 2026
+ * Dated: Tue Sep  1 04:30:51 UTC 2026
  * License: https://github.com/FOSSBilling/locale/blob/main/LICENSE.md
  */
 return [
   'el_GR' => 67,
   'ta_IN' => 0,
   'bg_BG' => 61,
-  'uz_UZ' => 0,
+  'uz_UZ' => 18,
   'he_IL' => 5,
   'si_LK' => 2,
   'it_IT' => 79,
@@ -18,32 +18,33 @@ return [
   'fa_IR' => 79,
   'bn_BD' => 2,
   'hr_HR' => 27,
-  'tr_TR' => 79,
+  'tr_TR' => 100,
   'sr_RS' => 71,
   'cs_CZ' => 76,
   'ar_SA' => 66,
   'da_DK' => 23,
-  'zh_CN' => 67,
+  'zh_CN' => 71,
   'sl_SI' => 0,
-  'es_ES' => 82,
+  'es_ES' => 83,
   'pt_PT' => 58,
   'nl_NL' => 79,
   'sv_SE' => 0,
   'fr_FR' => 79,
   'ar_EG' => 10,
-  'uk_UA' => 67,
-  'id_ID' => 66,
+  'id_ID' => 67,
+  'uk_UA' => 68,
   'pt_BR' => 99,
   'vi_VN' => 58,
   'ca_ES' => 52,
-  'ro_RO' => 77,
+  'ro_RO' => 78,
   'lt_LT' => 48,
+  'no_NO' => 0,
   'ja_JP' => 2,
   'ko_KR' => 3,
   'pl_PL' => 66,
   'th_TH' => 100,
   'en_AU' => 79,
   'hu_HU' => 70,
-  'de_DE' => 75,
+  'de_DE' => 78,
   'zh_TW' => 58,
 ];

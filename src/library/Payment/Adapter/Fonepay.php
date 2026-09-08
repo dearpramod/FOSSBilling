@@ -627,6 +627,7 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
     private function getBankList(): array
     {
         $cacheKey = 'banks_' . hash('sha256', $this->getBaseUrl());
+
         try {
             $item = $this->getIntentCache()->getItem($cacheKey);
             if ($item->isHit()) {
@@ -636,6 +637,7 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         }
 
         $banks = [];
+
         try {
             $response = $this->getHttpClient()->request('GET', $this->getBaseUrl() . self::API_PATH . '/banks/list', [
                 'headers' => [

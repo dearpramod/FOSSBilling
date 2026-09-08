@@ -701,9 +701,8 @@
              class="fixed inset-0 z-50 flex items-center justify-center p-4"
              style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
             <div @click.outside="cancelModal = false"
-                 class="w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
-                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
-                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                 class="cancel-request-modal w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden">
+                <div class="cancel-request-modal-header flex items-center justify-between px-6 pt-5 pb-4 border-b">
                     <h3 class="text-sm font-semibold text-white flex items-center gap-2">
                         <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
@@ -737,7 +736,7 @@
                     </button>
                 </div>
 
-                <form id="cancel-request-form-domain" class="px-6 py-5 space-y-4">
+                <form id="cancel-request-form-domain" class="cancel-request-modal-form px-6 py-5 space-y-4">
                     <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
                     <input type="hidden" name="rel_type" value="order"/>
                     <input type="hidden" name="rel_id" value="{{ order.id }}"/>
@@ -765,6 +764,7 @@
                     </div>
                     <div id="cancel-error-domain" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
                     <button type="submit" id="btn-submit-cancel-domain"
+                            data-cancel-submit
                             class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
                             style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
                         {{ 'Submit Request'|trans }}
@@ -850,9 +850,8 @@
              class="fixed inset-0 z-50 flex items-center justify-center p-4"
              style="background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);">
             <div @click.outside="cancelModal = false"
-                 class="w-full max-w-md rounded-2xl border border-white/[0.1] shadow-2xl overflow-hidden"
-                 style="background: linear-gradient(145deg, rgba(30,30,50,1), rgba(20,20,40,1));">
-                <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+                 class="cancel-request-modal w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden">
+                <div class="cancel-request-modal-header flex items-center justify-between px-6 pt-5 pb-4 border-b">
                     <h3 class="text-sm font-semibold text-white flex items-center gap-2">
                         <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
@@ -886,7 +885,7 @@
                     </button>
                 </div>
 
-                <form id="cancel-request-form-service" class="px-6 py-5 space-y-4">
+                <form id="cancel-request-form-service" class="cancel-request-modal-form px-6 py-5 space-y-4">
                     <input type="hidden" name="CSRFToken" value="{{ CSRFToken }}"/>
                     <input type="hidden" name="rel_type" value="order"/>
                     <input type="hidden" name="rel_id" value="{{ order.id }}"/>
@@ -914,6 +913,7 @@
                     </div>
                     <div id="cancel-error-service" class="hidden px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-xs"></div>
                     <button type="submit" id="btn-submit-cancel-service"
+                            data-cancel-submit
                             class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
                             style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
                         {{ 'Submit Request'|trans }}

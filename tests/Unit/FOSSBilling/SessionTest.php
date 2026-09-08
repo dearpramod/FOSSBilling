@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use FOSSBilling\Http\CookieNames;
+
 function createSession(): FOSSBilling\Session
 {
     $handler = new class extends PdoSessionHandler {
@@ -20,6 +22,34 @@ function invokePrivate(object $instance, string $method, array $args = []): mixe
 
     return $methodReflection->invokeArgs($instance, $args);
 }
+
+afterEach(function (): void {
+    $_SESSION = [];
+    foreach ([
+        CookieNames::SESSION,
+        'PHPSESSID',
+    ] as $sessionName) {
+        unset($_COOKIE[$sessionName]);
+    }
+    if (session_status() === PHP_SESSION_NONE) {
+        session_id('');
+        session_name('PHPSESSID');
+    }
+});
+
+test('session cookie name migrates and expires the previous session cookie', function (): void {
+    $_COOKIE['PHPSESSID'] = 'legacy-session';
+    $session = createSession();
+
+    invokePrivate($session, 'configureCookieName');
+
+    expect(session_name())->toBe(CookieNames::SESSION)
+        ->and(session_id())->toBe('legacy-session');
+
+    invokePrivate($session, 'expireLegacySessionCookies');
+
+    expect($_COOKIE)->not->toHaveKey('PHPSESSID');
+});
 
 test('obsolete session is detected', function (): void {
     $session = createSession();
@@ -56,4 +86,67 @@ test('obsolete session expiry honors grace window', function (): void {
 
     expect($active)->toBeFalse();
     expect($expired)->toBeTrue();
+});
+
+test('destroying a client login preserves the admin login', function (): void {
+    $_SESSION = [
+        'admin' => ['id' => 1],
+        'client' => ['id' => 2],
+        'client_id' => 2,
+    ];
+
+    $result = createSession()->destroy('client');
+
+    expect($result)->toBeTrue()
+        ->and($_SESSION)->toHaveKey('admin')
+        ->not->toHaveKeys(['client', 'client_id']);
+});
+
+test('destroying an admin login preserves the client login', function (): void {
+    $_SESSION = [
+        'admin' => ['id' => 1],
+        'client' => ['id' => 2],
+        'client_id' => 2,
+    ];
+
+    $result = createSession()->destroy('admin');
+
+    expect($result)->toBeTrue()
+        ->and($_SESSION)->not->toHaveKey('admin')
+        ->and($_SESSION)->toHaveKeys(['client', 'client_id']);
+});
+
+test('destroying a client login regenerates the session with the configured grace period, not zero', function (): void {
+    $handler = new class extends PdoSessionHandler {
+        public function __construct()
+        {
+        }
+    };
+
+    $session = Mockery::mock(FOSSBilling\Session::class, [$handler])->makePartial();
+    $session->shouldReceive('regenerateId')->withNoArgs()->once();
+
+    $_SESSION = [
+        'client' => ['id' => 2],
+        'client_id' => 2,
+    ];
+
+    $session->destroy('client');
+});
+
+test('destroying an admin login regenerates the session with the configured grace period, not zero', function (): void {
+    $handler = new class extends PdoSessionHandler {
+        public function __construct()
+        {
+        }
+    };
+
+    $session = Mockery::mock(FOSSBilling\Session::class, [$handler])->makePartial();
+    $session->shouldReceive('regenerateId')->withNoArgs()->once();
+
+    $_SESSION = [
+        'admin' => ['id' => 1],
+    ];
+
+    $session->destroy('admin');
 });

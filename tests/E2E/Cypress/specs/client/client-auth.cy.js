@@ -18,11 +18,14 @@ describe('client authentication', () => {
     cy.wait('@clientSignup').then(({ response }) => {
       expect(response.statusCode).to.eq(200);
       expect(response.body.error).to.eq(null);
-      expect(response.body.result, 'client id').to.exist;
+      // guest/client/create no longer returns the new client's id (doing so
+      // would reopen the email-enumeration issue it was hardened against);
+      // account creation and the logged-in session are proven below instead.
+      expect(response.body.result).to.eq(true);
     });
 
     cy.location('pathname', { timeout: 10000 }).should('eq', '/');
-    cy.getCookie('csrf_token').should('exist').then((cookie) => {
+    cy.getCookie('fossbilling_csrf').should('exist').then((cookie) => {
       cy.request({
         url: '/api/client/profile/get',
         qs: { CSRFToken: cookie.value },

@@ -103,22 +103,22 @@ class Client extends \FOSSBilling\Api\AbstractApi
                 ? round($taxableSubtotal * $taxRate / 100, 2)
                 : 0.0;
             $lastPaid = [
-                'hash'       => $lastPaidRow['hash'],
-                'total'      => round((float) $lastPaidRow['subtotal'] + $tax, 2),
-                'currency'   => $lastPaidRow['currency'],
-                'paid_at'    => $lastPaidRow['paid_at'],
+                'hash' => $lastPaidRow['hash'],
+                'total' => round((float) $lastPaidRow['subtotal'] + $tax, 2),
+                'currency' => $lastPaidRow['currency'],
+                'paid_at' => $lastPaidRow['paid_at'],
                 'updated_at' => $lastPaidRow['updated_at'],
             ];
         }
 
         return [
-            'total'             => (int) ($statsRow['total'] ?? 0),
-            'unpaid_count'      => (int) ($statsRow['unpaid_count'] ?? 0),
-            'paid_count'        => (int) ($statsRow['paid_count'] ?? 0),
+            'total' => (int) ($statsRow['total'] ?? 0),
+            'unpaid_count' => (int) ($statsRow['unpaid_count'] ?? 0),
+            'paid_count' => (int) ($statsRow['paid_count'] ?? 0),
             'outstanding_total' => round((float) ($statsRow['outstanding_total'] ?? 0), 2),
-            'paid_total'        => round((float) ($statsRow['paid_total'] ?? 0), 2),
-            'currency'          => $statsRow['currency'] ?? '',
-            'last_paid'         => $lastPaid,
+            'paid_total' => round((float) ($statsRow['paid_total'] ?? 0), 2),
+            'currency' => $statsRow['currency'] ?? '',
+            'last_paid' => $lastPaid,
         ];
     }
 
@@ -244,13 +244,7 @@ class Client extends \FOSSBilling\Api\AbstractApi
             throw new \FOSSBilling\InformationException('Invoice is already paid');
         }
         if ($identity->currency && $invoice->currency && $identity->currency !== $invoice->currency) {
-            throw new \FOSSBilling\InformationException(
-                sprintf(
-                    'Account balance is in %s but invoice is in %s. Please use a payment gateway to pay this invoice.',
-                    $identity->currency,
-                    $invoice->currency
-                )
-            );
+            throw new \FOSSBilling\InformationException(sprintf('Account balance is in %s but invoice is in %s. Please use a payment gateway to pay this invoice.', $identity->currency, $invoice->currency));
         }
         $paid = $this->getService()->tryPayWithCredits($invoice);
         if (!$paid) {

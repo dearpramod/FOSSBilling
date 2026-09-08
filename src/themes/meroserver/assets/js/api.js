@@ -61,13 +61,15 @@ const Tools = {
   },
 
   /**
-   * Returns the CSRF token from the csrf_token cookie set by the server.
+   * Returns the CSRF token cookie set by the server.
+   * Reads fossbilling_csrf (0.8.6+) first, falls back to legacy csrf_token.
    * Does NOT read from any meta tag (avoids XSS-via-meta-tag leakage).
    *
    * @returns {string|null} The CSRF token, or null if not found.
    */
   getCSRFToken: function () {
-    const match = document.cookie.match(/csrf_token=([^;]*)/);
+    const match = document.cookie.match(/(?:^|;\s*)fossbilling_csrf=([^;]*)/)
+      || document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
     return match ? decodeURIComponent(match[1]) : null;
   },
 

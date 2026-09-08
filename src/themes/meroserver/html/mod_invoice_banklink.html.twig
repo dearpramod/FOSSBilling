@@ -52,6 +52,18 @@
                     <p class="text-sm text-gray-400">{{ 'Connecting to payment gateway...'|trans }}</p>
                 </div>
                 {{ payment.result|raw }}
+                <script>
+                    // Redirecting gateways (e.g. Khalti) navigate away within ~1.5 s and this
+                    // never runs. QR / manual gateways (Fonepay, QRPayment) do NOT redirect —
+                    // the QR is the final state — so hide the "Connecting…" loader once the
+                    // gateway content is on screen, otherwise it hangs indefinitely above the QR.
+                    (function () {
+                        setTimeout(function () {
+                            var loader = document.getElementById('payment-loader');
+                            if (loader) { loader.style.display = 'none'; }
+                        }, 2000);
+                    })();
+                </script>
             {% endif %}
 
             {% if payment.type == 'form' %}

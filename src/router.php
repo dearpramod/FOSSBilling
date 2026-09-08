@@ -1,7 +1,8 @@
 <?php
+
 /**
  * PHP built-in server router for FOSSBilling development
- * Usage: php -S localhost:9000 -t src/ src/router.php
+ * Usage: php -S localhost:9000 -t src/ src/router.php.
  */
 
 // Set environment — use APP_ENV env var if set, otherwise default to production

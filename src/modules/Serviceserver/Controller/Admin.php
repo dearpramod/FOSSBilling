@@ -29,10 +29,10 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
             'subpages' => [
                 [
                     'location' => 'system',
-                    'index'    => 150,
-                    'label'    => __trans('Server Option Fields'),
-                    'uri'      => $this->di['url']->adminLink('serviceserver'),
-                    'class'    => '',
+                    'index' => 150,
+                    'label' => __trans('Server Option Fields'),
+                    'uri' => $this->di['url']->adminLink('serviceserver'),
+                    'class' => '',
                 ],
             ],
         ];
@@ -48,15 +48,15 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
     {
         $this->di['is_admin_logged'];
 
-        $service   = $this->di['mod_service']('Serviceserver');
+        $service = $this->di['mod_service']('Serviceserver');
         $modConfig = $this->di['mod_config']('Serviceserver');
-        $pairs     = $service->getServerProductCategoryPairs();
+        $pairs = $service->getServerProductCategoryPairs();
 
         $categories = [];
         foreach ($pairs as $id => $title) {
             $categories[] = [
-                'id'         => $id,
-                'title'      => $title,
+                'id' => $id,
+                'title' => $title,
                 'has_custom' => !empty($modConfig['option_fields_cat_' . $id]),
             ];
         }
@@ -69,21 +69,18 @@ class Admin implements \FOSSBilling\InjectionAwareInterface
         $this->di['is_admin_logged'];
 
         $categoryId = (int) $id;
-        $service    = $this->di['mod_service']('Serviceserver');
+        $service = $this->di['mod_service']('Serviceserver');
 
         if (!isset($service->getServerProductCategoryPairs()[$categoryId])) {
-            throw new \FOSSBilling\InformationException(
-                'Category :id has no server-type products',
-                [':id' => $categoryId]
-            );
+            throw new \FOSSBilling\InformationException('Category :id has no server-type products', [':id' => $categoryId]);
         }
 
-        $api           = $this->di['api_admin'];
-        $category      = $api->product_category_get(['id' => $categoryId]);
+        $api = $this->di['api_admin'];
+        $category = $api->product_category_get(['id' => $categoryId]);
         $option_fields = $api->serviceserver_category_options_get(['category_id' => $categoryId]);
 
         return $app->render('mod_serviceserver_category', [
-            'category'      => $category,
+            'category' => $category,
             'option_fields' => $option_fields,
         ]);
     }

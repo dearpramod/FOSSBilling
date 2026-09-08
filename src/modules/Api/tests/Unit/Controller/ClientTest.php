@@ -296,9 +296,9 @@ test('raw response bypasses JSON rendering', function (): void {
         {
         }
 
-        public function getIdentity(): Model_Guest
+        public function getIdentity(): FOSSBilling\Identity\Guest
         {
-            return new Model_Guest();
+            return new FOSSBilling\Identity\Guest();
         }
     };
 
@@ -319,4 +319,38 @@ test('non-AJAX client login returns a redirect response', function (): void {
     expect($response)->toBeInstanceOf(Response::class)
         ->and($response->isRedirect())->toBeTrue()
         ->and($response->headers->get('Location'))->toBe('https://client.example.test/');
+});
+
+test('guest client login is throttled under the anti-brute-force api_login policy', function (): void {
+    [$controller, $rateLimitCalls] = createTestController();
+
+    invokeApiCall($controller, 'guest', 'client', 'client_login', []);
+
+    expect($rateLimitCalls->getArrayCopy())->toBe([['api_login', '127.0.0.1', 1]]);
+});
+
+test('admin impersonation of client login is not throttled under the guest api_login policy', function (): void {
+    [$controller, $rateLimitCalls] = createTestController(['admin' => ['id' => 7]]);
+    $controller->hasValidSession = true;
+
+    invokeApiCall($controller, 'admin', 'client', 'client_login', []);
+
+    expect($rateLimitCalls->getArrayCopy())->toBe([
+        ['api_authenticated_ip', '127.0.0.1', 1],
+        ['api_authenticated_account', 'admin:7', 1],
+    ]);
+});
+
+test('an unauthenticated request to the admin client_login route is still throttled under api_login', function (): void {
+    [$controller, $rateLimitCalls] = createTestController();
+    $controller->hasValidSession = false;
+
+    try {
+        invokeApiCall($controller, 'admin', 'client', 'client_login', []);
+        expect(true)->toBeFalse('Expected authentication to fail');
+    } catch (InformationException $e) {
+        expect($e->getCode())->toBe(201);
+    }
+
+    expect($rateLimitCalls->getArrayCopy())->toBe([['api_login', '127.0.0.1', 1]]);
 });

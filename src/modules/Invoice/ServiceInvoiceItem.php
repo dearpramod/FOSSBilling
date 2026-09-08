@@ -16,6 +16,8 @@ use FOSSBilling\Validation\PriceValidator;
 
 class ServiceInvoiceItem implements InjectionAwareInterface
 {
+    public const int MAX_TASK_ATTEMPTS = 3;
+
     protected ?\Pimple\Container $di = null;
 
     public function setDi(\Pimple\Container $di): void
@@ -55,58 +57,79 @@ class ServiceInvoiceItem implements InjectionAwareInterface
         }
 
         if ($item->type == \Model_InvoiceItem::TYPE_ORDER) {
-            $order_id = $this->getOrderId($item);
-            $order = $this->di['db']->load('ClientOrder', $order_id);
-            if (!$order instanceof \Model_ClientOrder) {
-                throw new \FOSSBilling\Exception('Could not activate proforma item. Order :id not found', [':id' => $order_id]);
-            }
-            $orderService = $this->di['mod_service']('Order');
-            switch ($item->task) {
-                case \Model_InvoiceItem::TASK_ACTIVATE:
-                    $product = $this->di['mod_service']('Product')->findProductById((int) $order->product_id);
-                    if ($product->getSetup() == \Box\Mod\Product\Service::SETUP_AFTER_PAYMENT) {
+            $taskFailed = false;
+
+            try {
+                $order_id = $this->getOrderId($item);
+                $order = $this->di['db']->load('ClientOrder', $order_id);
+                if (!$order instanceof \Model_ClientOrder) {
+                    throw new \FOSSBilling\Exception('Could not activate proforma item. Order :id not found', [':id' => $order_id]);
+                }
+                $orderService = $this->di['mod_service']('Order');
+                switch ($item->task) {
+                    case \Model_InvoiceItem::TASK_ACTIVATE:
+                        $product = $this->di['mod_service']('Product')->findProductById((int) $order->product_id);
+                        if ($product->getSetup() == \Box\Mod\Product\Service::SETUP_AFTER_PAYMENT) {
+                            try {
+                                $orderService->activateOrder($order);
+                            } catch (\Exception $e) {
+                                error_log($e->getMessage());
+                                $orderService->saveStatusChange($order, "Order could not be activated due to error: {$e->getMessage()}.");
+                                $taskFailed = true;
+                            }
+                        }
+
+                        break;
+
+                    case \Model_InvoiceItem::TASK_RENEW:
                         try {
-                            $orderService->activateOrder($order);
+                            // Unsuspend order if suspended before renew
+                            if ($order->status == \Model_ClientOrder::STATUS_SUSPENDED) {
+                                $orderService->unsuspendFromOrder($order);
+                            }
+
+                            $order = $this->di['db']->load('ClientOrder', $order_id);
+                            $orderService->renewOrder($order);
                         } catch (\Exception $e) {
                             error_log($e->getMessage());
-                            $orderService->saveStatusChange($order, "Order could not be activated due to error: {$e->getMessage()}.");
-                        }
-                    }
-
-                    break;
-
-                case \Model_InvoiceItem::TASK_RENEW:
-                    try {
-                        // Unsuspend order if suspended before renew
-                        if ($order->status == \Model_ClientOrder::STATUS_SUSPENDED) {
-                            $orderService->unsuspendFromOrder($order);
+                            $orderService->saveStatusChange($order, "Order could not renew due to error: {$e->getMessage()}.");
+                            $taskFailed = true;
                         }
 
-                        $order = $this->di['db']->load('ClientOrder', $order_id);
-                        $orderService->renewOrder($order);
-                    } catch (\Exception $e) {
-                        error_log($e->getMessage());
-                        $orderService->saveStatusChange($order, "Order could not renew due to error: {$e->getMessage()}.");
-                    }
+                        break;
 
-                    break;
-
-                default:
-                    // do nothing for unregistered tasks
-                    break;
+                    default:
+                        // do nothing for unregistered tasks
+                        break;
+                }
+            } catch (\Exception $e) {
+                error_log($e->getMessage());
+                $taskFailed = true;
             }
 
-            $this->markAsExecuted($item);
+            if (!$taskFailed) {
+                $this->markAsExecuted($item);
+            } else {
+                $this->recordTaskFailure($item);
+            }
         }
 
         if ($item->type == \Model_InvoiceItem::TYPE_HOOK_CALL) {
+            $taskFailed = false;
+
             try {
                 $params = json_decode($item->rel_id ?? '');
                 $this->di['events_manager']->fire(['event' => $item->task, 'params' => $params]);
             } catch (\Exception $e) {
                 error_log($e->getMessage());
+                $taskFailed = true;
             }
-            $this->markAsExecuted($item);
+
+            if (!$taskFailed) {
+                $this->markAsExecuted($item);
+            } else {
+                $this->recordTaskFailure($item);
+            }
         }
 
         if ($item->type == \Model_InvoiceItem::TYPE_DEPOSIT) {
@@ -247,11 +270,21 @@ class ServiceInvoiceItem implements InjectionAwareInterface
         $credit->client_id = $client->id;
         $credit->type = 'invoice';
         $credit->rel_id = $invoice->id;
+        $credit->invoice_item_id = $item->id;
         $credit->description = $item->title;
         $credit->amount = -$total;
         $credit->created_at = date('Y-m-d H:i:s');
         $credit->updated_at = date('Y-m-d H:i:s');
-        $this->di['db']->store($credit);
+
+        // Idempotency: the unique constraint on invoice_item_id guarantees at most one
+        // credit per item. A violation means a retry already credited it — treat as a no-op.
+        try {
+            $this->di['db']->store($credit);
+        } catch (\RedBeanPHP\RedException) {
+            $this->di['logger']->setChannel('billing')->info(sprintf('Invoice item #%d was already credited; skipping duplicate credit.', $item->id));
+
+            return;
+        }
 
         $invoiceService = $this->di['mod_service']('Invoice');
         $invoiceService->addNote($invoice, sprintf('Charged clients balance with %s %s for %s', $total, $invoice->currency, $item->title));
@@ -276,6 +309,48 @@ class ServiceInvoiceItem implements InjectionAwareInterface
         $item->status = \Model_InvoiceItem::STATUS_EXECUTED;
         $item->updated_at = date('Y-m-d H:i:s');
         $this->di['db']->store($item);
+    }
+
+    protected function recordTaskFailure(\Model_InvoiceItem $item): void
+    {
+        $attempts = (int) $item->attempts + 1;
+        $item->attempts = $attempts;
+
+        if ($attempts >= self::MAX_TASK_ATTEMPTS) {
+            $item->status = \Model_InvoiceItem::STATUS_FAILED;
+            $this->di['logger']->setChannel('billing')->error(sprintf('Invoice item #%d marked as failed after %d task execution attempts.', (int) $item->id, $attempts));
+        }
+
+        $item->updated_at = date('Y-m-d H:i:s');
+        $this->di['db']->store($item);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getFailedItems(): array
+    {
+        return $this->di['db']->getAll(
+            'SELECT * FROM invoice_item WHERE status = :status ORDER BY id DESC',
+            [':status' => \Model_InvoiceItem::STATUS_FAILED]
+        );
+    }
+
+    public function requeueItem(int $id): \Model_InvoiceItem
+    {
+        $item = $this->di['db']->getExistingModelById('InvoiceItem', $id, 'Invoice item was not found');
+
+        if ($item->status !== \Model_InvoiceItem::STATUS_FAILED) {
+            throw new \FOSSBilling\InformationException('Invoice item is not in a failed state');
+        }
+
+        $item->status = \Model_InvoiceItem::STATUS_PENDING_SETUP;
+        $item->attempts = 0;
+        $item->updated_at = date('Y-m-d H:i:s');
+        $this->di['db']->store($item);
+        $this->di['logger']->setChannel('billing')->info(sprintf('Invoice item #%d re-queued for execution by an admin.', (int) $item->id));
+
+        return $item;
     }
 
     public function generateFromOrder(\Model_Invoice $proforma, \Model_ClientOrder $order, $task, $price, array $line = []): void
@@ -348,10 +423,11 @@ class ServiceInvoiceItem implements InjectionAwareInterface
         $sql = 'SELECT invoice_item.*
                 FROM invoice_item
                   left join invoice on invoice_item.invoice_id = invoice.id
-                WHERE invoice_item.status != :item_status and invoice.status = :invoice_status
+                WHERE invoice_item.status NOT IN (:status_executed, :status_failed) and invoice.status = :invoice_status
                 AND (invoice.paid_at IS NULL OR invoice.paid_at <= :cutoff_time)';
         $bindings = [
-            ':item_status' => \Model_InvoiceItem::STATUS_EXECUTED,
+            ':status_executed' => \Model_InvoiceItem::STATUS_EXECUTED,
+            ':status_failed' => \Model_InvoiceItem::STATUS_FAILED,
             ':invoice_status' => \Model_Invoice::STATUS_PAID,
             ':cutoff_time' => date('Y-m-d H:i:s', strtotime('-10 minutes')),
         ];

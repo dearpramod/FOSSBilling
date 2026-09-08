@@ -166,7 +166,7 @@
 <h4>{{ 'Public Navigation Menu'|trans }}</h4>
 <div class="card mb-4">
   <div class="card-body">
-    <p class="text-muted small mb-3">{{ 'Customise the label, URL and visibility of each link in the public header navigation.'|trans }}</p>
+    <p class="text-muted small mb-3">{{ 'Customise the label, URL and visibility of each link in the public header navigation. URLs are used exactly as entered; use a complete URL for external sites or a root-relative path for this site.'|trans }}</p>
 
     <h5>{{ 'Built-in Links'|trans }}</h5>
     <div class="table-responsive mb-4">
@@ -306,8 +306,8 @@
       <div class="col-md-8">
         <label class="form-label" for="homepage_custom_url">{{ 'Custom redirect URL'|trans }}</label>
         <input type="text" class="form-control" name="homepage_custom_url" id="homepage_custom_url"
-               value="{{ settings.homepage_custom_url }}" placeholder="/order/webhosting">
-        <div class="form-text">{{ 'Only used when mode is set to Redirect to custom URL.'|trans }}</div>
+               value="{{ settings.homepage_custom_url }}" placeholder="https://example.com/landing-page">
+        <div class="form-text">{{ 'Only used when mode is set to Redirect to custom URL. The value is used exactly as entered.'|trans }}</div>
       </div>
       <div class="col-md-4">
         <label class="form-label">{{ 'Hide sidebar for guests?'|trans }}</label>

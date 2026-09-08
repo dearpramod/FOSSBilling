@@ -501,6 +501,15 @@ class UpdatePatcher implements InjectionAwareInterface
             89 => 'patch89',
             90 => 'patch90',
             91 => 'patch91',
+            92 => 'patch92',
+            93 => 'patch93',
+            94 => 'patch94',
+            95 => 'patch95',
+            96 => 'patch96',
+            97 => 'patch97',
+            98 => 'patch98',
+            99 => 'patch99',
+            100 => 'patch100',
         ];
         ksort($patches, SORT_NATURAL);
 
@@ -2437,6 +2446,58 @@ class UpdatePatcher implements InjectionAwareInterface
         );
     }
 
+    private function patch99(): void
+    {
+        // Adds an admin-configurable per-TLD flag to require the transfer code (EPP/auth
+        // code) during domain transfer checkout, instead of silently accepting a blank
+        // value that only fails later at the registrar. See issue #2335.
+        if (!$this->tableHasColumn('tld', 'require_transfer_code')) {
+            $this->executeSql('ALTER TABLE `tld` ADD COLUMN `require_transfer_code` tinyint(1) DEFAULT NULL AFTER `allow_transfer`');
+        }
+    }
+
+    private function patch100(): void
+    {
+        // Caches for Payment_Adapter_Stripe::getOrCreateCustomer()/getOrCreatePriceId() - see
+        // those and Box\Mod\Invoice\Entity\PayGatewayCustomer/PayGatewayProduct for why: without
+        // a local cache, two requests resolving the same Stripe customer/product/price via
+        // Stripe's Search API - which is only eventually consistent - can race and create
+        // duplicates, then submit mismatched params under the same idempotency key.
+        if (!$this->tableExists('pay_gateway_customer')) {
+            // test_mode is part of the row's identity, not just informational: a gateway's
+            // test and live API keys are two entirely separate customer namespaces (same
+            // PayGateway row, since test_mode is just a config toggle on it), so without
+            // this, flipping a gateway between test and live mode would look up - and try
+            // to charge - a customer ID that only exists in the other one.
+            $this->executeSql('CREATE TABLE `pay_gateway_customer` (
+                `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                `pay_gateway_id` bigint(20) NOT NULL,
+                `client_id` bigint(20) NOT NULL,
+                `test_mode` tinyint(1) NOT NULL DEFAULT 0,
+                `external_customer_id` varchar(255) NOT NULL,
+                `created_at` datetime DEFAULT NULL,
+                `updated_at` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `pay_gateway_customer_gateway_client_mode` (`pay_gateway_id`, `client_id`, `test_mode`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;');
+        }
+
+        if (!$this->tableExists('pay_gateway_product')) {
+            $this->executeSql('CREATE TABLE `pay_gateway_product` (
+                `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                `pay_gateway_id` bigint(20) NOT NULL,
+                `cache_key` varchar(64) NOT NULL,
+                `name` varchar(255) NOT NULL,
+                `external_product_id` varchar(255) NOT NULL,
+                `external_price_id` varchar(255) NOT NULL,
+                `created_at` datetime DEFAULT NULL,
+                `updated_at` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `pay_gateway_product_gateway_cache_key` (`pay_gateway_id`, `cache_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;');
+        }
+    }
+
     private function generateDownloadableStoredFilename(): string
     {
         do {
@@ -2623,5 +2684,143 @@ class UpdatePatcher implements InjectionAwareInterface
                 $oldGatewayAssetsPath => 'unlink',
             ]);
         }
+    }
+
+    private function patch92(): void
+    {
+        // Enforce unique slugs on custom_pages at the DB level (matches the CustomPage
+        // entity UniqueConstraint and the module installer). The Custompages module may
+        // not be installed on every instance, so skip cleanly when the table is absent.
+        if (!$this->tableExists('custom_pages')) {
+            return;
+        }
+
+        // Reconcile any duplicate slugs before adding the unique index: keep the
+        // lowest-id row for each duplicated slug and rename the rest to an unused
+        // suffixed variant (probed against the database so existing rows such as a
+        // pre-existing "foo-2" are never collided with).
+        $duplicates = $this->fetchAll(
+            'SELECT c.id, c.slug FROM custom_pages c
+             INNER JOIN (
+                 SELECT slug FROM custom_pages GROUP BY slug HAVING COUNT(*) > 1
+             ) d ON d.slug = c.slug
+             ORDER BY c.slug ASC, c.id ASC'
+        );
+
+        $kept = [];
+        foreach ($duplicates as $row) {
+            $slug = $row['slug'];
+            $id = (int) $row['id'];
+            if (!isset($kept[$slug])) {
+                $kept[$slug] = $id;
+
+                continue;
+            }
+
+            $newSlug = $this->allocateUniqueCustomPageSlug($slug);
+            $this->executeSql(
+                'UPDATE custom_pages SET slug = :slug WHERE id = :id',
+                ['slug' => $newSlug, 'id' => $id]
+            );
+        }
+
+        if (!$this->tableHasIndex('custom_pages', 'uniq_custom_pages_slug')) {
+            $this->executeSql('ALTER TABLE `custom_pages` ADD UNIQUE INDEX `uniq_custom_pages_slug` (`slug`)');
+        }
+    }
+
+    private function patch93(): void
+    {
+        // Legacy RedBeanPHP installs stored `0` rather than NULL for clients with no
+        // group, since group ids start at 1. The Client entity's ClientGroup
+        // association only tolerates NULL, so Doctrine throws "Entity of type
+        // '...ClientGroup' for IDs id(0) was not found" the moment it tries to load
+        // the association for these clients.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/4160
+        $this->executeSql('UPDATE `client` SET `client_group_id` = NULL WHERE `client_group_id` = 0;');
+    }
+
+    private function patch94(): void
+    {
+        // Unique constraint on client_balance.invoice_item_id prevents duplicate credits
+        // for the same invoice item. MySQL treats multiple NULLs as distinct, so other
+        // rows (transaction debits, default deductions) are unaffected.
+        if (!$this->tableHasColumn('client_balance', 'invoice_item_id')) {
+            $this->executeSql('ALTER TABLE `client_balance` ADD COLUMN `invoice_item_id` BIGINT DEFAULT NULL AFTER `rel_id`');
+        }
+
+        if (!$this->tableHasIndex('client_balance', 'uniq_invoice_item_credit')) {
+            $this->executeSql('ALTER TABLE `client_balance` ADD UNIQUE INDEX `uniq_invoice_item_credit` (`invoice_item_id`)');
+        }
+    }
+
+    private function patch95(): void
+    {
+        if (!$this->tableHasColumn('currency', 'format_pattern')) {
+            $this->executeSql('ALTER TABLE `currency` ADD COLUMN `format_pattern` varchar(100) DEFAULT NULL AFTER `conversion_rate`');
+        }
+
+        if (!$this->tableHasColumn('currency', 'fraction_digits')) {
+            $this->executeSql('ALTER TABLE `currency` ADD COLUMN `fraction_digits` smallint DEFAULT NULL AFTER `format_pattern`');
+        }
+    }
+
+    private function patch96(): void
+    {
+        if (!$this->tableHasColumn('currency', 'is_rate_manual')) {
+            $this->executeSql("ALTER TABLE `currency` ADD COLUMN `is_rate_manual` tinyint(1) DEFAULT '0' AFTER `conversion_rate`");
+        }
+    }
+
+    private function patch97(): void
+    {
+        // Failed execution attempt counter for the bounded-retry logic in
+        // ServiceInvoiceItem before an item is marked STATUS_FAILED.
+        if (!$this->tableHasColumn('invoice_item', 'attempts')) {
+            $this->executeSql("ALTER TABLE `invoice_item` ADD COLUMN `attempts` INT NOT NULL DEFAULT '0' AFTER `taxed`");
+        }
+    }
+
+    private function patch98(): void
+    {
+        // Lets admins restrict a TLD's registration period to an explicit set of years
+        // (e.g. "1,2,5,10") instead of any integer at or above min_years.
+        // @see https://github.com/FOSSBilling/FOSSBilling/issues/2075
+        if (!$this->tableHasColumn('tld', 'periods')) {
+            $this->executeSql('ALTER TABLE `tld` ADD COLUMN `periods` VARCHAR(255) DEFAULT NULL AFTER `min_years`');
+        }
+    }
+
+    /**
+     * Find a database-collision-free slug derived from $base for reconciliation.
+     *
+     * Probes incrementing suffixes (-2, -3, ...) using database equality until an
+     * unused value is found, truncating the base so the result never exceeds the
+     * custom_pages.slug VARCHAR(255) column.
+     */
+    private function allocateUniqueCustomPageSlug(string $base): string
+    {
+        $suffix = 2;
+        while (true) {
+            $candidate = $this->fitCustomPageSlug($base, $suffix);
+            $owner = $this->fetchOne(
+                'SELECT id FROM custom_pages WHERE slug = :slug LIMIT 1',
+                ['slug' => $candidate]
+            );
+            if ($owner === false) {
+                return $candidate;
+            }
+            ++$suffix;
+        }
+    }
+
+    private function fitCustomPageSlug(string $base, int $suffix): string
+    {
+        $suffixStr = '-' . $suffix;
+        if (strlen($base) + strlen($suffixStr) <= 255) {
+            return $base . $suffixStr;
+        }
+
+        return substr($base, 0, 255 - strlen($suffixStr)) . $suffixStr;
     }
 }

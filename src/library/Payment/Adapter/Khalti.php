@@ -150,42 +150,83 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             throw new Payment_Exception('Khalti: Missing pidx in callback.');
         }
 
-        // === STEP 1: Call the Lookup API first — the only authoritative source ===
-        // Browser-supplied status, amount, and order fields are never trusted.
+        // === STEP 1: Call the Lookup API first — the authoritative source for the payment's
+        // status, amount, transaction id and refund flag. Browser-supplied values are never trusted
+        // for these.
+        //
+        // IMPORTANT: Khalti's Lookup API returns ONLY pidx, total_amount, status, transaction_id,
+        // fee and refunded. It does NOT return purchase_order_id / purchase_order_name — those come
+        // back only in (a) the server-side intent snapshot we wrote at initiation, and (b) the
+        // browser return-URL params. Reading purchase_order_id from the Lookup response (as this
+        // adapter previously did) always yielded null, so the order-binding gate below rejected
+        // EVERY completed payment ("Lookup API did not return purchase_order_id") and no invoice was
+        // ever credited. The order binding is now established from the intent snapshot instead.
         $lookupResult = $this->lookupPayment($pidx);
         $verifiedStatus = $lookupResult['status'] ?? 'Unknown';
         $verifiedAmount = (int) ($lookupResult['total_amount'] ?? 0);
         $verifiedTxnId = $lookupResult['transaction_id'] ?? null;
         $verifiedFee = (int) ($lookupResult['fee'] ?? 0);
         $isRefunded = (bool) ($lookupResult['refunded'] ?? false);
-        $verifiedOrderId = $lookupResult['purchase_order_id'] ?? null;
 
-        // === STEP 2: Resolve invoice — only from server-backed sources ===
-
-        // Priority 1: intent cache (written server-side at initiation — most reliable)
+        // === STEP 2: Resolve invoice + establish the order binding ===
+        //
+        // ipn.php redirects the client to /invoice/{hash} using the invoice resolved here, so the
+        // hash must NEVER derive from an attacker-controllable value. $invoiceIdVerified is set ONLY
+        // when the invoice came from the server-side intent snapshot (Priority 1); it alone gates the
+        // hash hydration used for the redirect, so a crafted callback (valid pidx + a guessed
+        // purchase_order_id, on a cold intent) can never turn the redirect into an invoice-hash
+        // disclosure oracle. Crediting, by contrast, is gated by the strict amount check further down.
+        //
+        // The intent snapshot is the authoritative pidx→invoice binding: we wrote it at initiation
+        // keyed on the unguessable, Khalti-issued pidx, and it also stores the purchase_order_id we
+        // sent to Khalti.
         $intent = $this->loadPaymentIntent($pidx);
+
+        // Order id: prefer the server-side intent snapshot. The callback param is
+        // attacker-controllable and used only as a cold-intent fallback to resolve the invoice —
+        // where the amount recompute in the crediting section is the real protection.
+        $intentOrderId = $intent['purchase_order_id'] ?? null;
+        $callbackOrderId = trim((string) ($params['purchase_order_id'] ?? '')) ?: null;
+        $verifiedOrderId = $intentOrderId ?? $callbackOrderId;
+
+        // Priority 1: intent cache (written server-side at initiation — most reliable).
         $invoiceId = $intent['invoice_id'] ?? null;
+        $invoiceIdVerified = $invoiceId !== null;
 
-        // Priority 2: transaction record (set by the IPN handler via invoice_hash — reliable)
-        if ($invoiceId === null && ($tx->invoice_id ?? null)) {
-            $invoiceId = $tx->invoice_id;
-            $this->log('Khalti: Intent cache cold for pidx=' . $pidx . '. Using tx->invoice_id.', 'warn');
-        }
-
-        // Priority 3: decode from the Lookup API's purchase_order_id — server-validated,
-        // never from browser params. This covers a cold cache after a server restart.
+        // Priority 2: decode from the purchase_order_id when the intent is cold (eviction / server
+        // restart). With a cold intent $verifiedOrderId comes from the browser callback, so it is
+        // NOT authoritative on its own — the strict amount check before crediting is what ties the
+        // Lookup-verified payment to this invoice. Not marked verified: no hash hydration/redirect.
         if ($invoiceId === null && $verifiedOrderId !== null) {
             $invoiceId = $this->decodeInvoiceIdFromOrderId($verifiedOrderId);
             if ($invoiceId !== null) {
-                $this->log('Khalti: Decoded invoice_id=' . $invoiceId . ' from Lookup purchase_order_id=' . $verifiedOrderId . '.', 'warn');
+                $this->log('Khalti: Decoded invoice_id=' . $invoiceId . ' from purchase_order_id=' . $verifiedOrderId . ' (cold intent).', 'warn');
             }
         }
 
-        // Hydrate invoice_hash so ipn.php can redirect the client after processing.
-        // Set on both $_GET and the DI request object: the Symfony Request was
-        // already constructed before processTransaction() runs, so $_GET alone
-        // would be missed by $request->query. Setting both keeps compatibility.
-        if ($invoiceId) {
+        // Priority 3: transaction record — set by ipn.php from the URL invoice_id, so it is
+        // attacker-controllable. Trust it as a last resort ONLY when it matches the callback
+        // purchase_order_id; otherwise refuse it (leaving $invoiceId null → generic "cannot
+        // identify" below). Not marked verified: no hash hydration/redirect off this path, and
+        // crediting still runs through the strict amount check.
+        if ($invoiceId === null && ($tx->invoice_id ?? null)) {
+            $candidateId = (int) $tx->invoice_id;
+            $candidate = $this->di['db']->load('Invoice', $candidateId);
+            if ($candidate && $verifiedOrderId !== null
+                && substr('INV-' . $candidate->serie . sprintf('%05d', $candidate->nr), 0, 64) === $verifiedOrderId) {
+                $invoiceId = $candidateId;
+                $this->log('Khalti: Intent cache cold for pidx=' . $pidx . '. Using tx->invoice_id (matches callback purchase_order_id).', 'warn');
+            } else {
+                $this->log('Khalti SECURITY: URL invoice_id=' . $candidateId . ' does not match purchase_order_id=' . ($verifiedOrderId ?? 'null') . ' — refusing to trust it. pidx=' . $pidx, 'error');
+            }
+        }
+
+        // Hydrate invoice_hash so ipn.php can redirect the client after processing — ONLY from a
+        // server-verified invoice id (never the raw URL), so the redirect cannot leak another
+        // client's invoice hash. Set on both $_GET and the DI request object: the Symfony Request
+        // was already constructed before processTransaction() runs, so $_GET alone would be missed
+        // by $request->query. Setting both keeps compatibility.
+        if ($invoiceId && $invoiceIdVerified) {
             $inv = $this->di['db']->load('Invoice', $invoiceId);
             if ($inv) {
                 $_GET['invoice_hash'] = $inv->hash;
@@ -195,13 +236,46 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
 
         if (!$invoiceId) {
             $tx->txn_status = 'failed';
-            $tx->error = 'Cannot identify invoice for pidx=' . $pidx . '. Lookup returned purchase_order_id=' . ($verifiedOrderId ?? 'null') . '.';
+            $tx->error = 'Cannot identify invoice for pidx=' . $pidx . '. purchase_order_id=' . ($verifiedOrderId ?? 'null') . ' (intent snapshot cold and no decodable callback order id).';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
             $this->log('Khalti: Could not resolve invoice for pidx=' . $pidx, 'error');
 
             throw new Payment_Exception('Khalti: Cannot identify invoice — intent cache cold and purchase_order_id not decodable.');
+        }
+
+        // Status gate FIRST — mirrors the official Stripe adapter (status checked before amount;
+        // validatePaymentAmount only runs for a succeeded payment). Khalti's Lookup returns
+        // total_amount=0 for a canceled/pending payment (e.g. the user abandons the Mobile Banking /
+        // connectIPS bank redirect), so running the amount check first would wrongly reject it as an
+        // underpayment "amount mismatch" and flag the transaction, instead of cleanly recording the
+        // cancel/pending and redirecting the user back to the invoice. Only Completed proceeds below.
+        if ($verifiedStatus !== 'Completed') {
+            $tx->invoice_id = (int) $invoiceId;
+            $tx->txn_id = $verifiedTxnId ?? $pidx;
+            $tx->amount = $verifiedAmount / 100;
+            $tx->currency = 'NPR';
+            $tx->updated_at = date('Y-m-d H:i:s');
+
+            if (in_array($verifiedStatus, ['Pending', 'Initiated'], true)) {
+                // Transaction is in progress — keep the intent alive
+                $tx->txn_status = 'pending';
+                $tx->error = 'Khalti payment is ' . $verifiedStatus . '. Awaiting completion.';
+                $tx->status = 'pending';
+            } else {
+                // User canceled / Expired / Refunded / Partially Refunded / Unknown
+                $tx->txn_status = strtolower(str_replace(' ', '_', $verifiedStatus));
+                $tx->error = 'Khalti payment status: ' . $verifiedStatus . '. Payment not completed.';
+                $tx->status = 'error';
+                if ($pidx) {
+                    $this->deletePaymentIntent($pidx);
+                }
+            }
+
+            $this->di['db']->store($tx);
+
+            return;
         }
 
         if ($verifiedTxnId) {
@@ -323,36 +397,6 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             }
         }
 
-        // Map Khalti status values to FOSSBilling transaction states.
-        // Pending / Initiated = still in progress (not an error yet).
-        // Everything else that is not Completed = definitive failure.
-        if ($verifiedStatus !== 'Completed') {
-            $tx->invoice_id = (int) $invoiceId;
-            $tx->txn_id = $verifiedTxnId ?? $pidx;
-            $tx->amount = $verifiedAmount / 100;
-            $tx->currency = 'NPR';
-            $tx->updated_at = date('Y-m-d H:i:s');
-
-            if (in_array($verifiedStatus, ['Pending', 'Initiated'], true)) {
-                // Transaction is in progress — keep the intent alive
-                $tx->txn_status = 'pending';
-                $tx->error = 'Khalti payment is ' . $verifiedStatus . '. Awaiting completion.';
-                $tx->status = 'pending';
-            } else {
-                // User canceled / Expired / Refunded / Partially Refunded / Unknown
-                $tx->txn_status = strtolower(str_replace(' ', '_', $verifiedStatus));
-                $tx->error = 'Khalti payment status: ' . $verifiedStatus . '. Payment not completed.';
-                $tx->status = 'error';
-                if ($pidx) {
-                    $this->deletePaymentIntent($pidx);
-                }
-            }
-
-            $this->di['db']->store($tx);
-
-            return;
-        }
-
         // Status = Completed but Khalti flagged it as refunded — do not credit
         if ($isRefunded) {
             $tx->invoice_id = (int) $invoiceId;
@@ -379,8 +423,11 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             return;
         }
 
-        // purchase_order_id was already fetched from the Lookup API above (server-validated).
-        // Must match what we sent during initiation — same truncation applied.
+        // $verifiedOrderId is the purchase_order_id from the intent snapshot (warm) or the browser
+        // callback (cold) — NOT the Lookup API, which does not return it. Must match what we sent
+        // during initiation — same truncation applied. For the warm path this genuinely confirms the
+        // intent's order == the resolved invoice; for the cold path (invoice decoded from the same
+        // callback order id) it is satisfied by construction and the amount check above is the guard.
         $expectedOrderId = substr('INV-' . $invoice->serie . sprintf('%05d', $invoice->nr), 0, 64);
 
         if ($verifiedOrderId === null) {
@@ -389,13 +436,13 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             $tx->txn_status = 'failed';
             $tx->amount = $verifiedAmount / 100;
             $tx->currency = 'NPR';
-            $tx->error = 'Security: Lookup API did not return purchase_order_id. Cannot verify order binding.';
+            $tx->error = 'Security: no purchase_order_id available (intent snapshot cold and none in callback). Cannot verify order binding.';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
-            $this->log('Khalti SECURITY: Lookup API missing purchase_order_id. pidx=' . $pidx, 'error');
+            $this->log('Khalti SECURITY: no purchase_order_id from intent or callback. pidx=' . $pidx, 'error');
 
-            throw new Payment_Exception('Khalti: Cannot verify order identity — purchase_order_id missing from Lookup response.');
+            throw new Payment_Exception('Khalti: Cannot verify order identity — purchase_order_id unavailable.');
         }
 
         if ($verifiedOrderId !== $expectedOrderId) {
@@ -404,7 +451,7 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             $tx->txn_status = 'failed';
             $tx->amount = $verifiedAmount / 100;
             $tx->currency = 'NPR';
-            $tx->error = 'Security: purchase_order_id mismatch. Expected ' . $expectedOrderId . ', Lookup returned ' . $verifiedOrderId . '.';
+            $tx->error = 'Security: purchase_order_id mismatch. Expected ' . $expectedOrderId . ', got ' . $verifiedOrderId . '.';
             $tx->status = 'error';
             $tx->updated_at = date('Y-m-d H:i:s');
             $this->di['db']->store($tx);
@@ -413,29 +460,60 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             throw new Payment_Exception('Khalti: Payment was made for a different order. This transaction has been flagged.');
         }
 
-        // Atomically claim this transaction before crediting — mirrors the official Stripe
-        // adapter (Payment_Adapter_Stripe::processTransaction). A conditional UPDATE flips the
-        // row to 'processing' only if no other worker holds it, so a concurrent replay of the
-        // same return_url (customer refresh/double-click, or a deliberate parallel callback on
-        // the same tx id) cannot pass the earlier duplicate-txn_id window and double-credit the
-        // client. Another worker that already claimed it returns early without crediting.
-        $transactionService = $this->di['mod_service']('Invoice', 'Transaction');
-        if (!$transactionService->claimForProcessing((int) $tx->id)) {
-            $this->log('Khalti: tx #' . $id . ' already claimed for processing — skipping duplicate concurrent callback. pidx=' . $pidx, 'warn');
+        // Serialize concurrent callbacks for the SAME Khalti payment with a DB advisory lock —
+        // mirrors the official Stripe adapter's GET_LOCK on the charge id. Without it, two
+        // concurrent replays of the return_url create SEPARATE transaction rows (createAndProcess
+        // dispenses a new row per callback), both pass the earlier duplicate-txn_id check before
+        // either commits 'processed', and both credit the client → double-credit (an attacker can
+        // parallel-replay one completed payment to be credited multiple times). The lock makes the
+        // loser wait, then the in-lock re-check below sees the winner's processed tx and skips.
+        $lockKey = $verifiedTxnId ?: $pidx;
+        $lockName = 'fb:khalti:' . substr(hash('sha256', $gateway_id . ':' . $lockKey), 0, 54);
+        if ((int) $this->di['dbal']->fetchOne('SELECT GET_LOCK(:l, 10)', ['l' => $lockName]) !== 1) {
+            $this->log('Khalti: timed out acquiring payment lock for ' . $lockKey . ' pidx=' . $pidx, 'warn');
 
-            return;
-        }
-
-        $tx->invoice_id = (int) $invoiceId;
-        $tx->txn_id = $verifiedTxnId ?? $pidx;
-        $tx->txn_status = 'complete';
-        $tx->amount = $verifiedAmount / 100;
-        $tx->currency = 'NPR';
-        if ($verifiedFee > 0) {
-            $tx->error = 'Khalti fee: NPR ' . number_format($verifiedFee / 100, 2);
+            throw new Payment_Exception('Khalti: Timed out while processing this payment. Please try again.');
         }
 
         try {
+            // Authoritative duplicate re-check UNDER THE LOCK — a concurrent callback that won the
+            // race has already credited this payment (same Khalti txn_id) and set its tx 'processed'.
+            if ($verifiedTxnId) {
+                $dupe = $this->di['db']->findOne('Transaction', 'txn_id = ? AND status = ? AND id != ?', [$verifiedTxnId, 'processed', $id]);
+                if ($dupe) {
+                    $tx->invoice_id = (int) $invoiceId;
+                    $tx->txn_id = $verifiedTxnId;
+                    $tx->txn_status = 'duplicate';
+                    $tx->amount = $verifiedAmount / 100;
+                    $tx->currency = 'NPR';
+                    $tx->error = 'Duplicate concurrent callback — payment already processed in tx #' . $dupe->id . '.';
+                    $tx->status = 'error';
+                    $tx->updated_at = date('Y-m-d H:i:s');
+                    $this->di['db']->store($tx);
+                    $this->log('Khalti: concurrent duplicate for txn=' . $verifiedTxnId . ' already in tx #' . $dupe->id . '. Skipping credit.', 'warn');
+
+                    return;
+                }
+            }
+
+            // Atomically claim this tx row before crediting (row-level state machine; with the
+            // lock above this is belt-and-suspenders). Another worker holding it returns early.
+            $transactionService = $this->di['mod_service']('Invoice', 'Transaction');
+            if (!$transactionService->claimForProcessing((int) $tx->id)) {
+                $this->log('Khalti: tx #' . $id . ' already claimed for processing. pidx=' . $pidx, 'warn');
+
+                return;
+            }
+
+            $tx->invoice_id = (int) $invoiceId;
+            $tx->txn_id = $verifiedTxnId ?? $pidx;
+            $tx->txn_status = 'complete';
+            $tx->amount = $verifiedAmount / 100;
+            $tx->currency = 'NPR';
+            if ($verifiedFee > 0) {
+                $tx->error = 'Khalti fee: NPR ' . number_format($verifiedFee / 100, 2);
+            }
+
             $client = $this->di['db']->getExistingModelById('Client', $invoice->client_id);
             $invoiceService = $this->di['mod_service']('Invoice');
             $isDepositInvoice = $invoiceService->isInvoiceTypeDeposit($invoice);
@@ -472,6 +550,14 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                 $invoiceService->payInvoiceWithCredits($invoice);
                 $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
             }
+
+            $tx->status = 'processed';
+            $tx->updated_at = date('Y-m-d H:i:s');
+            $this->di['db']->store($tx);
+
+            if ($pidx) {
+                $this->deletePaymentIntent($pidx);
+            }
         } catch (Exception $e) {
             $tx->error = 'Post-payment processing error: ' . $e->getMessage();
             $tx->status = 'error';
@@ -479,14 +565,9 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             $this->di['db']->store($tx);
 
             throw new Payment_Exception('Khalti: ' . $e->getMessage());
-        }
-
-        $tx->status = 'processed';
-        $tx->updated_at = date('Y-m-d H:i:s');
-        $this->di['db']->store($tx);
-
-        if ($pidx) {
-            $this->deletePaymentIntent($pidx);
+        } finally {
+            // Always release the advisory lock — success, early-return (dup/claim), or exception.
+            $this->di['dbal']->fetchOne('SELECT RELEASE_LOCK(:l)', ['l' => $lockName]);
         }
     }
 

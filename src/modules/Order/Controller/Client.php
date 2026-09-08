@@ -144,6 +144,7 @@ class Client implements \FOSSBilling\InjectionAwareInterface
 
         // Try product lookup first — only the API call is wrapped, not the render.
         $product = null;
+
         try {
             $product = $api->product_get(['slug' => $slug]);
         } catch (\Exception) {

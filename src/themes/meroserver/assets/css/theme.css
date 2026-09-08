@@ -4997,6 +4997,12 @@ html[data-theme="dark"] .mobile-checkout-bar .text-slate-900 {
 }
 
 /* ── DOMAIN REGISTRATION PAGE (mod_order_domain_plans) dark mode ──────── */
+/* The global light-mode hover:text-white remap assumes a light hover surface.
+   Popular extension CTAs switch to the solid primary background instead. */
+html[data-theme="light"] .tld-card button.hover\:text-white:hover {
+    color: #ffffff !important;
+}
+
 /* Popular Extensions card "Register" button — text-primary on bg-primary/10
    = indigo on semi-transparent indigo → near invisible. Brighten the text. */
 html[data-theme="dark"] .tld-card button.text-primary {

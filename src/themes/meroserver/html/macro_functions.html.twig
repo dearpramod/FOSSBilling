@@ -19,6 +19,12 @@
     {{ price | money(currency) }}
 {% endmacro %}
 
+{# Resolve a Terms-of-Service link from the `link_terms` theme setting.
+   Full URLs (http/https) pass through unchanged; an internal path is rooted to the
+   site base via |url so it NEVER resolves relative to the current page; an empty
+   setting falls back to the built-in /tos route. Single line = no stray whitespace. #}
+{% macro terms_href(link_terms) %}{% set _t = link_terms|default('')|trim %}{% if _t starts with 'http://' or _t starts with 'https://' %}{{ _t }}{% elseif _t is not empty %}{{ (_t|trim('/'))|url }}{% else %}{{ 'tos'|url }}{% endif %}{% endmacro %}
+
 {% macro currency(price, currency) %}
     {{ price | money_convert }}
 {% endmacro %}

@@ -95,7 +95,13 @@ class Service implements InjectionAwareInterface
         return $product->getTitle();
     }
 
-    public function validateOrderData(array &$data): void
+    /**
+     * Validates order data for hosting products. When the product context is
+     * provided (client-facing ordering paths), admin-controlled values are
+     * additionally cross-checked against the product configuration.
+     * Admin-created orders omit the context so staff can override them.
+     */
+    public function validateOrderData(array &$data, ?Product $product = null): void
     {
         if (!isset($data['server_id'])) {
             throw new InformationException('Hosting product is not configured completely. Configure server for hosting product.', null, 701);
@@ -112,6 +118,32 @@ class Service implements InjectionAwareInterface
 
         if (($data['domain']['action'] ?? null) === 'subdomain') {
             $this->assertSubdomainAvailable($data['sld'], $data['tld']);
+        }
+
+        if ($product instanceof Product) {
+            $this->assertAdminControlledValuesMatch($data, $product);
+        }
+    }
+
+    /**
+     * Defense-in-depth check for client-facing ordering paths: the merged
+     * order config must not carry admin-controlled values (server_id,
+     * hosting_plan_id, reseller) that differ from the product configuration.
+     * This catches regressions in the client-settable-keys filter or future
+     * code paths that merge untrusted input into order config.
+     */
+    private function assertAdminControlledValuesMatch(array $data, Product $product): void
+    {
+        $productConfig = json_decode((string) $product->getConfig(), true) ?? [];
+
+        foreach (['server_id', 'hosting_plan_id'] as $key) {
+            if ((int) ($data[$key] ?? 0) !== (int) ($productConfig[$key] ?? 0)) {
+                throw new InformationException('The requested configuration does not match the selected product.', null, 705);
+            }
+        }
+
+        if (Tools::normalizeBoolean($data['reseller'] ?? false) !== Tools::normalizeBoolean($productConfig['reseller'] ?? false)) {
+            throw new InformationException('The requested configuration does not match the selected product.', null, 705);
         }
     }
 
@@ -186,6 +218,15 @@ class Service implements InjectionAwareInterface
         // Retrieve the server manager for the order
         $serverManager = $this->_getServerManagerForOrder($model);
 
+        // A username is only ever persisted below once the account has
+        // actually been created on the server. If one is already present,
+        // a previous activation attempt already provisioned this account -
+        // most likely the order's status update afterwards failed to save,
+        // and this call is a retry. Re-running createAccount() in that case
+        // would only fail with a "domain/account already exists" server
+        // error, so treat the account as already provisioned instead.
+        $alreadyProvisioned = !empty($model->username);
+
         // Generate a password for the service
         $pass = $this->di['tools']->generatePassword($serverManager->getPasswordLength(), true);
 
@@ -195,7 +236,9 @@ class Service implements InjectionAwareInterface
         }
 
         // Generate a username for the service
-        if (isset($config['username']) && !empty($config['username'])) {
+        if ($alreadyProvisioned) {
+            $username = $model->username;
+        } elseif (isset($config['username']) && !empty($config['username'])) {
             $username = $config['username'];
         } else {
             $username = $serverManager->generateUsername($model->sld . $model->tld);
@@ -206,7 +249,7 @@ class Service implements InjectionAwareInterface
         $model->pass = $pass;
 
         // If the order's configuration does not specify that the service should be imported, create an account for the service on the server
-        if (!isset($config['import']) || !$config['import']) {
+        if (!$alreadyProvisioned && (!isset($config['import']) || !$config['import'])) {
             [$adapter, $account] = $this->_getAM($model);
             $adapter->createAccount($account);
         }
@@ -1143,6 +1186,51 @@ class Service implements InjectionAwareInterface
         return $result;
     }
 
+    /**
+     * Hosting plan id => name pairs scoped to plans referenced by the
+     * configuration of at least one enabled hosting product, for exposure
+     * through client-facing APIs. Use getHpPairs() for the full list.
+     *
+     * @return array<int, string>
+     */
+    public function getOrderableHpPairs(): array
+    {
+        $products = $this->di['em']->getRepository(Product::class)->findBy([
+            'type' => \Box\Mod\Product\Service::HOSTING,
+            'active' => true,
+            'status' => 'enabled',
+            'isAddon' => false,
+        ]);
+
+        $planIds = [];
+        foreach ($products as $product) {
+            $config = json_decode((string) $product->getConfig(), true);
+            if (is_array($config) && isset($config['hosting_plan_id'])) {
+                $planIds[(int) $config['hosting_plan_id']] = true;
+            }
+        }
+
+        if ($planIds === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach (array_keys($planIds) as $idx => $id) {
+            $placeholder = ':hp_id_' . $idx;
+            $placeholders[] = $placeholder;
+            $params['hp_id_' . $idx] = $id;
+        }
+        $plans = $this->di['db']->find('ServiceHostingHp', 'id IN (' . implode(',', $placeholders) . ')', $params);
+
+        $pairs = [];
+        foreach ($plans as $plan) {
+            $pairs[(int) $plan->id] = (string) $plan->name;
+        }
+
+        return $pairs;
+    }
+
     public function getHpSearchQuery($data): array
     {
         $sql = 'SELECT *
@@ -1329,12 +1417,24 @@ class Service implements InjectionAwareInterface
         return $adapter->getLoginUrl($account);
     }
 
+    /**
+     * Top-level cart-config keys a client is authorized to set when ordering
+     * a hosting product. Admin-controlled fields (hosting_plan_id, server_id,
+     * reseller, subdomain_base_domain, etc.) are stripped from client input
+     * before the merge.
+     *
+     * @return list<string>
+     */
+    public function clientSettableConfigKeys(): array
+    {
+        return ['period', 'domain', 'quantity', 'multiple'];
+    }
+
     public function attachOrderConfig(Product $product, array $data): array
     {
         $c = json_decode($product->getConfig() ?? '', true) ?? [];
 
         $data = array_merge($c, $data);
-
         if (($data['domain']['action'] ?? null) === 'subdomain' && array_key_exists('subdomain_base_domain', $c)) {
             $data['subdomain_base_domain'] = $c['subdomain_base_domain'];
         }
@@ -1381,7 +1481,7 @@ class Service implements InjectionAwareInterface
     public function getDomainProductFromConfig(Product $product, array &$data): bool|array
     {
         $data = $this->attachOrderConfig($product, $data);
-        $this->validateOrderData($data);
+        $this->validateOrderData($data, $product);
 
         $c = json_decode($product->getConfig() ?? '', true) ?? [];
 

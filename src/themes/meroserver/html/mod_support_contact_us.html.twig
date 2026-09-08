@@ -9,30 +9,24 @@
 {% set company = guest.system_company %}
 
 <!-- ===== HERO ===== -->
-<section class="relative overflow-hidden py-20 sm:py-28">
-    <!-- Background glow -->
-    <div class="absolute inset-0 pointer-events-none">
-        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full opacity-10"
-             style="background: radial-gradient(ellipse at center, var(--color-primary), transparent);"></div>
-    </div>
-
-    <div class="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
-        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium mb-6">
+<section class="relative pt-14 pb-9 sm:pt-16 sm:pb-11">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 text-center">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium mb-5">
             <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
             Support available 24/7
         </div>
-        <h1 class="text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
+        <h1 class="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">
             We're here to help
         </h1>
-        <p class="text-lg text-gray-400 max-w-xl mx-auto">
+        <p class="text-base sm:text-lg text-gray-400 max-w-xl mx-auto">
             Send us a message and our team will get back to you within 24 hours.
         </p>
     </div>
 </section>
 
 <!-- ===== CONTACT GRID ===== -->
-<section class="max-w-6xl mx-auto px-4 sm:px-6 pb-24">
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+<section class="max-w-6xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 items-start">
 
         <!-- LEFT: Contact form -->
         <div class="lg:col-span-3">
@@ -115,10 +109,10 @@
                     {% endif %}
 
                     <!-- Submit -->
-                    <div class="flex items-center justify-between pt-1">
+                    <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
                         <p class="text-xs text-gray-600">We typically reply within 24 hours.</p>
                         <button type="submit"
-                                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/25"
+                                class="public-contact-submit inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-2.5 rounded-lg text-white text-sm font-semibold whitespace-nowrap transition-all shadow-lg shadow-indigo-500/25"
                                 style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
                             Send Message
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,7 +125,7 @@
         </div>
 
         <!-- RIGHT: Contact info + feature cards -->
-        <div class="lg:col-span-2 space-y-5">
+        <div class="lg:col-span-2 space-y-5 lg:sticky lg:top-24 self-start">
 
             <!-- Company info card -->
             <div class="rounded-2xl bg-white/[0.03] border border-white/[0.08] p-6 space-y-4">
@@ -187,10 +181,9 @@
 
             <!-- Feature cards -->
             <div class="rounded-2xl bg-white/[0.03] border border-white/[0.08] p-5 flex items-start gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
-                     style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); box-shadow: 0 4px 16px rgba(var(--color-primary-rgb),0.3);">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
                 <div>
@@ -200,10 +193,9 @@
             </div>
 
             <div class="rounded-2xl bg-white/[0.03] border border-white/[0.08] p-5 flex items-start gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
-                     style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 16px rgba(16,185,129,0.3);">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                     </svg>
                 </div>
                 <div>
@@ -213,10 +205,9 @@
             </div>
 
             <div class="rounded-2xl bg-white/[0.03] border border-white/[0.08] p-5 flex items-start gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
-                     style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow: 0 4px 16px rgba(245,158,11,0.3);">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                 </div>
                 <div>

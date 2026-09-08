@@ -71,7 +71,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     {
         $this->decodeAndValidateOptionsJson((string) ($data['options_json'] ?? ''));
 
-        $config        = $this->getDi()['mod_config']('Serviceserver');
+        $config = $this->getDi()['mod_config']('Serviceserver');
         $config['ext'] = 'mod_serviceserver';
         $config['option_fields'] = $data['options_json'];
         $this->getDi()['mod_service']('extension')->setConfig($config);
@@ -80,7 +80,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
-     * @deprecated Use options_get() instead.
+     * @deprecated use options_get() instead
      */
     public function location_get_list(array $data = []): array
     {
@@ -97,7 +97,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
-     * @deprecated Use options_save() instead.
+     * @deprecated use options_save() instead
      */
     public function location_save(array $data): bool
     {
@@ -143,7 +143,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         $productId = (int) ($data['product_id'] ?? 0);
         $decoded = $this->decodeAndValidateOptionsJson((string) ($data['options_json'] ?? ''));
 
-        $db      = $this->getDi()['db'];
+        $db = $this->getDi()['db'];
         $product = $db->findOne('product', 'id = ?', [$productId]);
 
         if (!$product) {
@@ -151,10 +151,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         }
 
         if ((string) ($product->type ?? '') !== 'server') {
-            throw new \FOSSBilling\InformationException(
-                'Product #:id is not a server type product',
-                [':id' => $productId]
-            );
+            throw new \FOSSBilling\InformationException('Product #:id is not a server type product', [':id' => $productId]);
         }
 
         $config = json_decode((string) ($product->config ?? '{}'), true);
@@ -166,7 +163,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
             $config['option_fields'] = $decoded;
         }
 
-        $product->config     = json_encode($config);
+        $product->config = json_encode($config);
         $product->updated_at = date('Y-m-d H:i:s');
         $db->store($product);
 
@@ -176,7 +173,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
     /**
      * Return the saved option fields for a specific product category.
      * Returns an empty array when no category-level override has been configured —
-     * callers should treat an empty result as "no override; global defaults apply via merge."
+     * callers should treat an empty result as "no override; global defaults apply via merge.".
      *
      * @param array{category_id: int} $data
      */
@@ -190,7 +187,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
         }
 
         $config = $this->getDi()['mod_config']('Serviceserver');
-        $json       = $config['option_fields_cat_' . $categoryId] ?? null;
+        $json = $config['option_fields_cat_' . $categoryId] ?? null;
 
         if (!$json) {
             return [];
@@ -217,8 +214,8 @@ class Admin extends \FOSSBilling\Api\AbstractApi
 
         $this->decodeAndValidateOptionsJson((string) ($data['options_json'] ?? ''));
 
-        $config                                     = $this->getDi()['mod_config']('Serviceserver');
-        $config['ext']                              = 'mod_serviceserver';
+        $config = $this->getDi()['mod_config']('Serviceserver');
+        $config['ext'] = 'mod_serviceserver';
         $config['option_fields_cat_' . $categoryId] = $data['options_json'];
         $this->getDi()['mod_service']('extension')->setConfig($config);
 
@@ -249,10 +246,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
             }
 
             if (!preg_match('/^[a-z0-9_]+$/', (string) $field['id'])) {
-                throw new \FOSSBilling\InformationException(
-                    'Field ID ":id" must use only lowercase letters, numbers, and underscores',
-                    [':id' => $field['id']]
-                );
+                throw new \FOSSBilling\InformationException('Field ID ":id" must use only lowercase letters, numbers, and underscores', [':id' => $field['id']]);
             }
 
             if (!is_array($field['options'] ?? null)) {
@@ -267,9 +261,7 @@ class Admin extends \FOSSBilling\Api\AbstractApi
                 $imageUrl = trim((string) ($opt['image_url'] ?? ''));
 
                 if ($imageUrl !== '' && preg_match('#^(https?://|/)#i', $imageUrl) !== 1) {
-                    throw new \FOSSBilling\InformationException(
-                        'Option image sources must use an HTTP(S) URL or a local path beginning with a slash'
-                    );
+                    throw new \FOSSBilling\InformationException('Option image sources must use an HTTP(S) URL or a local path beginning with a slash');
                 }
             }
         }

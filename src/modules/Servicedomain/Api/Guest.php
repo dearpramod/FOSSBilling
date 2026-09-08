@@ -91,6 +91,9 @@ class Guest extends \FOSSBilling\Api\AbstractApi
 
         $tld = $this->getService()->tldFindOneByTld($data['tld']);
         if (!$tld instanceof \Model_Tld) {
+            throw new \FOSSBilling\InformationException('Domain availability could not be determined. TLD is not configured.');
+        }
+        if (!$tld->active) {
             throw new \FOSSBilling\InformationException('Domain availability could not be determined. TLD is not active.');
         }
 
@@ -132,6 +135,9 @@ class Guest extends \FOSSBilling\Api\AbstractApi
 
         $tld = $this->getService()->tldFindOneByTld($data['tld']);
         if (!$tld instanceof \Model_Tld) {
+            throw new \FOSSBilling\InformationException('TLD is not configured.');
+        }
+        if (!$tld->active) {
             throw new \FOSSBilling\InformationException('TLD is not active.');
         }
 

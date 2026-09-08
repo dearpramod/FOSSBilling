@@ -20,6 +20,7 @@ use Box\Mod\Email\Repository\ActivityClientEmailRepository;
 use Box\Mod\Email\Repository\EmailTemplateGroupRepository;
 use Box\Mod\Email\Repository\EmailTemplateRepository;
 use Box\Mod\Email\Repository\QueuedEmailRepository;
+use Box\Mod\Staff\Entity\Admin;
 use FOSSBilling\Config;
 use FOSSBilling\Environment;
 use FOSSBilling\PaginationOptions;
@@ -35,6 +36,14 @@ class Service implements \FOSSBilling\InjectionAwareInterface
     protected ActivityClientEmailRepository $activityClientEmailRepository;
     protected QueuedEmailRepository $queuedEmailRepository;
     private Filesystem $filesystem;
+
+    /**
+     * Cache of the parsed "Bcc" setting for the lifetime of this instance, so an invalid
+     * configured address is logged once per batch run rather than once per queued email.
+     *
+     * @var string[]|null
+     */
+    private ?array $validatedBccAddresses = null;
 
     public function __construct()
     {
@@ -203,6 +212,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             'id' => 1,
             'subject' => 'Example support ticket',
             'status' => 'open',
+            'priority' => 100,
             'created_at' => '',
             'updated_at' => '',
             'replies' => 0,
@@ -228,7 +238,6 @@ class Service implements \FOSSBilling\InjectionAwareInterface
             'messages' => [$message],
         ];
         $staffTicket = $ticket;
-        $staffTicket['priority'] = 100;
         $staffTicket['client'] = $client;
 
         return match ($actionCode) {
@@ -285,9 +294,19 @@ class Service implements \FOSSBilling\InjectionAwareInterface
 
         // send email to admins
         if (isset($data['to_admin']) && $data['to_admin'] > 0) {
-            /** @todo Doctrine: use Admin entity once Staff is migrated */
-            $oneStaff = $this->di['dbal']->fetchAssociative('SELECT id, email, name, signature, timezone FROM admin WHERE id = :id', ['id' => $data['to_admin']]);
-            $vars['c'] = $this->safeStaffTemplateVars($oneStaff);
+            $admin = $this->di['em']->getRepository(Admin::class)->find((int) $data['to_admin']);
+            if ($admin instanceof Admin && $admin->getId() !== null) {
+                $oneStaff = [
+                    'id' => (int) $admin->getId(),
+                    'email' => $admin->getEmail(),
+                    'name' => $admin->getName(),
+                    'signature' => $admin->getSignature(),
+                    'timezone' => $admin->getTimezone(),
+                ];
+                $vars['c'] = $this->safeStaffTemplateVars($oneStaff);
+            } else {
+                throw new \FOSSBilling\InformationException('Admin not found');
+            }
         }
 
         $this->setVars($template, $vars);
@@ -344,7 +363,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         } elseif (isset($oneStaff)) {
             $to = $oneStaff['email'];
             $to_name = $oneStaff['name'];
-            $sent = $this->sendMail($to, $from, $subject, $content, $to_name, $from_name, $oneStaff['id'], null, $send_now, $throw_exceptions, $attachment);
+            $sent = $this->sendMail($to, $from, $subject, $content, $to_name, $from_name, null, $oneStaff['id'], $send_now, $throw_exceptions, $attachment);
         } elseif (isset($customer)) {
             // Supplying both keeps the email associated with the client while allowing a
             // purpose-specific recipient, such as the client's billing address.
@@ -638,6 +657,7 @@ class Service implements \FOSSBilling\InjectionAwareInterface
     private function applySaasEmailLayout(string $content, ?string $brandName = null): string
     {
         $company = [];
+
         try {
             $company = $this->di['mod_service']('system')->getCompany();
         } catch (\Throwable) {
@@ -695,61 +715,61 @@ class Service implements \FOSSBilling\InjectionAwareInterface
         $body = preg_replace('~<style\b[^>]*>.*?</style>~is', '', $body) ?? $body;
 
         return <<<HTML
-<!doctype html>
-<html lang="en" data-fb-email-shell="modern">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="x-apple-disable-message-reformatting">
-    <style>
-        body { margin: 0 !important; padding: 0 !important; background: #edf3f8 !important; color: #172033 !important; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important; -webkit-text-size-adjust: 100%; }
-        .fb-email-content h1 { margin: 0 0 18px !important; color: #111827 !important; font-size: 26px !important; line-height: 1.3 !important; letter-spacing: -.5px !important; }
-        .fb-email-content h2, .fb-email-content h3 { color: #172033 !important; line-height: 1.4 !important; }
-        .fb-email-content p { margin: 0 0 14px !important; color: #56637a !important; font-size: 15px !important; line-height: 1.65 !important; }
-        .fb-email-content ul, .fb-email-content ol { margin: 16px 0 20px !important; padding: 0 0 0 22px !important; color: #56637a !important; }
-        .fb-email-content li { margin: 8px 0 !important; font-size: 14px !important; line-height: 1.55 !important; }
-        .fb-email-content a { color: #3158e8 !important; font-weight: 650 !important; text-decoration: none !important; }
-        .fb-email-content strong { color: #253047 !important; font-weight: 700 !important; }
-        .fb-email-content table { max-width: 100% !important; }
-        .fb-email-content img { max-width: 100% !important; height: auto !important; }
-        .fb-email-content .signature { margin-top: 24px !important; padding-top: 18px !important; border-top: 1px solid #e7ebf2 !important; color: #7d899b !important; font-size: 13px !important; font-style: normal !important; line-height: 1.55 !important; }
-        .fb-email-content code, .fb-email-content pre { overflow-wrap: anywhere; }
-        @media only screen and (max-width: 620px) {
-            .fb-email-outer { padding: 20px 10px !important; }
-            .fb-email-card { padding: 28px 22px !important; }
-            .fb-email-brand { padding-bottom: 22px !important; }
-            .fb-email-content h1 { font-size: 23px !important; }
-        }
-    </style>
-</head>
-<body>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#edf3f8;">
-        <tr>
-            <td class="fb-email-outer" align="center" style="padding:36px 16px;">
-                <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;">
+            <!doctype html>
+            <html lang="en" data-fb-email-shell="modern">
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta name="x-apple-disable-message-reformatting">
+                <style>
+                    body { margin: 0 !important; padding: 0 !important; background: #edf3f8 !important; color: #172033 !important; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important; -webkit-text-size-adjust: 100%; }
+                    .fb-email-content h1 { margin: 0 0 18px !important; color: #111827 !important; font-size: 26px !important; line-height: 1.3 !important; letter-spacing: -.5px !important; }
+                    .fb-email-content h2, .fb-email-content h3 { color: #172033 !important; line-height: 1.4 !important; }
+                    .fb-email-content p { margin: 0 0 14px !important; color: #56637a !important; font-size: 15px !important; line-height: 1.65 !important; }
+                    .fb-email-content ul, .fb-email-content ol { margin: 16px 0 20px !important; padding: 0 0 0 22px !important; color: #56637a !important; }
+                    .fb-email-content li { margin: 8px 0 !important; font-size: 14px !important; line-height: 1.55 !important; }
+                    .fb-email-content a { color: #3158e8 !important; font-weight: 650 !important; text-decoration: none !important; }
+                    .fb-email-content strong { color: #253047 !important; font-weight: 700 !important; }
+                    .fb-email-content table { max-width: 100% !important; }
+                    .fb-email-content img { max-width: 100% !important; height: auto !important; }
+                    .fb-email-content .signature { margin-top: 24px !important; padding-top: 18px !important; border-top: 1px solid #e7ebf2 !important; color: #7d899b !important; font-size: 13px !important; font-style: normal !important; line-height: 1.55 !important; }
+                    .fb-email-content code, .fb-email-content pre { overflow-wrap: anywhere; }
+                    @media only screen and (max-width: 620px) {
+                        .fb-email-outer { padding: 20px 10px !important; }
+                        .fb-email-card { padding: 28px 22px !important; }
+                        .fb-email-brand { padding-bottom: 22px !important; }
+                        .fb-email-content h1 { font-size: 23px !important; }
+                    }
+                </style>
+            </head>
+            <body>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#edf3f8;">
                     <tr>
-                        <td class="fb-email-brand" align="center" style="padding:4px 24px 28px;">
-                            {$logoMarkup}
+                        <td class="fb-email-outer" align="center" style="padding:36px 16px;">
+                            <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;">
+                                <tr>
+                                    <td class="fb-email-brand" align="center" style="padding:4px 24px 28px;">
+                                        {$logoMarkup}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fb-email-card fb-email-content" style="border-top:4px solid #5271ff;border-radius:16px;background:#fff;padding:38px 40px;box-shadow:0 12px 35px rgba(25,39,75,.06);">
+                                        {$body}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding:22px 24px 0;color:#7d899b;font-size:12px;line-height:18px;">
+                                        <strong style="color:#56637a;font-size:13px;">{$safeBrand}</strong>{$addressHtml}
+                                    </td>
+                                </tr>
+                                {$footerLinksHtml}
+                            </table>
                         </td>
                     </tr>
-                    <tr>
-                        <td class="fb-email-card fb-email-content" style="border-top:4px solid #5271ff;border-radius:16px;background:#fff;padding:38px 40px;box-shadow:0 12px 35px rgba(25,39,75,.06);">
-                            {$body}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td align="center" style="padding:22px 24px 0;color:#7d899b;font-size:12px;line-height:18px;">
-                            <strong style="color:#56637a;font-size:13px;">{$safeBrand}</strong>{$addressHtml}
-                        </td>
-                    </tr>
-                    {$footerLinksHtml}
                 </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-HTML;
+            </body>
+            </html>
+            HTML;
     }
 
     /**
@@ -767,6 +787,7 @@ HTML;
         ];
 
         $settings = [];
+
         try {
             $themeService = $this->di['mod_service']('theme');
             $theme = $themeService->getCurrentClientAreaTheme();
@@ -924,77 +945,6 @@ HTML;
             'name' => $email->getAttachmentName() ?? 'attachment',
             'mime' => $email->getAttachmentMime() ?? 'application/octet-stream',
         ];
-    }
-
-    public function queueGetSearchQuery($data): array
-    {
-        $query = 'SELECT * FROM email_queue';
-
-        $id = $data['id'] ?? null;
-        $search = $data['search'] ?? null;
-        $recipient = $data['recipient'] ?? null;
-        $subject = $data['subject'] ?? null;
-        $status = $data['status'] ?? null;
-        $tries = $data['tries'] ?? null;
-        $date_from = $data['date_from'] ?? null;
-        $date_to = $data['date_to'] ?? null;
-
-        $where = [];
-        $bindings = [];
-
-        if ($id !== null && $id !== '') {
-            $where[] = 'id = :id';
-            $bindings[':id'] = (int) $id;
-        }
-
-        if ($search) {
-            $search = "%$search%";
-
-            $where[] = '(recipient LIKE :recipient OR subject LIKE :subject OR content LIKE :content OR to_name LIKE :to_name)';
-
-            $bindings[':recipient'] = $search;
-            $bindings[':subject'] = $search;
-            $bindings[':content'] = $search;
-            $bindings[':to_name'] = $search;
-        }
-
-        if ($recipient !== null && $recipient !== '') {
-            $where[] = 'recipient LIKE :filter_recipient';
-            $bindings[':filter_recipient'] = '%' . $recipient . '%';
-        }
-
-        if ($subject !== null && $subject !== '') {
-            $where[] = 'subject LIKE :filter_subject';
-            $bindings[':filter_subject'] = '%' . $subject . '%';
-        }
-
-        if ($status !== null && $status !== '') {
-            $where[] = 'status = :status';
-            $bindings[':status'] = $status;
-        }
-
-        if ($tries !== null && $tries !== '') {
-            $where[] = 'tries = :tries';
-            $bindings[':tries'] = (int) $tries;
-        }
-
-        if ($date_from !== null && $date_from !== '') {
-            $where[] = 'created_at >= :date_from';
-            $bindings[':date_from'] = date('Y-m-d 00:00:00', strtotime((string) $date_from));
-        }
-
-        if ($date_to !== null && $date_to !== '') {
-            $where[] = 'created_at <= :date_to';
-            $bindings[':date_to'] = date('Y-m-d 23:59:59', strtotime((string) $date_to));
-        }
-
-        if (!empty($where)) {
-            $query = $query . ' WHERE ' . implode(' AND ', $where);
-        }
-
-        $query .= ' ORDER BY updated_at DESC';
-
-        return [$query, $bindings];
     }
 
     public function templateToApiArray(EmailTemplate $template, bool $deep = false): array
@@ -1412,6 +1362,28 @@ HTML;
         ];
     }
 
+    /**
+     * @return string[]
+     */
+    private function parseBccAddresses(string $value): array
+    {
+        $addresses = [];
+        foreach (explode(',', $value) as $address) {
+            $address = trim($address);
+            if ($address === '') {
+                continue;
+            }
+
+            if (filter_var($address, FILTER_VALIDATE_EMAIL)) {
+                $addresses[] = $address;
+            } else {
+                $this->di['logger']->setChannel('email')->warning('Skipping invalid Bcc address: ' . $address);
+            }
+        }
+
+        return $addresses;
+    }
+
     private function _sendFromQueue(QueuedEmail $queue, bool $throw_exceptions = false): bool
     {
         $extensionService = $this->di['mod_service']('extension');
@@ -1451,6 +1423,14 @@ HTML;
                     $mail->addReplyTo($settings['reply_to']);
                 } else {
                     $this->di['logger']->setChannel('email')->warning('Skipping invalid Reply-To address: ' . $settings['reply_to']);
+                }
+            }
+
+            if (!empty($settings['bcc_email'])) {
+                $this->validatedBccAddresses ??= $this->parseBccAddresses((string) $settings['bcc_email']);
+                $bccAddresses = $this->validatedBccAddresses;
+                if ($bccAddresses !== []) {
+                    $mail->addBcc($bccAddresses);
                 }
             }
 

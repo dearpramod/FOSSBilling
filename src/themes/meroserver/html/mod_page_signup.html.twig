@@ -21,7 +21,7 @@
        LEFT PANEL — "Need help choosing?" support panel
        ══════════════════════════════════════════════════════════════ #}
     <aside class="auth-aside auth-signup-aside hidden lg:flex lg:w-[34%] flex-col items-center justify-center px-10 py-16 relative overflow-hidden"
-         style="background: linear-gradient(135deg, rgb(var(--brand-400)) 0%, var(--color-primary) 30%, var(--color-secondary) 70%, rgb(var(--brand2-900)) 100%);">
+         style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 55%, var(--color-primary) 100%);">
 
         <div class="auth-panel-brand auth-signup-panel-brand relative z-10">
             {% if brand_logo %}
@@ -463,7 +463,7 @@
                            class="mt-0.5 w-4 h-4 rounded border-gray-300 cursor-pointer"
                            style="accent-color: var(--color-primary);">
                     <label for="tos" class="text-sm text-gray-500 leading-relaxed cursor-pointer">
-                        I agree to the <a href="{{ settings.link_terms|default('/page/terms-and-conditions') }}" target="_blank"
+                        I agree to the <a href="{{ mf.terms_href(settings.link_terms) }}" target="_blank" rel="noopener"
                            class="font-semibold hover:underline underline-offset-2 transition-colors"
                            style="color: var(--color-primary);">Terms of Service</a>
                     </label>

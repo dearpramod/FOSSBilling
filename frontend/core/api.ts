@@ -66,7 +66,8 @@ const Tools = {
    * @returns {string|null} The CSRF token from cookie, or null if not found.
    */
   getCSRFToken: function () {
-    const match = document.cookie.match(/csrf_token=([^;]*)/);
+    const match = document.cookie.match(/(?:^|;\s*)fossbilling_csrf=([^;]*)/)
+      || document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
     return match ? decodeURIComponent(match[1]) : null;
   },
 
@@ -400,6 +401,10 @@ const API = {
           event.preventDefault();
 
           const formData = new FormData(formElement);
+          const submitter = event.submitter;
+          if (submitter?.name) {
+            formData.append(submitter.name, submitter.value);
+          }
 
           if (FOSSBilling.editor) {
             if (!FOSSBilling.editor.validateForm(formElement)) {

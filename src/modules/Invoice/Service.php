@@ -28,6 +28,32 @@ use Twig\Loader\FilesystemLoader;
 
 class Service implements InjectionAwareInterface
 {
+    /**
+     * Columns on the `invoice` table permitted in CSV exports.
+     * The `hash` column (bearer token for public invoice access) is excluded.
+     */
+    private const array EXPORTABLE_COLUMNS = [
+        'id', 'client_id', 'serie', 'nr', 'currency', 'currency_rate',
+        'credit', 'base_income', 'base_refund', 'refund', 'notes',
+        'text_1', 'text_2', 'status', 'seller_company', 'seller_company_vat',
+        'seller_company_number', 'seller_address', 'seller_phone', 'seller_email',
+        'buyer_first_name', 'buyer_last_name', 'buyer_company', 'buyer_company_vat',
+        'buyer_company_number', 'buyer_address', 'buyer_city', 'buyer_state',
+        'buyer_country', 'buyer_zip', 'buyer_phone', 'buyer_phone_cc',
+        'buyer_email', 'gateway_id', 'approved', 'taxname', 'taxrate',
+        'due_at', 'reminded_at', 'paid_at', 'created_at', 'updated_at',
+    ];
+
+    /** Subset of EXPORTABLE_COLUMNS used when the caller passes no headers. */
+    private const array DEFAULT_EXPORT_COLUMNS = [
+        'id', 'client_id', 'nr', 'currency', 'credit', 'base_income', 'base_refund',
+        'refund', 'notes', 'status', 'buyer_first_name', 'buyer_last_name',
+        'buyer_company', 'buyer_company_vat', 'buyer_company_number', 'buyer_address',
+        'buyer_city', 'buyer_state', 'buyer_country', 'buyer_zip', 'buyer_phone',
+        'buyer_phone_cc', 'buyer_email', 'approved', 'taxname', 'taxrate',
+        'due_at', 'reminded_at', 'paid_at',
+    ];
+
     protected ?\Pimple\Container $di = null;
     private Filesystem $filesystem;
     private ?int $invoiceNumberPadding = null;
@@ -97,8 +123,10 @@ class Service implements InjectionAwareInterface
         $select = 'p.*';
         if (!empty($data['summary'])) {
             $select .= ',
-                COALESCE(SUM(COALESCE(pi.price, 0) * COALESCE(pi.quantity, 1)), 0) AS list_subtotal,
-                COALESCE(SUM(CASE WHEN pi.taxed = 1 THEN COALESCE(pi.price, 0) * COALESCE(pi.quantity, 1) ELSE 0 END), 0) AS list_taxable_subtotal';
+                (SELECT COALESCE(SUM(COALESCE(invoice_totals.price, 0) * COALESCE(invoice_totals.quantity, 1)), 0)
+                    FROM invoice_item invoice_totals WHERE invoice_totals.invoice_id = p.id) AS list_subtotal,
+                (SELECT COALESCE(SUM(CASE WHEN invoice_taxable.taxed = 1 THEN COALESCE(invoice_taxable.price, 0) * COALESCE(invoice_taxable.quantity, 1) ELSE 0 END), 0)
+                    FROM invoice_item invoice_taxable WHERE invoice_taxable.invoice_id = p.id) AS list_taxable_subtotal';
         }
 
         $sql = 'SELECT ' . $select . '
@@ -214,7 +242,6 @@ class Service implements InjectionAwareInterface
 
         return [
             'id' => $row['id'],
-            'hash' => $row['hash'] ?? null,
             'serie' => $row['serie'],
             'nr' => $row['nr'],
             'serie_nr' => $row['serie'] . sprintf('%0' . $this->getInvoiceNumberPadding() . 's', $invoiceNumber),
@@ -603,10 +630,16 @@ class Service implements InjectionAwareInterface
         $systemService = $di['mod_service']('System');
         $remove_after_days = $systemService->getParamValue('remove_after_days');
         if (isset($remove_after_days) && $remove_after_days) {
-            // removing old invoices
+            // removing old unpaid invoices, through rmInvoice() so related
+            // orders, invoice items, and reserved resources stay consistent
             $days = (int) $remove_after_days;
-            $sql = 'DELETE FROM invoice WHERE status = :status AND DATEDIFF(NOW(), due_at) > :days';
-            $di['db']->exec($sql, [':days' => $days, ':status' => \Model_Invoice::STATUS_UNPAID]);
+            $service = $di['mod_service']('invoice');
+            $invoices = $service->findUnpaidOlderThan($days);
+            foreach ($invoices as $invoiceModel) {
+                $id = $invoiceModel->id;
+                $service->rmInvoice($invoiceModel);
+                $di['logger']->info("Removed expired unpaid invoice #{$id}.");
+            }
         }
     }
 
@@ -683,7 +716,7 @@ class Service implements InjectionAwareInterface
         return $email;
     }
 
-    public function markAsPaid(\Model_Invoice $invoice, $charge = true, $execute = false): bool
+    public function markAsPaid(\Model_Invoice $invoice, $charge = true, $execute = false, bool $deferEvents = false): bool
     {
         if ($invoice->status == \Model_Invoice::STATUS_PAID) {
             return true;
@@ -719,7 +752,11 @@ class Service implements InjectionAwareInterface
         $productService = $this->di['mod_service']('Product');
         $productService->commitReservedPromoRedemptionsForInvoice($invoice);
 
-        $this->di['events_manager']->fire(['event' => 'onAfterAdminInvoicePaymentReceived', 'params' => ['id' => $invoice->id]]);
+        // Listeners render PDFs and send email, so a caller holding a payment lock defers this
+        // until after it has released it, rather than holding it for the duration of an SMTP send.
+        if (!$deferEvents) {
+            $this->firePaymentReceivedEvent($invoice);
+        }
 
         if ($execute) {
             foreach ($invoiceItems as $item) {
@@ -734,6 +771,28 @@ class Service implements InjectionAwareInterface
         $this->di['logger']->info("Marked invoice {$invoice->id} as paid.");
 
         return true;
+    }
+
+    private function firePaymentReceivedEvent(\Model_Invoice $invoice): void
+    {
+        $this->di['events_manager']->fire(['event' => 'onAfterAdminInvoicePaymentReceived', 'params' => ['id' => $invoice->id]]);
+    }
+
+    /**
+     * The task execution markAsPaid() performs with $execute, for callers that must run it after
+     * their own lock has been released.
+     */
+    private function executeInvoiceItemTasks(\Model_Invoice $invoice): void
+    {
+        $invoiceItemService = $this->di['mod_service']('Invoice', 'InvoiceItem');
+        $items = $this->di['db']->find('InvoiceItem', 'invoice_id = ?', [$invoice->id]);
+        foreach ($items as $item) {
+            try {
+                $invoiceItemService->executeTask($item);
+            } catch (\Exception $e) {
+                $this->di['logger']->warning($e->getMessage());
+            }
+        }
     }
 
     public function markAsPaidByAdmin(\Model_Invoice $invoice, array $data = []): bool
@@ -828,19 +887,25 @@ class Service implements InjectionAwareInterface
     public function getNextInvoiceNumber()
     {
         $systemService = $this->di['mod_service']('system');
-        $next_nr = $systemService->getParamValue('invoice_starting_number');
 
-        if (empty($next_nr)) {
+        // Claimed and advanced in one locked step, otherwise two concurrent approvals take the
+        // same number and issue two invoices sharing an invoice number.
+        $next_nr = $systemService->reserveNextNumericParamValue('invoice_starting_number');
+
+        if ($next_nr === null) {
             // In theory this code should never need to be called, but is provided as a fallback
             $r = $this->di['db']->findOne('Invoice', 'nr is not null order by id desc');
-            if ($r instanceof \Model_Invoice && is_numeric($r->nr)) {
-                $next_nr = intval($r->nr) + 1;
-            } else {
+            if (!$r instanceof \Model_Invoice || !is_numeric($r->nr)) {
+                throw new \FOSSBilling\Exception('Unable to determine the next invoice number');
+            }
+
+            // Seeding the counter and reserving from it has to be one locked step too, otherwise
+            // two callers deriving the same seed both write it and both reserve the same number.
+            $next_nr = $systemService->reserveNextNumericParamValue('invoice_starting_number', intval($r->nr) + 1);
+            if ($next_nr === null) {
                 throw new \FOSSBilling\Exception('Unable to determine the next invoice number');
             }
         }
-
-        $systemService->setParamValue('invoice_starting_number', intval($next_nr) + 1);
 
         return $next_nr;
     }
@@ -1017,61 +1082,89 @@ class Service implements InjectionAwareInterface
             return false;
         }
 
-        $client = $this->di['db']->load('Client', $invoice->client_id);
-
-        // Refuse cross-currency credit application: client_balance stores raw floats
-        // with no currency column; comparing NPR balance against USD invoice total
-        // would cause over- or under-payment.
-        if ($client->currency && $invoice->currency && $client->currency !== $invoice->currency) {
-            $this->di['logger']->setChannel('billing')->warning(
-                "Credit payment skipped for invoice {$invoice->id}: currency mismatch (invoice: {$invoice->currency}, client: {$client->currency})."
-            );
-
-            return false;
+        // Reading the balance and marking the invoice paid without a lock lets two concurrent
+        // requests for the same client each pass the balance check and each spend the same
+        // credit. Serialize with a named lock scoped to the client rather than a row lock, since
+        // the balance (Doctrine) and the invoice (RedBeanPHP) are written through separate
+        // database connections here, and holding a row lock open on one while writing through the
+        // other would block that write on itself for the lifetime of the request.
+        $clientId = (int) $invoice->client_id;
+        $lockName = 'fb:credit_payment:client:' . $clientId;
+        $acquired = (int) $this->di['dbal']->fetchOne('SELECT GET_LOCK(:lock_name, 10)', ['lock_name' => $lockName]);
+        if ($acquired !== 1) {
+            throw new \FOSSBilling\Exception('Timed out waiting to process this credit payment.');
         }
 
-        $cbrepo = $this->di['mod_service']('Client', 'Balance');
-        $balance = $cbrepo->getClientBalance($client);
-        $required = $this->getTotalWithTax($invoice);
-        $epsilon = 0.01;
-        $difference = $balance - $required;
+        try {
+            // Another request could have paid this invoice while we waited for the lock. A plain
+            // read of the bean passed in could still reflect the state from before we waited, so
+            // re-read the status directly rather than trusting it.
+            $currentStatus = $this->di['dbal']->fetchOne('SELECT status FROM invoice WHERE id = :id', ['id' => $invoice->id]);
+            if ($currentStatus === \Model_Invoice::STATUS_PAID) {
+                return false;
+            }
 
-        if ($difference >= -$epsilon) {
+            $client = $this->di['db']->load('Client', $clientId);
+
+            // Refuse cross-currency credit application: client_balance stores raw floats
+            // with no currency column; comparing NPR balance against USD invoice total
+            // would cause over- or under-payment.
+            if ($client->currency && $invoice->currency && $client->currency !== $invoice->currency) {
+                $this->di['logger']->setChannel('billing')->warning(
+                    "Credit payment skipped for invoice {$invoice->id}: currency mismatch (invoice: {$invoice->currency}, client: {$client->currency})."
+                );
+
+                return false;
+            }
+
+            $cbrepo = $this->di['mod_service']('Client', 'Balance');
+            $balance = $cbrepo->getClientBalance($client);
+            $required = $this->getTotalWithTax($invoice);
+            $epsilon = 0.01;
+            $difference = $balance - $required;
+
+            if ($difference < -$epsilon) {
+                // @phpstan-ignore if.alwaysFalse (DEBUG is a runtime constant that may be true during debugging)
+                if (DEBUG) {
+                    $this->di['logger']->setChannel('billing')->info("Invoice {$invoice->id} could not be paid with credits. Money in balance {$balance} Required: {$required}.");
+                }
+
+                return false;
+            }
+
             // @phpstan-ignore if.alwaysFalse
             if (DEBUG) {
                 $this->di['logger']->setChannel('billing')->info("Setting invoice {$invoice->id} as paid with credits for the amount of {$required}.");
             }
 
-            if ($required <= $epsilon) {
-                // Nothing was actually charged against the client's balance, so don't record a $0 credit transaction.
-                $this->markAsPaid($invoice, false, true);
+            if ($required > $epsilon) {
+                // Nothing at or below the epsilon is actually charged against the client's
+                // balance, so don't record a $0 credit transaction.
+                $balanceTransaction = $this->di['db']->dispense('ClientBalance');
+                $balanceTransaction->client_id = $clientId;
+                $balanceTransaction->type = 'invoice';
+                $balanceTransaction->rel_id = $invoice->id;
 
-                return true;
+                $invoice_identifier = $invoice->nr ?: $invoice->id;
+                $balanceTransaction->description = "Payment for invoice #{$invoice_identifier} using account credit.";
+
+                $balanceTransaction->amount = -$required;
+                $balanceTransaction->created_at = date('Y-m-d H:i:s');
+                $balanceTransaction->updated_at = date('Y-m-d H:i:s');
+                $this->di['db']->store($balanceTransaction);
             }
 
-            $balanceTransaction = $this->di['db']->dispense('ClientBalance');
-            $balanceTransaction->client_id = $client->id;
-            $balanceTransaction->type = 'invoice';
-            $balanceTransaction->rel_id = $invoice->id;
-
-            $invoice_identifier = $invoice->nr ?: $invoice->id;
-            $balanceTransaction->description = "Payment for invoice #{$invoice_identifier} using account credit.";
-
-            $balanceTransaction->amount = -$required;
-            $balanceTransaction->created_at = date('Y-m-d H:i:s');
-            $balanceTransaction->updated_at = date('Y-m-d H:i:s');
-            $this->di['db']->store($balanceTransaction);
-
-            $this->markAsPaid($invoice, false, true);
-
-            return true;
-        }
-        // @phpstan-ignore if.alwaysFalse (DEBUG is a runtime constant that may be true during debugging)
-        if (DEBUG) {
-            $this->di['logger']->setChannel('billing')->info("Invoice {$invoice->id} could not be paid with credits. Money in balance {$balance} Required: {$required}.");
+            // Events and tasks run after the lock is released below, so neither notifications nor
+            // provisioning hold up a concurrent credit payment for the same client.
+            $this->markAsPaid($invoice, false, false, true);
+        } finally {
+            $this->di['dbal']->fetchOne('SELECT RELEASE_LOCK(:lock_name)', ['lock_name' => $lockName]);
         }
 
-        return false;
+        $this->firePaymentReceivedEvent($invoice);
+        $this->executeInvoiceItemTasks($invoice);
+
+        return true;
     }
 
     public function getTotalWithTax(\Model_Invoice $invoice): float
@@ -1641,10 +1734,21 @@ class Service implements InjectionAwareInterface
         ];
     }
 
+    public function isFundsEnabled(): bool
+    {
+        $systemService = $this->di['mod_service']('system');
+
+        return (bool) $systemService->getParamValue('funds_enabled', true);
+    }
+
     public function generateFundsInvoice(\Model_Client $client, $amount)
     {
         if (!$client->currency) {
             throw new InformationException('You must have at least one active order before you can add funds so you cannot proceed at the current time!');
+        }
+
+        if (!$this->isFundsEnabled()) {
+            throw new InformationException('Adding funds to the account balance is currently disabled', null, 980);
         }
 
         $systemService = $this->di['mod_service']('system');
@@ -1898,6 +2002,20 @@ class Service implements InjectionAwareInterface
         return $this->di['db']->find('Invoice', 'status = ? order by id desc', [\Model_Invoice::STATUS_PAID]);
     }
 
+    /**
+     * Unpaid invoices whose due date is more than the given number of days
+     * in the past. Used by the cron cleanup that expires stale unpaid
+     * invoices.
+     *
+     * @return \Model_Invoice[]
+     */
+    public function findUnpaidOlderThan(int $days): array
+    {
+        $conditions = 'status = ? and due_at is not null and DATEDIFF(NOW(), due_at) > ?';
+
+        return $this->di['db']->find('Invoice', $conditions, [\Model_Invoice::STATUS_UNPAID, $days]);
+    }
+
     public function getUnpaidInvoicesLateFor($days_after_issue = 2)
     {
         $conditions = 'status = ? and approved = 1 and reminded_at is null and DATEDIFF(NOW(), created_at) > ?';
@@ -2077,8 +2195,12 @@ class Service implements InjectionAwareInterface
 
     public function exportCSV(array $headers): Response
     {
+        if ($headers) {
+            $headers = array_values(array_intersect(self::EXPORTABLE_COLUMNS, $headers));
+        }
+
         if (!$headers) {
-            $headers = ['id', 'client_id', 'nr', 'currency', 'credit', 'base_income', 'base_refund', 'refund', 'notes', 'status', 'buyer_first_name', 'buyer_last_name', 'buyer_company', 'buyer_company_vat', 'buyer_company_number', 'buyer_address', 'buyer_city', 'buyer_state', 'buyer_country', 'buyer_zip', 'buyer_phone', 'buyer_phone_cc', 'buyer_email', 'approved', 'taxname', 'taxrate', 'due_at', 'reminded_at', 'paid_at'];
+            $headers = self::DEFAULT_EXPORT_COLUMNS;
         }
 
         return $this->di['csv_response_factory']->create('invoice', 'invoices.csv', $headers);
@@ -2428,7 +2550,18 @@ class Service implements InjectionAwareInterface
             // products like domain registrations where multiple orders share
             // the same product — it would find an unrelated order and generate
             // a renewal invoice for the wrong service.
-            if ($originalOrder->status !== \Model_ClientOrder::STATUS_ACTIVE) {
+            //
+            // Accept the same "still renewable" statuses generateForOrder() itself
+            // recognizes below, not just active: the batch-suspend cron can suspend
+            // an order (on expiry) before a delayed gateway subscription-payment IPN
+            // for that same renewal arrives. generateForOrder() already reuses any
+            // unpaid invoice the cron generated ahead of time, so this lets that
+            // invoice be paid and the order un-suspended/renewed as normal.
+            if (!in_array($originalOrder->status, [
+                \Model_ClientOrder::STATUS_ACTIVE,
+                \Model_ClientOrder::STATUS_SUSPENDED,
+                \Model_ClientOrder::STATUS_FAILED_RENEW,
+            ], true)) {
                 return null;
             }
 

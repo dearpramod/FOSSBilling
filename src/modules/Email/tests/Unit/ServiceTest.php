@@ -14,6 +14,7 @@ use Box\Mod\Currency\Entity\Currency;
 use Box\Mod\Email\Entity\EmailTemplate;
 
 use function Tests\Helpers\container;
+use function Tests\Helpers\createEntity;
 use function Tests\Helpers\moduleService;
 
 function emailTemplate(string $actionCode = '', ?int $id = null, array $data = []): EmailTemplate
@@ -76,11 +77,13 @@ function emailBuildEm(
     ?Box\Mod\Email\Repository\QueuedEmailRepository $queueRepo = null,
     bool $ignoreMissing = true,
     ?Box\Mod\Email\Repository\EmailTemplateGroupRepository $templateGroupRepo = null,
+    ?Box\Mod\Staff\Repository\AdminRepository $adminRepo = null,
 ) {
     $activityRepo ??= Mockery::mock(Box\Mod\Email\Repository\ActivityClientEmailRepository::class)->shouldIgnoreMissing();
     $templateRepo ??= Mockery::mock(Box\Mod\Email\Repository\EmailTemplateRepository::class)->shouldIgnoreMissing();
     $queueRepo ??= Mockery::mock(Box\Mod\Email\Repository\QueuedEmailRepository::class)->shouldIgnoreMissing();
     $templateGroupRepo ??= Mockery::mock(Box\Mod\Email\Repository\EmailTemplateGroupRepository::class)->shouldIgnoreMissing();
+    $adminRepo ??= Mockery::mock(Box\Mod\Staff\Repository\AdminRepository::class)->shouldIgnoreMissing();
 
     $em = Mockery::mock(Doctrine\ORM\EntityManagerInterface::class);
     if ($ignoreMissing) {
@@ -91,6 +94,7 @@ function emailBuildEm(
         EmailTemplate::class => $templateRepo,
         Box\Mod\Email\Entity\QueuedEmail::class => $queueRepo,
         Box\Mod\Email\Entity\EmailTemplateGroup::class => $templateGroupRepo,
+        Box\Mod\Staff\Entity\Admin::class => $adminRepo,
         default => $activityRepo,
     });
 
@@ -242,8 +246,12 @@ test('getVars supplies preview variables for support and staff templates before 
 
     $supportVars = $service->getVars(emailTemplate('mod_support_ticket_staff_open'));
     expect($supportVars)
-        ->toHaveKeys(['c.email', 'ticket.subject', 'ticket.client.first_name', 'ticket.messages.0.content'])
-        ->not->toHaveKeys(['ticket.priority', 'ticket.client.email', 'ticket.messages.0.author.email']);
+        ->toHaveKeys(['c.email', 'ticket.subject', 'ticket.priority', 'ticket.client.first_name', 'ticket.messages.0.content'])
+        ->not->toHaveKeys(['ticket.client.email', 'ticket.messages.0.author.email']);
+
+    foreach (['mod_support_ticket_staff_open', 'mod_support_ticket_staff_close', 'mod_support_ticket_staff_reply'] as $actionCode) {
+        expect($service->getVars(emailTemplate($actionCode))['ticket']['priority'])->toBe(100);
+    }
 
     $staffVars = $service->getVars(emailTemplate('mod_staff_ticket_open'));
     expect($staffVars)
@@ -626,6 +634,128 @@ test('sendTemplate handles to_staff and to_client options', function (array $dat
     expect($persistedQueue)->not->toBeNull();
     expect($persistedQueue->getRecipient())->toBe($expectedRecipient);
 })->with('sendTemplateExistsStaffProvider');
+
+test('sendTemplate sends to a specific admin via to_admin using the Admin entity', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $di = container();
+
+    $emailTemplate = emailTemplate(data: ['enabled' => true]);
+
+    $templateRepo = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateRepository::class);
+    $templateRepo->shouldReceive('findOneByActionCode')->andReturn($emailTemplate);
+
+    $templateGroupRepo = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateGroupRepository::class);
+    $templateGroupRepo->shouldReceive('getGroupIdsForTemplate')->andReturn([]);
+
+    $admin = createEntity(Box\Mod\Staff\Entity\Admin::class, [
+        'id' => 7,
+        'email' => 'admin@fossbilling.org',
+        'name' => 'Root Admin',
+        'signature' => '— Root',
+        'timezone' => 'UTC',
+    ]);
+
+    $adminRepo = Mockery::mock(Box\Mod\Staff\Repository\AdminRepository::class);
+    $adminRepo->shouldReceive('find')
+        ->once()
+        ->with(7)
+        ->andReturn($admin);
+
+    /** @var Box\Mod\Email\Entity\QueuedEmail|null $persistedQueue */
+    $persistedQueue = null;
+    $em = emailBuildEm(null, $templateRepo, null, true, $templateGroupRepo, $adminRepo);
+    $em->shouldReceive('persist')
+        ->atLeast()->once()
+        ->with(Mockery::on(function ($entity) use (&$persistedQueue): bool {
+            if ($entity instanceof Box\Mod\Email\Entity\QueuedEmail) {
+                $persistedQueue = $entity;
+            }
+
+            return true;
+        }));
+
+    $system = Mockery::mock(Box\Mod\System\Service::class);
+    $system->shouldReceive('getParamValue')->atLeast()->once()->andReturn('value');
+    $system->shouldReceive('renderEmailTplString')->atLeast()->once()->andReturn('value');
+
+    $staffServiceMock = Mockery::mock(Box\Mod\Staff\Service::class);
+    $staffServiceMock->shouldReceive('getAdminGroupMemberRepository')->never();
+
+    $clientServiceMock = Mockery::mock(Box\Mod\Client\Service::class);
+    $clientServiceMock->shouldReceive('get')->never();
+    $clientServiceMock->shouldReceive('toApiArray')->never();
+
+    $cryptMock = Mockery::mock('\Box_Crypt');
+    $cryptMock->shouldReceive('encrypt')->atLeast()->once();
+
+    $validatorMock = Mockery::mock(FOSSBilling\Validate::class);
+    $validatorMock->shouldReceive('checkRequiredParamsForArray')->byDefault();
+    $di['validator'] = $validatorMock;
+
+    $modMock = Mockery::mock(FOSSBilling\Module::class)->makePartial();
+    $modMock->shouldReceive('getConfig')
+        ->atLeast()->once()
+        ->andReturn([
+            'from_name' => 'Test',
+            'from_email' => 'test@test.com',
+        ]);
+
+    $di['em'] = $em;
+    $di['mod'] = $di->protect(fn () => $modMock);
+    $di['crypt'] = $cryptMock;
+    $di['mod_service'] = $di->protect(moduleService([
+        'staff' => $staffServiceMock,
+        'system' => $system,
+        'client' => $clientServiceMock,
+    ]));
+
+    $service->setDi($di);
+
+    $result = $service->sendTemplate([
+        'code' => 'mod_email_test',
+        'to_admin' => 7,
+        'default_subject' => 'SUBJECT',
+        'default_template' => 'TEMPLATE',
+        'default_description' => 'DESCRIPTION',
+    ]);
+
+    expect($result)->toBeTrue();
+    expect($persistedQueue)->not->toBeNull();
+    expect($persistedQueue->getRecipient())->toBe('admin@fossbilling.org');
+    expect($persistedQueue->getClientId())->toBeNull();
+    expect($persistedQueue->getAdminId())->toBe(7);
+});
+
+test('sendTemplate throws when to_admin does not resolve to an admin', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $di = container();
+
+    $templateRepo = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateRepository::class);
+    $templateRepo->shouldReceive('findOneByActionCode')->andReturn(emailTemplate(data: ['enabled' => true]));
+
+    $templateGroupRepo = Mockery::mock(Box\Mod\Email\Repository\EmailTemplateGroupRepository::class);
+
+    $adminRepo = Mockery::mock(Box\Mod\Staff\Repository\AdminRepository::class);
+    $adminRepo->shouldReceive('find')->once()->with(999)->andReturn(null);
+
+    $di['em'] = emailBuildEm(null, $templateRepo, null, true, $templateGroupRepo, $adminRepo);
+
+    $validatorMock = Mockery::mock(FOSSBilling\Validate::class);
+    $validatorMock->shouldReceive('checkRequiredParamsForArray')->byDefault();
+    $di['validator'] = $validatorMock;
+
+    $service->setDi($di);
+
+    $service->sendTemplate([
+        'code' => 'mod_email_test',
+        'to_admin' => 999,
+        'default_subject' => 'SUBJECT',
+        'default_template' => 'TEMPLATE',
+        'default_description' => 'DESCRIPTION',
+    ]);
+})->throws(FOSSBilling\InformationException::class, 'Admin not found');
 
 test('sendTemplate does not send to staff when template has no assigned groups', function (): void {
     $service = new Box\Mod\Email\Service();
@@ -1605,4 +1735,85 @@ test('loggedAttachmentToArray converts a logged attachment into a mail-ready arr
         'name' => 'Invoice-BB0001.pdf',
         'mime' => 'application/pdf',
     ]);
+});
+
+test('parseBccAddresses returns validated addresses and logs invalid ones', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $di = container();
+    $di['logger'] = new Tests\Helpers\TestLogger();
+    $service->setDi($di);
+
+    $ref = new ReflectionMethod($service, 'parseBccAddresses');
+    $result = $ref->invoke($service, ' billing@example.com ,not-an-email, accounts@example.com,');
+
+    expect($result)->toBe(['billing@example.com', 'accounts@example.com']);
+
+    $logMessages = array_map(static fn (array $call): string => $call['params'][0], $di['logger']->calls);
+    expect($logMessages)->toContain('Skipping invalid Bcc address: not-an-email');
+});
+
+test('parseBccAddresses returns an empty array for a blank setting', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $di = container();
+    $di['logger'] = new Tests\Helpers\TestLogger();
+    $service->setDi($di);
+
+    $ref = new ReflectionMethod($service, 'parseBccAddresses');
+    $result = $ref->invoke($service, '  ,  ');
+
+    expect($result)->toBe([]);
+});
+
+test('_sendFromQueue only logs an invalid Bcc address once per service instance', function (): void {
+    $service = new Box\Mod\Email\Service();
+
+    $buildQueue = static function (int $id): Box\Mod\Email\Entity\QueuedEmail {
+        $queue = new Box\Mod\Email\Entity\QueuedEmail();
+        \Tests\Helpers\setEntityId($queue, $id);
+        $queue->setSubject('subject');
+        $queue->setSender('sender@example.com');
+        $queue->setRecipient('receiver@example.com');
+        $queue->setContent('content');
+
+        return $queue;
+    };
+
+    $em = emailBuildEm();
+    $em->shouldReceive('flush')->atLeast()->once();
+
+    $modMock = Mockery::mock(FOSSBilling\Module::class);
+    $modMock->shouldReceive('getConfig')
+        ->atLeast()->once()
+        ->andReturn([
+            'mailer' => 'sendmail',
+            'bcc_email' => 'billing@example.com,not-an-email',
+        ]);
+
+    $extension = Mockery::mock(Box\Mod\Extension\Service::class);
+    $extension->shouldReceive('isExtensionActive')->atLeast()->once()->andReturn(false);
+
+    $di = container();
+    $di['em'] = $em;
+    $di['logger'] = new Tests\Helpers\TestLogger();
+    $di['mod_service'] = $di->protect(function ($name) use ($extension) {
+        if ($name == 'extension') {
+            return $extension;
+        }
+    });
+    $di['mod'] = $di->protect(fn () => $modMock);
+
+    $service->setDi($di);
+
+    $ref = new ReflectionMethod($service, '_sendFromQueue');
+    $ref->invoke($service, $buildQueue(1));
+    $ref->invoke($service, $buildQueue(2));
+
+    $bccWarnings = array_filter(
+        $di['logger']->calls,
+        static fn (array $call): bool => $call['method'] === 'warning' && str_contains((string) $call['params'][0], 'Skipping invalid Bcc address')
+    );
+
+    expect($bccWarnings)->toHaveCount(1);
 });

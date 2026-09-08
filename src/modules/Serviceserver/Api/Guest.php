@@ -14,12 +14,12 @@ class Guest extends \FOSSBilling\Api\AbstractApi
     /**
      * Return the global option fields (no product/category merge).
      *
-     * @deprecated Use product_options_get() with a product_id for the merged result shown on order forms.
+     * @deprecated use product_options_get() with a product_id for the merged result shown on order forms
      */
     public function options_get(array $data = []): array
     {
         $config = $this->getDi()['mod_config']('Serviceserver');
-        $json   = $config['option_fields'] ?? null;
+        $json = $config['option_fields'] ?? null;
 
         if (!$json) {
             return $this->getService()->getDefaultOptions();
@@ -50,7 +50,7 @@ class Guest extends \FOSSBilling\Api\AbstractApi
     }
 
     /**
-     * @deprecated Use options_get() instead.
+     * @deprecated use options_get() instead
      */
     public function location_get_list(array $data = []): array
     {

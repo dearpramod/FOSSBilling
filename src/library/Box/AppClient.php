@@ -118,7 +118,7 @@ class Box_AppClient extends Box_App
             return parent::run();
         } catch (FOSSBilling\InformationException $e) {
             return $this->errorResponse($e, $e->getCode() ?: null);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->di['logger']->setChannel('routing')->error($e->getMessage(), ['exception' => $e]);
             $internal = new FOSSBilling\InformationException('An unexpected error occurred.', [], 500);
 
@@ -131,47 +131,47 @@ class Box_AppClient extends Box_App
      * never escapes to the raw PHP handler — falls back to a minimal inline page.
      */
     #[Override]
-    public function errorResponse(\Exception $e, ?int $statusCode = null, array $headers = []): Response
+    public function errorResponse(Exception $e, ?int $statusCode = null, array $headers = []): Response
     {
         try {
             $html = $this->render('error', ['exception' => $e]);
-        } catch (\Throwable $renderEx) {
+        } catch (Throwable $renderEx) {
             $this->di['logger']->setChannel('routing')->error(
                 'error.html.twig itself failed to render: ' . $renderEx->getMessage(),
                 ['exception' => $renderEx]
             );
             $code = $statusCode ?? ($e->getCode() ?: 500);
-            $msg  = htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $msg = htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $html = <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Error {$code}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,-apple-system,sans-serif;background:#0d0f1a;color:#f1f5f9;
-         display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
-    .wrap{text-align:center;max-width:420px}
-    .code{font-size:5rem;font-weight:800;line-height:1;
-          background:linear-gradient(135deg,#5271ff,#224dda);
-          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-    .msg{margin:1rem 0 .5rem;color:rgba(255,255,255,.55);font-size:.9375rem;line-height:1.6}
-    a{display:inline-flex;align-items:center;gap:.4rem;margin-top:1.5rem;padding:.6rem 1.25rem;
-      border-radius:.75rem;background:linear-gradient(135deg,#5271ff,#224dda);
-      color:#fff;font-weight:600;font-size:.875rem;text-decoration:none}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <p class="code">{$code}</p>
-    <p class="msg">{$msg}</p>
-    <a href="/">&#8592; Go Home</a>
-  </div>
-</body>
-</html>
-HTML;
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="utf-8">
+                  <meta name="viewport" content="width=device-width,initial-scale=1">
+                  <title>Error {$code}</title>
+                  <style>
+                    *{box-sizing:border-box;margin:0;padding:0}
+                    body{font-family:system-ui,-apple-system,sans-serif;background:#0d0f1a;color:#f1f5f9;
+                         display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
+                    .wrap{text-align:center;max-width:420px}
+                    .code{font-size:5rem;font-weight:800;line-height:1;
+                          background:linear-gradient(135deg,#5271ff,#224dda);
+                          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+                    .msg{margin:1rem 0 .5rem;color:rgba(255,255,255,.55);font-size:.9375rem;line-height:1.6}
+                    a{display:inline-flex;align-items:center;gap:.4rem;margin-top:1.5rem;padding:.6rem 1.25rem;
+                      border-radius:.75rem;background:linear-gradient(135deg,#5271ff,#224dda);
+                      color:#fff;font-weight:600;font-size:.875rem;text-decoration:none}
+                  </style>
+                </head>
+                <body>
+                  <div class="wrap">
+                    <p class="code">{$code}</p>
+                    <p class="msg">{$msg}</p>
+                    <a href="/">&#8592; Go Home</a>
+                  </div>
+                </body>
+                </html>
+                HTML;
         }
 
         return $this->responseFactory()->error($html, $e, $statusCode, $headers);

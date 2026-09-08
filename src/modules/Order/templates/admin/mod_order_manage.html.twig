@@ -23,8 +23,9 @@
 {% set active_menu = 'order' %}
 
 {% set service_partial = 'mod_service' ~ order.service_type ~ '_manage.html.twig' %}
-{% if order.group_master == 1 %}
-    {% set addons = admin.order_addons({ 'id': order.id }) %}
+{% set addons = order.group_master == 1 ? admin.order_addons({ 'id': order.id }) : [] %}
+{% if order.status == 'active' or order.status == 'failed_renew' %}
+    {% set can_cancel_at_period_end = admin.order_can_cancel_at_period_end({ 'id': order.id }) %}
 {% endif %}
 {% if order.status == 'active' or order.status == 'failed_renew' %}
     {% set can_cancel_at_period_end = admin.order_can_cancel_at_period_end({ 'id': order.id }) %}
@@ -116,7 +117,7 @@
                                         <td class="text-end">{{ 'Order Notes'|trans }}</td>
                                         <td>
                                             <svg class="icon">
-                                                <use href="#headset" />
+                                                <use href="#notes" />
                                             </svg>
                                             <a>{{ order.notes }}</a>
                                         </td>
@@ -534,7 +535,15 @@
         <div class="tab-pane fade" id="tab-service" role="tabpanel">
             {% if guest.system_template_exists({ 'file': service_partial }) %}
                 {% set service = admin.order_service({ 'id': order.id }) %}
-                {{ include(service_partial, { 'order': order, 'service': service }) }}
+                {% if service is not null %}
+                    {{ include(service_partial, { 'order': order, 'service': service }) }}
+                {% else %}
+                    <div class="p-3">
+                        <div class="alert alert-info mb-0" role="alert">
+                            {{ 'This order does not have a provisioned service yet.'|trans }}
+                        </div>
+                    </div>
+                {% endif %}
             {% elseif order.form_id and guest.extension_is_on({ 'mod': 'formbuilder' }) %}
                 {{ include('mod_formbuilder_manage.html.twig', order) }}
             {% else %}

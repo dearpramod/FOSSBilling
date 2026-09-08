@@ -280,8 +280,8 @@ Order our services at {{ "order"|url }}
             foreach ($clients as $client) {
                 $clientInfo = $clientService->get(['id' => $client['id']]);
                 $recipients[] = [
-                    'email' => $clientInfo->email,
-                    'name' => $clientInfo->first_name . ' ' . $clientInfo->last_name,
+                    'email' => $clientInfo->getEmail(),
+                    'name' => $clientInfo->getFirstName() . ' ' . $clientInfo->getLastName(),
                 ];
             }
         }
@@ -306,7 +306,7 @@ Order our services at {{ "order"|url }}
             return 'Unknown';
         }
 
-        return $client->email;
+        return $client->getEmail() ?? 'Unknown';
     }
 
     private function _getTestClientId(): int

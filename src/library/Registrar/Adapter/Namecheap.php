@@ -67,6 +67,7 @@ class Registrar_Adapter_Namecheap extends Registrar_AdapterAbstract
                         'label' => 'API Key',
                         'description' => 'You can get this at Namecheap control panel.',
                         'required' => true,
+                        'secret' => true,
                     ],
                 ],
                 'username' => [
@@ -310,8 +311,12 @@ class Registrar_Adapter_Namecheap extends Registrar_AdapterAbstract
 
         $result = $this->_makeRequest($params);
 
-        $domain->setRegistrationTime((string) $result->CommandResponse->DomainGetInfoResult->DomainDetails->CreatedDate);
-        $domain->setExpirationTime((string) $result->CommandResponse->DomainGetInfoResult->DomainDetails->ExpiredDate);
+        // Namecheap returns these as "MM/DD/YYYY" strings, not Unix timestamps.
+        $registrationTime = strtotime((string) $result->CommandResponse->DomainGetInfoResult->DomainDetails->CreatedDate);
+        $expirationTime = strtotime((string) $result->CommandResponse->DomainGetInfoResult->DomainDetails->ExpiredDate);
+
+        $domain->setRegistrationTime($registrationTime === false ? null : $registrationTime);
+        $domain->setExpirationTime($expirationTime === false ? null : $expirationTime);
         $domain->setPrivacyEnabled((string) $result->CommandResponse->DomainGetInfoResult->Whoisguard['Enabled']);
 
         $params = [
@@ -334,6 +339,8 @@ class Registrar_Adapter_Namecheap extends Registrar_AdapterAbstract
         // set SLD and TLD
         $newDomain->setSld($domain->getSld());
         $newDomain->setTld($domain->getTld());
+        $newDomain->setRegistrationTime($domain->getRegistrationTime());
+        $newDomain->setExpirationTime($domain->getExpirationTime());
 
         $registrarContact = new Registrar_Domain_Contact();
         $adminContact = new Registrar_Domain_Contact();

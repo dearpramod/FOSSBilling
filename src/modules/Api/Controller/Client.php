@@ -116,7 +116,14 @@ class Client implements InjectionAwareInterface
     {
         $subject = (string) $this->_getIp();
 
-        if ($method === 'staff_login' || $method === 'client_login') {
+        // $role only reflects which API namespace was requested, not whether the caller has
+        // actually authenticated yet - checkPreAuthRateLimit() runs before that. Exempting
+        // client_login/staff_login from the anti-brute-force policy must require a real,
+        // already-established admin session, or an unauthenticated caller could bypass it
+        // entirely by just requesting the admin route.
+        $isAuthenticatedAdmin = $role === 'admin' && $this->hasAuthenticatedSession('admin');
+
+        if (($method === 'staff_login' || $method === 'client_login') && !$isAuthenticatedAdmin) {
             $policy = 'api_login';
         } elseif ($role === 'guest') {
             $policy = 'api_guest';
@@ -465,7 +472,8 @@ class Client implements InjectionAwareInterface
             $data = new \stdClass();
         }
 
-        $cookieToken = $this->di['request']->cookies->get('csrf_token');
+        $cookieToken = $this->di['request']->cookies->get(\FOSSBilling\Http\CookieNames::CSRF)
+            ?? $this->di['request']->cookies->get(\FOSSBilling\Http\CookieNames::LEGACY_CSRF);
         $headerToken = $this->di['request']->headers->get('X-CSRF-TOKEN');
 
         $token = $data->CSRFToken

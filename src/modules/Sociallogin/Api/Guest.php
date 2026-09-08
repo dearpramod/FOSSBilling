@@ -60,6 +60,11 @@ class Guest extends \FOSSBilling\Api\AbstractApi
             throw new \FOSSBilling\InformationException('Missing credential.');
         }
 
+        // Throttle per IP before the outbound tokeninfo call — this endpoint is unauthenticated
+        // and proxies a request to Google on every hit, so an unbounded caller could burn Google
+        // quota / amplify traffic. A real sign-in is a single click, well under the cap.
+        $this->di['rate_limiter']->consumeOrThrow('sociallogin_credential_ip', (string) $this->ip);
+
         $config = $this->di['mod_config']('sociallogin');
 
         if (empty($config['google_enabled']) || empty($config['google_client_id'])) {
@@ -91,12 +96,12 @@ class Guest extends \FOSSBilling\Api\AbstractApi
             throw new \FOSSBilling\InformationException('Google authentication failed. Please sign in again.', [], 401);
         }
 
-        // Verify the token was issued for our application specifically.
-        // Also accept `azp` (authorized party) as a fallback for cross-client tokens.
+        // Verify the token was issued for our application specifically. Per Google's guidance the
+        // `aud` claim MUST equal our client id — this is the primary anti-replay binding, so it is
+        // checked strictly (no `azp` fallback, which would accept a token minted for another app).
         $clientId = (string) $config['google_client_id'];
         $aud = (string) ($payload['aud'] ?? '');
-        $azp = (string) ($payload['azp'] ?? '');
-        if ($aud !== $clientId && $azp !== $clientId) {
+        if (!hash_equals($clientId, $aud)) {
             $this->di['logger']->setChannel('sociallogin')->info('GSI credential audience mismatch.');
 
             throw new \FOSSBilling\InformationException('Authentication failed.', [], 401);
