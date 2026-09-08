@@ -1,9 +1,11 @@
 import Alpine from 'alpinejs';
 import Collapse from '@alpinejs/collapse';
 import TomSelect from 'tom-select';
+import sidebar from './js/ui/sidebar';
 
 // ── Alpine.js setup ────────────────────────────────────────────────────────────
 Alpine.plugin(Collapse);
+Alpine.data('mobileSidebar', sidebar);
 
 // Expose Alpine globally so x-data inline expressions and devtools work.
 window.Alpine = Alpine;

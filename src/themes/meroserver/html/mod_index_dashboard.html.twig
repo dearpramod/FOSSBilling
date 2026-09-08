@@ -1,6 +1,6 @@
 {% extends request.ajax ? "layout_blank.html.twig" : "layout_public.html.twig" %}
 
-{% block meta_title %}Order{% endblock %}
+{% block meta_title %}Cloud hosting & client portal{% endblock %}
 {% block body_class %}public-home-page{% endblock %}
 
 {% block content %}
@@ -19,8 +19,9 @@
 {# ═══════════════════════════════════════════════════════════════════
    HERO — PaaS control plane
    ═══════════════════════════════════════════════════════════════════ #}
-<div class="ref-home">
+<div class="ref-home ref-home-saas ref-home-glass">
 <section class="ref-home-hero">
+    <div class="home-glass-pattern" aria-hidden="true"><span></span><span></span><span></span></div>
     <div class="ref-home-hero-inner">
         <div class="ref-home-hero-copy" data-reveal="hero-copy">
             <div class="ref-home-kicker" data-reveal-child
@@ -57,19 +58,19 @@
                     {% endfor %}
                 </div>
             </div>
-            <h1 data-reveal-child>Your cloud,<br><span>built for Nepal.</span></h1>
-            <p data-reveal-child>Deploy applications, databases, and managed VPS infrastructure from one control plane—with Git-based delivery, automatic SSL, live observability, and expert support available 24/7.</p>
+            <h1 data-reveal-child>Your cloud.<br><span>Simply managed.</span></h1>
+            <p data-reveal-child>Bring your hosting, servers, domains, and billing together. Choose your next service and manage it all from a simple client dashboard, with NPR pricing and local support.</p>
             <div class="ref-home-hero-actions" data-reveal-child>
                 <a href="{{ '/order'|url }}" class="ref-home-primary">
-                    Start deploying
+                    Explore plans
                     <span aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <path d="M5 12h14M13 6l6 6-6 6"/>
                         </svg>
                     </span>
                 </a>
-                <a href="#mero-how-it-works" class="ref-home-secondary">
-                    See how it works
+                <a href="{{ '/login'|url }}" class="ref-home-secondary">
+                    Open dashboard
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                 </a>
             </div>
@@ -83,6 +84,14 @@
         </div>
 
         <div class="ref-home-console-stage" data-reveal="console">
+            <svg class="home-glass-orbit" viewBox="0 0 640 540" fill="none" aria-hidden="true" focusable="false">
+                <ellipse cx="320" cy="270" rx="292" ry="192" transform="rotate(-32 320 270)"/>
+                <ellipse cx="320" cy="270" rx="292" ry="192" transform="rotate(32 320 270)"/>
+                <circle cx="320" cy="270" r="236"/>
+                <circle cx="120" cy="146" r="9" class="home-orbit-dot"/>
+                <circle cx="544" cy="346" r="6" class="home-orbit-dot"/>
+            </svg>
+            <div class="home-glass-caption"><span class="home-glass-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"/></svg></span><span><small>LESS SWITCHING. MORE DOING.</small><strong>Your entire cloud, connected.</strong></span></div>
             <svg class="ref-home-deploy-map" viewBox="0 0 680 500" fill="none" aria-hidden="true" focusable="false">
                 <defs>
                     <linearGradient id="mero-home-deploy-line" x1="34" y1="432" x2="646" y2="62" gradientUnits="userSpaceOnUse">
@@ -103,13 +112,13 @@
             <span class="ref-home-float-chip ref-home-float-chip-region" aria-hidden="true">
                 <i></i>Kathmandu region
             </span>
-            <div class="ref-home-account-console" aria-label="MeroVPS account console preview">
+            <section class="ref-home-account-console" aria-label="Client dashboard preview with illustrative sample data">
             <div class="ref-home-account-topbar">
                 <div>
                     <span class="ref-home-account-mark">M</span>
-                    <p><strong>Mero Cloud Platform</strong><small>console.merovps.com</small></p>
+                    <p><strong>Client dashboard</strong><small>Your services, in one place</small></p>
                 </div>
-                <span class="ref-home-account-live"><i></i> All systems operational</span>
+                <span class="ref-home-account-live">Sample workspace</span>
             </div>
             <div class="ref-home-account-body">
                 <aside aria-hidden="true">
@@ -120,24 +129,24 @@
                 </aside>
                 <div class="ref-home-account-main">
                     <div class="ref-home-account-heading">
-                        <p><small>Production workspace</small><strong>Applications overview</strong></p>
-                        <button type="button" aria-label="Deploy a new application">+ Deploy app</button>
+                        <p><small>Account overview</small><strong>Welcome back</strong></p>
+                        <a href="{{ '/order'|url }}" class="ref-home-preview-action">+ New order</a>
                     </div>
                     <div class="ref-home-account-metrics">
-                        <div><small>Live services</small><strong>06</strong><span class="is-good">All healthy</span></div>
-                        <div><small>Deploy success</small><strong>99.8%</strong><span><i style="width:88%"></i></span></div>
-                        <div><small>Requests today</small><strong>84.2K</strong><span><i style="width:62%"></i></span></div>
+                        <div><small>Active services</small><strong>06</strong><span class="is-good">Your infrastructure</span></div>
+                        <div><small>Invoices</small><strong>02</strong><span class="is-good">To review</span></div>
+                        <div><small>Support tickets</small><strong>01</strong><span class="is-good">Open conversation</span></div>
                     </div>
                     <div class="ref-home-server-card">
                         <div class="ref-home-server-title">
                             <span><i></i><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/></svg></span>
-                            <p><strong>mero-storefront</strong><small>Production · Kathmandu region</small></p>
-                            <b>Healthy</b>
+                            <p><strong>Business cloud server</strong><small>Services / Cloud VPS</small></p>
+                            <b>Active</b>
                         </div>
                         <div class="ref-home-server-details">
-                            <span><small>Runtime</small><strong>Node.js 22</strong></span>
-                            <span><small>Last deployment</small><strong>main@8f2a1c · 2m</strong></span>
-                            <span><small>Instances</small><strong>3 replicas · Auto</strong></span>
+                            <span><small>Resources</small><strong>2 vCPU · 4 GB RAM</strong></span>
+                            <span><small>Billing cycle</small><strong>Monthly</strong></span>
+                            <span><small>Management</small><strong>Client portal</strong></span>
                         </div>
                         <div class="ref-home-server-chart" aria-hidden="true">
                             <svg viewBox="0 0 520 70" preserveAspectRatio="none">
@@ -145,31 +154,26 @@
                             </svg>
                         </div>
                     </div>
-                    <div class="ref-home-account-foot"><span><i></i> Git connected · SSL active · Autoscaling on</span><b>Live metrics</b></div>
+                    <div class="ref-home-account-foot"><span>Services · Billing · Support</span><b>One workspace</b></div>
                 </div>
             </div>
-            </div>
+            </section>
+            <div class="home-glass-workspace-note"><span aria-hidden="true">↗</span><p><strong>Built around your workflow</strong><small>One account for services, invoices, and support.</small></p></div>
         </div>
     </div>
 </section>
 
 {# ═══════════════════════════════════════════════════════════════════
-   TRUSTED BY — editorial company name strip (twenty.com style)
+   PLATFORM FIT — compact audience strip
    ═══════════════════════════════════════════════════════════════════ #}
-<section class="ref-home-trusted" aria-label="Trusted by leading Nepal organisations">
+<section class="ref-home-trusted" aria-label="Built for growing teams in Nepal">
     <div class="ref-home-container">
-        <p class="ref-home-trusted-label">Trusted by Nepal's fastest-growing teams</p>
+        <p class="ref-home-trusted-label">Built for ambitious teams across Nepal</p>
         <div class="ref-home-trusted-strip">
-            <span>Daraz Nepal</span>
-            <span>Khalti</span>
-            <span>eSewa</span>
-            <span>Ncell</span>
-            <span>Foodmandu</span>
-            <span>CloudFactory</span>
-            <span>Leapfrog</span>
-            <span>Hamro Patro</span>
-            <span>Sastodeal</span>
-            <span>PathaoNepal</span>
+            <span>Startups</span>
+            <span>Developers</span>
+            <span>Agencies</span>
+            <span>Growing businesses</span>
         </div>
     </div>
 </section>
@@ -291,18 +295,15 @@
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-16">
             {# Left column — heading + CTA #}
             <div class="lg:col-span-2" data-reveal="up">
-                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-gray-400 mb-6">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                    Up To <span class="font-bold text-amber-400">70%</span> Off Managed Cloud Hosting
-                </div>
+                <span class="ref-home-eyebrow">Here to help</span>
 
                 <h2 class="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-2">
-                    Frequently Ask
+                    A little clarity,
                 </h2>
-                <p class="text-3xl sm:text-4xl font-extrabold italic mb-6" style="color: var(--color-primary);">Questions</p>
+                <p class="text-3xl sm:text-4xl font-extrabold mb-6" style="color: var(--color-primary);">before you begin.</p>
 
                 <p class="text-gray-500 text-sm leading-relaxed mb-8 max-w-sm">
-                    In today's competitive business, the demand for efficient hosting solutions continues to grow. We've answered the most common questions to help you get started.
+                    Find answers about hosting, billing, and managing your services. Already have an account? Your dashboard brings everything together.
                 </p>
 
                 <a href="{{ 'login'|url }}"
@@ -326,7 +327,9 @@
                 <div class="divide-y divide-white/[0.06]">
                     {% for i, faq in faqs %}
                     <div class="ref-home-faq-item" :class="{ 'is-open': open === {{ i }} }">
-                        <button @click="open = (open === {{ i }}) ? null : {{ i }}"
+                        <button type="button"
+                                id="home-faq-question-{{ i }}"
+                                @click="open = (open === {{ i }}) ? null : {{ i }}"
                                 :aria-expanded="open === {{ i }}"
                                 aria-controls="home-faq-answer-{{ i }}"
                                 class="w-full flex items-center justify-between py-5 text-left group">
@@ -338,6 +341,8 @@
                             </svg>
                         </button>
                         <div id="home-faq-answer-{{ i }}"
+                             role="region"
+                             aria-labelledby="home-faq-question-{{ i }}"
                              x-show="open === {{ i }}"
                              x-collapse.duration.240ms
                              x-cloak
@@ -350,6 +355,11 @@
             </div>
         </div>
     </div>
+</section>
+
+<section class="home-glass-cta" aria-labelledby="home-workspace-title">
+    <div><span class="ref-home-eyebrow">Your next chapter</span><h2 id="home-workspace-title">Make room for<br>your next big idea.</h2><p>Find the right infrastructure. Keep everything in view.</p></div>
+    <a href="{{ '/order'|url }}" class="ref-home-primary">Explore the plans <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
 </section>
 
 </div>

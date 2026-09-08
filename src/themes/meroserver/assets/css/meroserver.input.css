@@ -1,3 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Shared navigation controls retain a full touch target around small icons. */
+.sidebar-mobile-control {
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+}
+@media (max-width: 1023px) {
+    .sidebar-mobile-control { display: inline-flex; }
+}
+#sidebar :is(a, button):focus-visible,
+.sidebar-mobile-control:focus-visible,
+#sidebar-toggle:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    #sidebar, #sidebar *, #sidebar-toggle, .sidebar-overlay {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}

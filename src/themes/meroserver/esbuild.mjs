@@ -66,7 +66,8 @@ async function build() {
     const twOutput = readFileSync(meroserverCssOut, 'utf8');
     const themeSrc = readFileSync(resolve(__dirname, 'assets/css/theme.css'), 'utf8');
     const customSrc = readFileSync(resolve(__dirname, 'assets/css/custom.css'), 'utf8');
-    const merged = twOutput + '\n' + themeSrc + '\n' + customSrc;
+    const homeSrc = readFileSync(resolve(__dirname, 'assets/css/home-saas.css'), 'utf8');
+    const merged = twOutput + '\n' + themeSrc + '\n' + customSrc + '\n' + homeSrc;
     if (isProduction) {
       const result = await esbuild.transform(merged, { loader: 'css', minify: true });
       writeFileSync(meroserverCssOut, result.code);
