@@ -93,7 +93,11 @@ class Client extends \FOSSBilling\Api\AbstractApi
     public function sync($data)
     {
         $s = $this->_getService($data);
-        $this->getService()->synchronizeDomain($s);
+
+        $this->_guardRegistrar(
+            fn () => $this->getService()->synchronizeDomain($s),
+            'The domain could not be synchronized with the registrar right now. Please try again later.'
+        );
 
         return true;
     }
