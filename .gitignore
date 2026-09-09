@@ -45,3 +45,6 @@ client_secret_*.json
 
 ### Installer backup — must not be in repo ###
 /src/install.bk/
+
+# Local git worktrees (Claude Code isolation)
+.worktrees/
