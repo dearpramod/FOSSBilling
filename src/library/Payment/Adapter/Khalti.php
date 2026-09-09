@@ -292,6 +292,34 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
             }
         }
 
+        // SECURITY: crediting is only permitted when the invoice binding came from the
+        // trustworthy, server-written intent snapshot (Priority 1 / $invoiceIdVerified).
+        // A cold intent means $invoiceId was resolved via Priority 2/3 from the browser-
+        // supplied purchase_order_id / URL invoice_id — both attacker-controlled — and once
+        // the invoice is picked using that string, the "order binding" check further below
+        // (verifiedOrderId === expectedOrderId) is tautological: it compares the invoice
+        // against the very string used to select it, so it always passes by construction.
+        // A genuine, Khalti-Lookup-verified payment for a self-controlled small invoice could
+        // otherwise be replayed against an arbitrary invoice (any client's) once the intent
+        // cache goes cold (~1h TTL, fully attacker-timed) simply by supplying a guessed
+        // purchase_order_id (INV-{serie}{nr}, a predictable format) or invoice_id on the
+        // callback. Refuse to credit here and hold for manual review instead — mirrors the
+        // "amount could not be recomputed" review-hold pattern already used below.
+        if (!$invoiceIdVerified) {
+            $tx->invoice_id = (int) $invoiceId;
+            $tx->txn_id = $verifiedTxnId ?? $pidx;
+            $tx->txn_status = 'failed';
+            $tx->amount = $verifiedAmount / 100;
+            $tx->currency = 'NPR';
+            $tx->error = 'SECURITY: intent snapshot cold — invoice binding is not trustworthy (resolved from browser-supplied purchase_order_id/invoice_id, not the server-side intent). Held for operator review. Candidate invoice_id=' . $invoiceId . ', pidx=' . $pidx;
+            $tx->status = 'error';
+            $tx->updated_at = date('Y-m-d H:i:s');
+            $this->di['db']->store($tx);
+            $this->log('Khalti SECURITY: cold intent — refusing to credit invoice #' . $invoiceId . ' from an unverified binding. pidx=' . $pidx, 'error');
+
+            throw new Payment_Exception('Khalti: Payment received but could not be automatically verified against an invoice. It has been flagged for manual review.');
+        }
+
         /** @var Model_Invoice $invoice */
         $invoice = $this->di['db']->getExistingModelById('Invoice', $invoiceId);
 
@@ -382,18 +410,24 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
                     throw new Payment_Exception('Khalti: Payment amount does not match invoice total. This transaction has been flagged.');
                 }
             } else {
-                // Converted (non-NPR) invoice: the USD→NPR rate may have legitimately drifted between
-                // initiation and this callback, so a strict compare against the recompute would falsely
-                // reject a real payment. Trust Khalti's server-verified total (the purchase_order_id
-                // binding below still ties it to THIS invoice), but log the recomputed reference so an
-                // operator can reconcile any material discrepancy.
-                $this->log(sprintf(
-                    'Khalti: intent cold for converted invoice_id=%s pidx=%s — recomputed≈%d paisa vs Lookup-verified total=%d paisa; trusting Lookup total (rate may have drifted). Flagged for review.',
-                    $invoiceId,
-                    $pidx,
-                    $recomputedPaisa,
-                    $verifiedAmount
-                ), 'warn');
+                // Converted (non-NPR) invoice with a cold intent. With the $invoiceIdVerified
+                // gate above, this branch is now reachable only when the intent was warm
+                // (trustworthy invoice binding) but its expected_paisa was missing/malformed —
+                // an anomaly, not the ordinary cold-intent case. Do not blindly trust Khalti's
+                // reported total against a merely-recomputed reference in that situation either;
+                // hold for operator review, same as the recompute-failure branch above.
+                $tx->invoice_id = (int) $invoiceId;
+                $tx->txn_id = $verifiedTxnId ?? $pidx;
+                $tx->txn_status = 'failed';
+                $tx->amount = $verifiedAmount / 100;
+                $tx->currency = 'NPR';
+                $tx->error = 'SECURITY: intent snapshot missing expected_paisa for a converted invoice — amount cannot be verified without risking a stale/drifted comparison. Held for operator review. invoice_id=' . $invoiceId . ', recomputed≈' . $recomputedPaisa . ' paisa, Lookup total=' . $verifiedAmount . ' paisa.';
+                $tx->status = 'error';
+                $tx->updated_at = date('Y-m-d H:i:s');
+                $this->di['db']->store($tx);
+                $this->log('Khalti SECURITY: missing expected_paisa for converted invoice #' . $invoiceId . ' pidx=' . $pidx . ' — held for review.', 'error');
+
+                throw new Payment_Exception('Khalti: Payment received but the amount could not be verified. It has been flagged for manual review.');
             }
         }
 
@@ -843,8 +877,12 @@ class Payment_Adapter_Khalti implements InjectionAwareInterface
      * Format stored during initiation: INV-{serie}{nr_zero_padded_5} (truncated to 64 chars).
      * The nr occupies exactly the last 5 characters; serie is everything between "INV-" and nr.
      *
-     * Used as a server-validated last-resort fallback when the intent cache is cold.
-     * The value comes from the Khalti Lookup API response, never from the browser.
+     * Used only to IDENTIFY a candidate invoice for logging/status-recording when the intent
+     * cache is cold (e.g. so an error/pending transaction row can reference something).
+     * $orderId here is NOT server-verified — it comes from the browser callback's
+     * purchase_order_id param, not the Khalti Lookup API (which doesn't return that field —
+     * see processTransaction()). NEVER use the result of this method to authorize crediting;
+     * processTransaction()'s $invoiceIdVerified gate enforces that.
      */
     private function decodeInvoiceIdFromOrderId(string $orderId): ?int
     {

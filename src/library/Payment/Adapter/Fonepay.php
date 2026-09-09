@@ -184,6 +184,7 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
         }
 
         $intent = $this->loadPaymentIntent($referenceLabel);
+        $intentVerified = $intent !== null;
         $invoiceId = $intent['invoice_id'] ?? ($tx->invoice_id ?? null);
         $terminalId = $intent['terminal_id'] ?? trim((string) ($this->config['terminal_id'] ?? ''));
 
@@ -212,6 +213,24 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
             $this->di['db']->store($tx);
 
             return;
+        }
+
+        // SECURITY: crediting is only permitted when the invoice binding came from the
+        // trustworthy, server-written pending-intent file. A cold intent (file missing —
+        // ordinarily only after this exact reference already settled once, but also reachable
+        // if reconcilePending() deleted the file without actually settling it) means $invoiceId
+        // fell back to $tx->invoice_id, which ipn.php sets straight from the browser-supplied
+        // invoice_id query param — attacker controlled, and never cross-checked against
+        // anything Fonepay returns (unlike Khalti, there is no order-id field to bind against
+        // at all). Refuse to credit and hold for manual review instead of trusting a guessed
+        // invoice + a Fonepay-verified amount: an attacker who genuinely pays their own small
+        // invoice, then replays that same (unguessable but self-known) reference_label with a
+        // different invoice_id after the intent file is gone, must not be able to redirect the
+        // credit to an arbitrary invoice.
+        if (!$intentVerified) {
+            $this->failTx($tx, 'SECURITY: intent file cold — invoice binding is not trustworthy (resolved from browser-supplied invoice_id, not the server-side intent). Held for operator review. Candidate invoice_id=' . $invoiceId . ', ref=' . $referenceLabel);
+
+            throw new Payment_Exception('Fonepay: payment received but could not be automatically verified against an invoice. It has been flagged for manual review.');
         }
 
         // Amount check. Warm path: enforce against the initiation snapshot (the exact NPR we asked
@@ -248,11 +267,15 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
                 }
                 $this->log(sprintf('Fonepay amount check (cold intent, NPR): ref=%s recomputed=%.2f received=%.2f', $referenceLabel, $recomputed, $verifiedAmount), 'warn');
             } else {
-                // Converted (non-NPR) invoice: the FX rate may have legitimately drifted between
-                // initiation and this callback, so a strict compare would falsely reject a real
-                // payment. Trust Fonepay's server-verified amount but log the recomputed reference
-                // for reconciliation.
-                $this->log(sprintf('Fonepay: intent cold for converted invoice #%s ref=%s — recomputed~%.2f NPR vs verified %.2f NPR; trusting verified amount (rate may have drifted). Flagged for review.', $invoiceId, $referenceLabel, $recomputed, $verifiedAmount), 'warn');
+                // Converted (non-NPR) invoice. With the $intentVerified gate above, this branch
+                // is now reachable only when the intent file was present (trustworthy invoice
+                // binding) but its expected_amount was missing/zero — an anomaly, not the
+                // ordinary cold-intent case. Do not blindly trust Fonepay's reported amount
+                // against a merely-recomputed reference in that situation either; hold for
+                // operator review, same as the recompute-failure branch above.
+                $this->failTx($tx, sprintf('SECURITY: intent missing expected_amount for a converted invoice — amount cannot be verified without risking a stale/drifted comparison. Held for operator review. invoice_id=%s, recomputed≈%.2f NPR, verified=%.2f NPR, ref=%s', $invoiceId, $recomputed, $verifiedAmount, $referenceLabel));
+
+                throw new Payment_Exception('Fonepay: payment received but the amount could not be verified. It has been flagged for manual review.');
             }
         }
 
@@ -383,8 +406,23 @@ class Payment_Adapter_Fonepay implements InjectionAwareInterface
             if ($paymentStatus === 'success') {
                 if ($this->settlePendingSuccess($record, $status)) {
                     ++$settled;
+                    @unlink($file);
+                } else {
+                    // settlePendingSuccess() reported a real Fonepay success but could not settle
+                    // it (amount mismatch, invoice already paid by other means, or a transient
+                    // exception crediting it) — do NOT delete the file. Doing so previously left a
+                    // genuinely-successful, Fonepay-confirmed reference with no dedup record,
+                    // which processTransaction() could then be tricked into crediting to a
+                    // different invoice via the browser-supplied invoice_id fallback (now closed
+                    // by the $intentVerified gate above, but this file must still not be silently
+                    // discarded — it's either worth a retry or needs an operator to look at it).
+                    // Only give up once it's past the staleness cutoff.
+                    $this->log('Fonepay reconcile: ' . $ref . ' reported success but could not be settled — left in place for review/retry.', 'error');
+                    if ($age > $maxAgeSeconds) {
+                        $this->log('Fonepay reconcile: ' . $ref . ' exceeded max age without settling — discarding. Verify manually if funds were captured.', 'error');
+                        @unlink($file);
+                    }
                 }
-                @unlink($file);
             } elseif ($paymentStatus === 'failed' || $age > $maxAgeSeconds) {
                 @unlink($file); // definitively failed, or too old to keep chasing
             }
