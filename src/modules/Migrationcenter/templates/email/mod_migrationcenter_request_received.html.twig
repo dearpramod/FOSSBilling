@@ -1,0 +1,27 @@
+{% block subject %}[{{ guest.system_company.name }}] We received your migration request{% endblock %}
+{% block content %}
+<p>Hi {{ c.first_name }},</p>
+
+<p>
+    We have received your request to migrate from <strong>{{ request.host }}</strong> and our
+    migration team has been notified. We will start work shortly and email you again when the
+    status changes.
+</p>
+
+<p>
+    <strong>Request:</strong> #{{ request.id }}<br>
+    <strong>Previous host:</strong> {{ request.username }}@{{ request.host }}<br>
+    <strong>Control panel:</strong> {{ request.panel_type_label }}
+</p>
+
+<p>
+    For your security we never include the credentials you sent us in email. You can review the
+    status of this request at any time from the Migration Center in your client area.
+</p>
+
+<p>
+    Once the migration is complete we recommend changing the password at your previous host.
+</p>
+
+<p>— {{ guest.system_company.name }}</p>
+{% endblock %}

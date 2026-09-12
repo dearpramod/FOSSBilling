@@ -1,0 +1,23 @@
+{% block subject %}[{{ guest.system_company.name }}] Migration request #{{ request.id }} is now {{ status_spaced }}{% endblock %}
+{% block content %}
+<p>Hi {{ c.first_name }},</p>
+
+<p>
+    The status of your migration from <strong>{{ request.host }}</strong> has changed to
+    <strong>{{ status_spaced|title }}</strong>.
+</p>
+
+{% if request.status == 'completed' %}
+<p>
+    Your migration is complete. Please check your site and let us know if anything looks wrong.
+    We recommend changing the password at your previous host now.
+</p>
+{% elseif request.status == 'failed' %}
+<p>
+    We were not able to complete this migration. Our team will be in touch with the details, or
+    you can open a support ticket and we will pick it up from there.
+</p>
+{% endif %}
+
+<p>— {{ guest.system_company.name }}</p>
+{% endblock %}

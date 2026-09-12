@@ -125,6 +125,22 @@ class Service implements InjectionAwareInterface
         // Never log host, username or the secret — only the identifiers.
         $this->di['logger']->info(sprintf('Migration request %d created by client %d.', $id, $clientId));
 
+        $apiArray = $request->toApiArray();
+        $client = $this->di['mod_service']('client')->get(['id' => $clientId]);
+
+        $this->sendEmail([
+            'to_client' => $clientId,
+            'code' => 'mod_migrationcenter_request_received',
+            'request' => $apiArray,
+        ]);
+
+        $this->sendEmail([
+            'to_staff' => true,
+            'code' => 'mod_migrationcenter_staff_new_request',
+            'request' => $apiArray,
+            'client_name' => trim(($client->getFirstName() ?? '') . ' ' . ($client->getLastName() ?? '')),
+        ]);
+
         return $id;
     }
 
@@ -236,6 +252,13 @@ class Service implements InjectionAwareInterface
 
         $this->di['logger']->info(sprintf('Migration request %d moved from %s to %s.', $id, $current, $status));
 
+        $this->sendEmail([
+            'to_client' => $request->getClientId(),
+            'code' => 'mod_migrationcenter_status_changed',
+            'request' => $request->toApiArray(),
+            'status_spaced' => str_replace('_', ' ', $status),
+        ]);
+
         return true;
     }
 
@@ -278,6 +301,22 @@ class Service implements InjectionAwareInterface
     }
 
     // ── Internals ────────────────────────────────────────────────────────
+
+    /**
+     * Email sending must never break the operation that triggered it, and no
+     * email ever carries the submitted credentials.
+     */
+    private function sendEmail(array $payload): void
+    {
+        try {
+            $this->di['mod_service']('email')->sendTemplate($payload);
+        } catch (\Exception $e) {
+            $this->di['logger']->setChannel('email')->error('Failed to send migration center email', [
+                'code' => $payload['code'] ?? '',
+                'exception' => $e->getMessage(),
+            ]);
+        }
+    }
 
     private function repository(): MigrationRequestRepository
     {

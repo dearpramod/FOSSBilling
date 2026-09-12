@@ -1,0 +1,20 @@
+{% block subject %}[{{ guest.system_company.name }}] New migration request #{{ request.id }}{% endblock %}
+{% block content %}
+<p>A client has submitted a new migration request.</p>
+
+<p>
+    <strong>Request:</strong> #{{ request.id }}<br>
+    <strong>Client:</strong> {{ client_name }} (#{{ request.client_id }})<br>
+    <strong>Previous host:</strong> {{ request.username }}@{{ request.host }}{% if request.port %}:{{ request.port }}{% endif %}<br>
+    <strong>Control panel:</strong> {{ request.panel_type_label }}
+</p>
+
+{% if request.client_notes %}
+<p><strong>Client notes:</strong><br>{{ request.client_notes }}</p>
+{% endif %}
+
+<p>
+    The credentials are stored encrypted and are visible in the Migration Center queue in the
+    admin area. They are deliberately not included in this email.
+</p>
+{% endblock %}
