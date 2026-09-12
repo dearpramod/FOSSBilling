@@ -48,3 +48,6 @@ client_secret_*.json
 
 # Local git worktrees (Claude Code isolation)
 .worktrees/
+
+# Superpowers SDD scratch workspace (ledger, briefs, review packages)
+.superpowers/
