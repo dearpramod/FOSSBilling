@@ -46,6 +46,13 @@
         Manage Domain
       </a>
       {% endif %}
+      {% if guest.extension_is_on({'mod': 'migrationcenter'}) %}
+      <a href="{{ '/migrationcenter'|url({'order_id': order.id}) }}"
+         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all hm-btn-outline">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        Migrate from another host
+      </a>
+      {% endif %}
       {% if order.unpaid_invoice_id|default(false) %}
       <a href="#" data-pay-order="{{ order.id }}"
          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all"

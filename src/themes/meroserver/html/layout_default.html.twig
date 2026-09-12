@@ -69,7 +69,7 @@
     <script defer src="{{ 'js/main.js' | public_asset_url }}"></script>
     <script src="{{ 'js/api.js' | public_asset_url }}"></script>
     <!-- Merotheme bundle: Alpine.js + @alpinejs/collapse + TomSelect (defer: Alpine.start() runs after DOM parsed) -->
-    <script defer src="{{ 'build/js/meroserver.js' | asset_url }}"></script>
+    <script type="module" src="{{ 'build/js/meroserver.js' | asset_url }}"></script>
 
     <!-- Panel utility shims (bb, FBPanel) -->
     <script>
@@ -361,6 +361,19 @@
                 <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">My Services</span>
             </a>
             {% if _sidebar_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
+            {% endif %}
+
+            {# ===== Migration Center (module-gated) ===== #}
+            {% if client and guest.extension_is_on({'mod': 'migrationcenter'}) %}
+            <a href="{{ '/migrationcenter'|url }}" title="Migration Center"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
+                      {% if 'migrationcenter' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
+               :class="sidebarCollapsed ? 'justify-center px-2' : ''">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">Migration Center</span>
+            </a>
             {% endif %}
 
             {# ===== Order Services (collapsible group) ===== #}
@@ -1010,14 +1023,18 @@
 
             <div class="flex items-center gap-1">
 
-                {# Notification bell #}
-                <a href="{{ '/support'|url }}" title="Support &amp; Tickets"
-                   aria-label="Support and Tickets"
-                   class="relative p-2 rounded-lg text-slate-400 hover:text-primary hover:bg-violet-50 transition-all">
-                    <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                </a>
+                {# Notification bell — was a plain link to /support wearing a bell icon
+                   (a leftover/mislabeled placeholder, never actually wired to
+                   notifications), so every non-dashboard route (i.e. everywhere except
+                   '' and 'dashboard' — orders, invoices, support, my-services, ...) showed
+                   a "bell" that just navigated to Support instead of the real invoice/news
+                   panel. Use the same shared component the dashboard route (above) and
+                   layout_public.html.twig already use correctly. #}
+                {% include 'partial_notifications.html.twig' with {
+                    _notif_client: client is not null,
+                    _notif_news:   _notif_news,
+                    _notif_dark:   false
+                } only %}
 
                 {# Cart icon #}
                 <a id="cart-link-topbar" href="{{ '/cart'|url }}" title="Cart"
@@ -1709,6 +1726,85 @@ function SupportPinModal() {
 }
 </script>
 {% endif %}
+
+<script>
+/**
+ * Ajax-navigate same-page filter/tab/pagination links instead of a full
+ * document reload. A template opts in by wrapping the region(s) that should
+ * update — e.g. tabs + list + pagination — in `<div data-ajax-region="some-id">`
+ * (a page can declare more than one, swapped together on every nav).
+ *
+ * A same-page link (only the query string differs) clicked inside a region
+ * is intercepted: the target URL is re-fetched with the X-Requested-With
+ * header so the server renders it through layout_blank.html.twig instead of
+ * this layout (see request.ajax — every meroserver page template already
+ * extends the blank layout when that flag is set), the response's matching
+ * [data-ajax-region] fragments replace the current ones in place, and the
+ * URL updates via pushState. Falls back to a normal navigation on any
+ * fetch/parse failure, or when a page declares no regions.
+ */
+(function () {
+    function isSamePageLink(a) {
+        if (!a || a.tagName !== 'A') return false;
+        if (a.target && a.target !== '_self') return false;
+        if (a.hasAttribute('download') || a.dataset.ajaxSkip !== undefined) return false;
+        var href = a.getAttribute('href');
+        if (!href || href.charAt(0) === '#') return false;
+        var url;
+        try { url = new URL(a.href, window.location.href); } catch (e) { return false; }
+        return url.origin === window.location.origin && url.pathname === window.location.pathname;
+    }
+
+    function ajaxNavigate(url, opts) {
+        opts = opts || {};
+        var regions = document.querySelectorAll('[data-ajax-region]');
+        if (!regions.length) { window.location = url; return; }
+
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (res) {
+                if (!res.ok) { throw new Error('HTTP ' + res.status); }
+                return res.text();
+            })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var swapped = 0;
+                regions.forEach(function (current) {
+                    var id = current.getAttribute('data-ajax-region');
+                    var fresh = doc.querySelector('[data-ajax-region="' + id + '"]');
+                    if (fresh) { current.replaceWith(fresh); swapped++; }
+                });
+                if (!swapped) { throw new Error('no matching data-ajax-region in response'); }
+                if (opts.push !== false) { history.pushState({ ajaxUrl: url }, '', url); }
+                // Not syncing document.title from doc.title: the fetched response
+                // renders through layout_blank.html.twig, whose <title> lacks the
+                // " — {company}" suffix this layout appends, and none of today's
+                // ajax regions change the page's subject anyway.
+                document.dispatchEvent(new CustomEvent('ajax:navigated', { detail: { url: url } }));
+            })
+            .catch(function (err) {
+                console.warn('[ajaxNavigate] falling back to full page load:', err);
+                window.location = url;
+            });
+    }
+    window.ajaxNavigate = ajaxNavigate;
+
+    // Delegated on document (not the regions) so freshly-swapped-in links
+    // never need rebinding.
+    document.addEventListener('click', function (e) {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        var a = e.target.closest('a');
+        if (!a || !a.closest('[data-ajax-region]') || !isSamePageLink(a)) return;
+        e.preventDefault();
+        ajaxNavigate(a.href);
+    });
+
+    window.addEventListener('popstate', function () {
+        if (document.querySelector('[data-ajax-region]')) {
+            ajaxNavigate(window.location.href, { push: false });
+        }
+    });
+})();
+</script>
 
 {{ include('partial_pending_messages.html.twig', ignore_missing: true) }}
 {% if guest.extension_is_on({ "mod": "cookieconsent" }) %}

@@ -1,0 +1,197 @@
+{% extends "layout_default.html.twig" %}
+
+{% block meta_title %}Migration Center{% endblock %}
+
+{% block content %}
+{# Alpine factory must be defined before the x-data element — Alpine.start() runs in <head>. #}
+<script>
+function migrationCenter() {
+    return {
+        submitting: false,
+        error: '',
+        success: '',
+        form: {
+            panel_type: 'cpanel_whm',
+            host: '',
+            port: '',
+            username: '',
+            password: '',
+            ssh_key: '',
+            client_notes: '',
+            // Pre-filled when arriving from a service's manage page (?order_id=N).
+            // `request.x` is a RequestDataView over the query string — it renders
+            // empty when the param is absent, so no |default is needed.
+            client_order_id: '{{ request.order_id }}'
+        },
+        showKey: false,
+        reset() {
+            this.form.password = '';
+            this.form.ssh_key = '';
+            this.form.host = '';
+            this.form.port = '';
+            this.form.username = '';
+            this.form.client_notes = '';
+        },
+        submit() {
+            this.error = '';
+            this.success = '';
+            this.submitting = true;
+            API.client.post('migrationcenter/create', this.form, (r) => {
+                this.submitting = false;
+                this.success = 'Your migration request has been sent to our migration team. We will be in touch shortly.';
+                this.reset();
+                setTimeout(() => window.location.reload(), 1500);
+            }, (e) => {
+                this.submitting = false;
+                this.error = e.message || 'Could not submit your migration request.';
+            });
+        },
+        cancel(id) {
+            if (!confirm('Withdraw this migration request?')) { return; }
+            API.client.post('migrationcenter/cancel', { id: id }, () => window.location.reload(),
+                (e) => { this.error = e.message || 'Could not cancel this request.'; });
+        }
+    };
+}
+</script>
+
+<div x-data="migrationCenter()" class="max-w-4xl mx-auto px-4 py-8 space-y-8">
+
+    <header>
+        <h1 class="text-2xl font-bold text-slate-800 dark:text-white">Migration Center</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Moving in from another host? Send us the login details for your old hosting account and our
+            migration team will move your data across for you.
+        </p>
+    </header>
+
+    {# ── Existing requests ─────────────────────────────────────────── #}
+    {% set requests = client.migrationcenter_get_list %}
+    {% if requests|length %}
+    <section class="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Your migration requests</h2>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for r in requests %}
+            <div class="px-5 py-4 flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-800 dark:text-white truncate">
+                        {{ r.username }}@{{ r.host }}{% if r.port %}:{{ r.port }}{% endif %}
+                    </p>
+                    <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {{ r.panel_type_label }} · submitted {{ r.created_at|format_date }}
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <span class="px-2.5 py-1 rounded-full text-xs font-medium
+                        {% if r.status == 'completed' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400
+                        {% elseif r.status == 'failed' %}bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400
+                        {% elseif r.status == 'in_progress' %}bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400
+                        {% elseif r.status == 'cancelled' %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300
+                        {% else %}bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400{% endif %}">
+                        {{ r.status|replace({'_': ' '})|title }}
+                    </span>
+                    {% if r.can_client_cancel %}
+                    <button type="button" @click="cancel({{ r.id }})"
+                            class="text-xs font-medium text-slate-500 hover:text-red-600 dark:hover:text-red-400">
+                        Withdraw
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {# ── New request form ──────────────────────────────────────────── #}
+    <section class="rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Request a migration</h2>
+
+        <div x-show="error" x-cloak class="mt-4 rounded-lg bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400" x-text="error"></div>
+        <div x-show="success" x-cloak class="mt-4 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400" x-text="success"></div>
+
+        <form @submit.prevent="submit()" class="mt-5 grid gap-5 sm:grid-cols-2">
+
+            <label class="block sm:col-span-2">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Which service is this for?</span>
+                <select x-model="form.client_order_id"
+                        class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm">
+                    <option value="">Not sure / not listed</option>
+                    {% for order in client.order_get_list({'per_page': 100}).list %}
+                    <option value="{{ order.id }}">#{{ order.id }} — {{ order.title }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="block">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Control panel at your old host</span>
+                <select x-model="form.panel_type" required
+                        class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm">
+                    <option value="cpanel_whm">cPanel / WHM</option>
+                    <option value="plesk">Plesk</option>
+                    <option value="directadmin">DirectAdmin</option>
+                    <option value="ssh_custom">SSH / Custom</option>
+                    <option value="other">Other</option>
+                </select>
+            </label>
+
+            <div class="grid grid-cols-3 gap-3">
+                <label class="block col-span-2">
+                    <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Host or IP</span>
+                    <input type="text" x-model="form.host" required placeholder="old-host.example.com"
+                           class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm">
+                </label>
+                <label class="block">
+                    <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Port</span>
+                    <input type="text" x-model="form.port" inputmode="numeric" placeholder="2083"
+                           class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm">
+                </label>
+            </div>
+
+            <label class="block">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Username</span>
+                <input type="text" x-model="form.username" required autocomplete="off"
+                       class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm">
+            </label>
+
+            <label class="block">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Password</span>
+                <input type="password" x-model="form.password" autocomplete="new-password"
+                       class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm">
+            </label>
+
+            <div class="sm:col-span-2">
+                <button type="button" @click="showKey = !showKey"
+                        class="text-xs font-medium text-primary hover:underline">
+                    <span x-text="showKey ? 'Hide SSH key field' : 'Use an SSH key instead'"></span>
+                </button>
+                <label class="block mt-2" x-show="showKey" x-cloak>
+                    <span class="text-xs font-medium text-slate-600 dark:text-slate-300">SSH private key</span>
+                    <textarea x-model="form.ssh_key" rows="4" spellcheck="false"
+                              class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm font-mono"></textarea>
+                </label>
+            </div>
+
+            <label class="block sm:col-span-2">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Anything we should know?</span>
+                <textarea x-model="form.client_notes" rows="3" placeholder="e.g. WordPress site, the database user is separate"
+                          class="mt-1.5 w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-800 text-sm"></textarea>
+            </label>
+
+            <div class="sm:col-span-2 flex items-center justify-between gap-4 pt-2">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Your credentials are encrypted before they are stored and are only readable by our migration staff.
+                    We recommend changing this password at your old host once the migration is complete.
+                </p>
+                <button type="submit" :disabled="submitting"
+                        class="flex-shrink-0 px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+                        style="background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));">
+                    <span x-text="submitting ? 'Sending…' : 'Send to migration team'"></span>
+                </button>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}
