@@ -46,6 +46,13 @@ describe('canTransition', function (): void {
         expect(RequestStatus::canTransition('bogus', RequestStatus::COMPLETED))->toBeFalse()
             ->and(RequestStatus::canTransition(RequestStatus::SUBMITTED, 'bogus'))->toBeFalse();
     });
+
+    test('in_progress can move to all terminal states and failed can be cancelled', function (): void {
+        expect(RequestStatus::canTransition(RequestStatus::IN_PROGRESS, RequestStatus::COMPLETED))->toBeTrue()
+            ->and(RequestStatus::canTransition(RequestStatus::IN_PROGRESS, RequestStatus::FAILED))->toBeTrue()
+            ->and(RequestStatus::canTransition(RequestStatus::IN_PROGRESS, RequestStatus::CANCELLED))->toBeTrue()
+            ->and(RequestStatus::canTransition(RequestStatus::FAILED, RequestStatus::CANCELLED))->toBeTrue();
+    });
 });
 
 describe('isPurgeable', function (): void {
@@ -62,6 +69,8 @@ describe('isClientCancellable', function (): void {
     test('a client may only cancel before staff pick the request up', function (): void {
         expect(RequestStatus::isClientCancellable(RequestStatus::SUBMITTED))->toBeTrue()
             ->and(RequestStatus::isClientCancellable(RequestStatus::IN_PROGRESS))->toBeFalse()
-            ->and(RequestStatus::isClientCancellable(RequestStatus::COMPLETED))->toBeFalse();
+            ->and(RequestStatus::isClientCancellable(RequestStatus::COMPLETED))->toBeFalse()
+            ->and(RequestStatus::isClientCancellable(RequestStatus::FAILED))->toBeFalse()
+            ->and(RequestStatus::isClientCancellable(RequestStatus::CANCELLED))->toBeFalse();
     });
 });
