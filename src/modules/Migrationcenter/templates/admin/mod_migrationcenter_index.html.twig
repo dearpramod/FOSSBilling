@@ -40,8 +40,7 @@
                 <tr>
                     <td>{{ r.id }}</td>
                     <td>
-                        {% set c = admin.client_get({'id': r.client_id}) %}
-                        <a href="{{ "client/manage/#{r.client_id}"|url }}">{{ c.first_name }} {{ c.last_name }}</a>
+                        <a href="{{ "client/manage/#{r.client_id}"|url }}">{{ r.client_first_name }} {{ r.client_last_name }}</a>
                     </td>
                     <td><code>{{ r.username }}@{{ r.host }}{% if r.port %}:{{ r.port }}{% endif %}</code></td>
                     <td>{{ r.panel_type_label }}</td>
@@ -181,6 +180,15 @@ function mcOpen(id) {
     });
 }
 
+function mcApiError(e) {
+    var msg = (e && e.message) ? e.message : 'Could not save changes.';
+    if (typeof FOSSBilling !== 'undefined' && typeof FOSSBilling.message === 'function') {
+        FOSSBilling.message(msg, 'error');
+    } else {
+        alert(msg);
+    }
+}
+
 function mcSave() {
     const id = mcCurrentId;
     const status = document.getElementById('mc-status').value;
@@ -188,14 +196,17 @@ function mcSave() {
     const staffId = parseInt(document.getElementById('mc-assignee').value, 10) || 0;
 
     // Chained rather than parallel so a rejected status transition surfaces
-    // its error instead of racing a page reload.
+    // its error instead of racing a page reload. Each step gets its own error
+    // handler so a rejected transition (e.g. an illegal status move) is
+    // reported to the user instead of failing silently while the earlier
+    // steps' writes (notes, assignment) have already been persisted.
     FOSSBilling.api.admin.post('migrationcenter/update_notes', { id: id, staff_notes: notes }, function () {
         FOSSBilling.api.admin.post('migrationcenter/assign', { id: id, staff_id: staffId }, function () {
             FOSSBilling.api.admin.post('migrationcenter/update_status', { id: id, status: status }, function () {
                 window.location.reload();
-            });
-        });
-    });
+            }, mcApiError);
+        }, mcApiError);
+    }, mcApiError);
 }
 
 function mcPurge() {

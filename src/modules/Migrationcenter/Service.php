@@ -19,6 +19,7 @@ use Box\Mod\Migrationcenter\Repository\MigrationRequestRepository;
 use Box\Mod\Migrationcenter\Support\RequestInput;
 use Box\Mod\Migrationcenter\Support\RequestStatus;
 use Box\Mod\Migrationcenter\Support\SecretCodec;
+use Doctrine\DBAL\ArrayParameterType;
 use FOSSBilling\InjectionAwareInterface;
 
 class Service implements InjectionAwareInterface
@@ -158,6 +159,13 @@ class Service implements InjectionAwareInterface
 
     // ── Staff-facing ─────────────────────────────────────────────────────
 
+    /**
+     * The queue table needs each row's client name, but the entity only
+     * knows client_id. Rather than an admin.client_get() lookup per row
+     * (an N+1 that also requires the caller to hold the `client.view`
+     * permission just to render the list), the distinct client ids are
+     * batched into a single query here and merged onto the rows.
+     */
     public function getAdminRequestList(array $data): array
     {
         $requests = $this->repository()
@@ -165,7 +173,33 @@ class Service implements InjectionAwareInterface
             ->getQuery()
             ->getResult();
 
-        return array_map(static fn (MigrationRequest $r): array => $r->toAdminApiArray(), $requests);
+        $rows = array_map(static fn (MigrationRequest $r): array => $r->toAdminApiArray(), $requests);
+
+        $clientIds = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['client_id'], $rows)));
+
+        $clients = [];
+        if ($clientIds !== []) {
+            $clientRows = $this->di['dbal']->fetchAllAssociative(
+                'SELECT id, first_name, last_name FROM client WHERE id IN (?)',
+                [$clientIds],
+                [ArrayParameterType::INTEGER]
+            );
+            foreach ($clientRows as $clientRow) {
+                $clients[(int) $clientRow['id']] = [
+                    'first_name' => (string) $clientRow['first_name'],
+                    'last_name' => (string) $clientRow['last_name'],
+                ];
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $client = $clients[(int) $row['client_id']] ?? null;
+            $row['client_first_name'] = $client['first_name'] ?? '';
+            $row['client_last_name'] = $client['last_name'] ?? '';
+        }
+        unset($row);
+
+        return $rows;
     }
 
     public function getAdminRequest(int $id): array
