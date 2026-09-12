@@ -1,0 +1,13 @@
+{
+  "id": "migrationcenter",
+  "type": "mod",
+  "name": "Migration Center",
+  "description": "Lets clients hand their previous host's credentials to migration support staff, and gives staff a queue to work those migrations through. Credentials are encrypted at rest and only readable by staff holding the manage_migrations permission.",
+  "version": "0.1.0",
+  "minimum_fossbilling_version": "0.8.3",
+  "homepage_url": "https://merovps.com",
+  "author": "MeroVPS",
+  "author_url": "https://merovps.com",
+  "license": "Apache-2.0",
+  "icon_url": "icon.svg"
+}
