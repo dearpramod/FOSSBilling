@@ -1,0 +1,208 @@
+{% extends 'layout_default.html.twig' %}
+
+{% block meta_title %}Migration Center{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Migration requests</h3>
+        <div class="card-actions">
+            <div class="btn-list">
+                {% for status in ['', 'submitted', 'in_progress', 'completed', 'failed', 'cancelled'] %}
+                <a href="{{ '/migrationcenter'|url({'status': status}) }}"
+                   class="btn btn-sm {% if request.status|default('') == status %}btn-primary{% endif %}">
+                    {{ status ? status|replace({'_': ' '})|title : 'All' }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% set requests = admin.migrationcenter_get_list({'status': request.status|default('')}) %}
+    {% set staff_pairs = admin.staff_get_pairs %}
+
+    <div class="table-responsive">
+        <table class="table card-table table-vcenter">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Client</th>
+                    <th>Previous host</th>
+                    <th>Panel</th>
+                    <th>Status</th>
+                    <th>Assigned</th>
+                    <th>Submitted</th>
+                    <th class="w-1"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                <tr>
+                    <td>{{ r.id }}</td>
+                    <td>
+                        {% set c = admin.client_get({'id': r.client_id}) %}
+                        <a href="{{ "client/manage/#{r.client_id}"|url }}">{{ c.first_name }} {{ c.last_name }}</a>
+                    </td>
+                    <td><code>{{ r.username }}@{{ r.host }}{% if r.port %}:{{ r.port }}{% endif %}</code></td>
+                    <td>{{ r.panel_type_label }}</td>
+                    <td>
+                        <span class="badge
+                            {% if r.status == 'completed' %}bg-green
+                            {% elseif r.status == 'failed' %}bg-red
+                            {% elseif r.status == 'in_progress' %}bg-yellow
+                            {% elseif r.status == 'cancelled' %}bg-secondary
+                            {% else %}bg-blue{% endif %}">
+                            {{ r.status|replace({'_': ' '})|title }}
+                        </span>
+                    </td>
+                    <td class="text-muted">
+                        {% if r.assigned_staff_id and staff_pairs[r.assigned_staff_id] is defined %}
+                            {{ staff_pairs[r.assigned_staff_id] }}
+                        {% else %}
+                            <span class="text-secondary">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted">{{ r.created_at|format_date }}</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="mcOpen({{ r.id }})">Open</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-4">No migration requests yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Detail modal ─────────────────────────────────────────────────── #}
+<div class="modal" id="mc-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Migration request <span id="mc-id"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Previous host</label>
+            <input class="form-control" id="mc-host" readonly>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Username</label>
+            <input class="form-control" id="mc-username" readonly>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Password</label>
+            <input class="form-control font-monospace" id="mc-password" readonly>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <select class="form-select" id="mc-status">
+              <option value="submitted">Submitted</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Assigned to</label>
+            <select class="form-select" id="mc-assignee">
+              <option value="0">Unassigned</option>
+              {% for id, name in staff_pairs %}
+              <option value="{{ id }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"></div>
+          <div class="col-12" id="mc-sshkey-wrap" style="display:none">
+            <label class="form-label">SSH key</label>
+            <textarea class="form-control font-monospace" id="mc-sshkey" rows="4" readonly></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Client notes</label>
+            <textarea class="form-control" id="mc-client-notes" rows="2" readonly></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Internal staff notes</label>
+            <textarea class="form-control" id="mc-staff-notes" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-danger me-auto" id="mc-purge" onclick="mcPurge()">Purge credentials</button>
+        <button class="btn" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-primary" onclick="mcSave()">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+let mcCurrentId = null;
+
+function mcOpen(id) {
+    mcCurrentId = id;
+    document.getElementById('mc-id').textContent = '#' + id;
+    document.getElementById('mc-password').value = '';
+    document.getElementById('mc-sshkey').value = '';
+    document.getElementById('mc-sshkey-wrap').style.display = 'none';
+
+    FOSSBilling.api.admin.post('migrationcenter/get', { id: id }, function (r) {
+        document.getElementById('mc-host').value = r.host + (r.port ? ':' + r.port : '');
+        document.getElementById('mc-username').value = r.username;
+        document.getElementById('mc-status').value = r.status;
+        document.getElementById('mc-assignee').value = r.assigned_staff_id || 0;
+        document.getElementById('mc-client-notes').value = r.client_notes || '';
+        document.getElementById('mc-staff-notes').value = r.staff_notes || '';
+        document.getElementById('mc-purge').style.display = r.can_purge_secret ? '' : 'none';
+
+        if (r.has_secret) {
+            // Only staff holding manage_migrations get past this call; a
+            // view_migrations-only account simply sees the fields stay empty.
+            FOSSBilling.api.admin.post('migrationcenter/reveal_secret', { id: id }, function (s) {
+                document.getElementById('mc-password').value = s.password;
+                if (s.ssh_key) {
+                    document.getElementById('mc-sshkey').value = s.ssh_key;
+                    document.getElementById('mc-sshkey-wrap').style.display = '';
+                }
+            }, function () {
+                document.getElementById('mc-password').placeholder = 'You do not have permission to view credentials';
+            });
+        } else {
+            document.getElementById('mc-password').placeholder = r.secret_purged_at ? 'Purged on ' + r.secret_purged_at : 'No credentials stored';
+        }
+
+        new bootstrap.Modal(document.getElementById('mc-modal')).show();
+    });
+}
+
+function mcSave() {
+    const id = mcCurrentId;
+    const status = document.getElementById('mc-status').value;
+    const notes = document.getElementById('mc-staff-notes').value;
+    const staffId = parseInt(document.getElementById('mc-assignee').value, 10) || 0;
+
+    // Chained rather than parallel so a rejected status transition surfaces
+    // its error instead of racing a page reload.
+    FOSSBilling.api.admin.post('migrationcenter/update_notes', { id: id, staff_notes: notes }, function () {
+        FOSSBilling.api.admin.post('migrationcenter/assign', { id: id, staff_id: staffId }, function () {
+            FOSSBilling.api.admin.post('migrationcenter/update_status', { id: id, status: status }, function () {
+                window.location.reload();
+            });
+        });
+    });
+}
+
+function mcPurge() {
+    if (!confirm('Permanently erase the stored credentials for this request? This cannot be undone.')) { return; }
+    FOSSBilling.api.admin.post('migrationcenter/purge_secret', { id: mcCurrentId }, function () {
+        window.location.reload();
+    });
+}
+</script>
+{% endblock %}
