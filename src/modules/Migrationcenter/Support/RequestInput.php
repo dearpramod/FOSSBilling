@@ -61,7 +61,7 @@ final class RequestInput
         }
 
         $clientNotes = trim((string) ($data['client_notes'] ?? ''));
-        $clientOrderId = (int) ($data['client_order_id'] ?? 0);
+        $clientOrderId = self::parseClientOrderId($data['client_order_id'] ?? null);
 
         return new self(
             $panelType,
@@ -71,7 +71,7 @@ final class RequestInput
             $password,
             $sshKey,
             $clientNotes === '' ? null : $clientNotes,
-            $clientOrderId > 0 ? $clientOrderId : null,
+            $clientOrderId,
         );
     }
 
@@ -92,5 +92,24 @@ final class RequestInput
         }
 
         return $port;
+    }
+
+    private static function parseClientOrderId(mixed $raw): ?int
+    {
+        $value = trim((string) ($raw ?? ''));
+        if ($value === '') {
+            return null;
+        }
+
+        if (!ctype_digit($value)) {
+            throw new \FOSSBilling\InformationException('The selected service is not valid.');
+        }
+
+        $orderId = (int) $value;
+        if ($orderId === 0) {
+            return null;
+        }
+
+        return $orderId;
     }
 }

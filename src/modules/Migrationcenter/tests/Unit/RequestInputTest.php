@@ -96,4 +96,22 @@ describe('fromClientData', function (): void {
     test('rejects a payload with neither password nor SSH key', function (): void {
         RequestInput::fromClientData(validMigrationPayload(['password' => '', 'ssh_key' => '']));
     })->throws(FOSSBilling\InformationException::class, 'Provide either a password or an SSH key for your previous host.');
+
+    test('rejects port 0', function (): void {
+        RequestInput::fromClientData(validMigrationPayload(['port' => '0']));
+    })->throws(FOSSBilling\InformationException::class, 'The port must be a number between 1 and 65535.');
+
+    test('order id of 0 becomes null', function (): void {
+        $input = RequestInput::fromClientData(validMigrationPayload(['client_order_id' => '0']));
+
+        expect($input->clientOrderId)->toBeNull();
+    });
+
+    test('rejects a non-numeric client order id', function (): void {
+        RequestInput::fromClientData(validMigrationPayload(['client_order_id' => 'abc']));
+    })->throws(FOSSBilling\InformationException::class, 'The selected service is not valid.');
+
+    test('rejects a partially numeric client order id', function (): void {
+        RequestInput::fromClientData(validMigrationPayload(['client_order_id' => '7abc']));
+    })->throws(FOSSBilling\InformationException::class, 'The selected service is not valid.');
 });
