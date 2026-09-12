@@ -86,6 +86,11 @@ class RateLimiter implements InjectionAwareInterface
                 // endpoint before any account lookup, so an unbounded caller could burn Google
                 // quota. A real sign-in is a single click, well under the cap.
                 'sociallogin_credential_ip' => ['policy' => 'fixed_window', 'limit' => 30, 'interval' => '1 hour'],
+                // A migration request hands us third-party credentials and emails staff;
+                // an unbounded intake form is both a spam vector and a way to bulk-probe
+                // which order ids exist. A genuine client files one of these rarely.
+                'migrationcenter_request_ip' => ['policy' => 'fixed_window', 'limit' => 10, 'interval' => '1 hour'],
+                'migrationcenter_request_client' => ['policy' => 'fixed_window', 'limit' => 5, 'interval' => '1 hour'],
             ],
         ];
     }
