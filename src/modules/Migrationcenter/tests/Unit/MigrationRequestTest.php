@@ -54,6 +54,12 @@ describe('toApiArray', function (): void {
             ->and($array['status'])->toBe(RequestStatus::SUBMITTED)
             ->and($array['method'])->toBe('manual');
     });
+
+    test('never exposes the internal assigned staff id', function (): void {
+        $array = migrationRequestFixture()->setAssignedStaffId(5)->toApiArray();
+
+        expect($array)->not->toHaveKey('assigned_staff_id');
+    });
 });
 
 describe('toAdminApiArray', function (): void {
@@ -63,6 +69,12 @@ describe('toAdminApiArray', function (): void {
         expect($array['staff_notes'])->toBe('Waiting on DNS TTL')
             ->and($array)->not->toHaveKey('secret_encrypted')
             ->and(json_encode($array))->not->toContain('ciphertext-goes-here');
+    });
+
+    test('adds the assigned staff id for staff use only', function (): void {
+        $array = migrationRequestFixture()->setAssignedStaffId(5)->toAdminApiArray();
+
+        expect($array['assigned_staff_id'])->toBe(5);
     });
 });
 

@@ -8,10 +8,12 @@
         <h3 class="card-title">Migration requests</h3>
         <div class="card-actions">
             <div class="btn-list">
+                {% set status_counts = admin.migrationcenter_status_counts %}
                 {% for status in ['', 'submitted', 'in_progress', 'completed', 'failed', 'cancelled'] %}
+                {% set tab_count = status ? status_counts[status]|default(0) : status_counts|reduce((carry, c) => carry + c, 0) %}
                 <a href="{{ '/migrationcenter'|url({'status': status}) }}"
                    class="btn btn-sm {% if request.status|default('') == status %}btn-primary{% endif %}">
-                    {{ status ? status|replace({'_': ' '})|title : 'All' }}
+                    {{ status ? status|replace({'_': ' '})|title : 'All' }} <span class="badge ms-1">{{ tab_count }}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -169,8 +171,13 @@ function mcOpen(id) {
                     document.getElementById('mc-sshkey').value = s.ssh_key;
                     document.getElementById('mc-sshkey-wrap').style.display = '';
                 }
-            }, function () {
-                document.getElementById('mc-password').placeholder = 'You do not have permission to view credentials';
+            }, function (e) {
+                // Decryption also fails for reasons unrelated to permissions
+                // (a rotated salt, a corrupted row) — show the server's own
+                // message when there is one instead of always blaming
+                // permissions, which sends staff who do hold
+                // manage_migrations down a dead end.
+                document.getElementById('mc-password').placeholder = (e && e.message) ? e.message : 'You do not have permission to view credentials';
             });
         } else {
             document.getElementById('mc-password').placeholder = r.secret_purged_at ? 'Purged on ' + r.secret_purged_at : 'No credentials stored';
@@ -213,7 +220,7 @@ function mcPurge() {
     if (!confirm('Permanently erase the stored credentials for this request? This cannot be undone.')) { return; }
     FOSSBilling.api.admin.post('migrationcenter/purge_secret', { id: mcCurrentId }, function () {
         window.location.reload();
-    });
+    }, mcApiError);
 }
 </script>
 {% endblock %}

@@ -52,6 +52,10 @@ final class RequestInput
             throw new \FOSSBilling\InformationException('The username at your previous host is required.');
         }
 
+        if (mb_strlen($username) > 255) {
+            throw new \FOSSBilling\InformationException('The username at your previous host is too long.');
+        }
+
         $port = self::parsePort($data['port'] ?? null);
 
         $password = (string) ($data['password'] ?? '');

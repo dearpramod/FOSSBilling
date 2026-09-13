@@ -114,7 +114,6 @@ class MigrationRequest implements ApiArrayInterface
             'client_notes' => $this->clientNotes,
             'has_secret' => $this->secretEncrypted !== '',
             'secret_purged_at' => $this->secretPurgedAt?->format('Y-m-d H:i:s'),
-            'assigned_staff_id' => $this->assignedStaffId,
             'can_client_cancel' => RequestStatus::isClientCancellable($this->status),
             'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
@@ -129,6 +128,7 @@ class MigrationRequest implements ApiArrayInterface
     {
         return $this->toApiArray() + [
             'staff_notes' => $this->staffNotes,
+            'assigned_staff_id' => $this->assignedStaffId,
             'can_purge_secret' => RequestStatus::isPurgeable($this->status) && $this->secretEncrypted !== '',
         ];
     }

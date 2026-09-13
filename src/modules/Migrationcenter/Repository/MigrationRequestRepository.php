@@ -28,7 +28,11 @@ class MigrationRequestRepository extends EntityRepository
             $qb->andWhere('r.id = :id')->setParameter('id', (int) $data['id']);
         }
 
-        if (!empty($data['client_id'])) {
+        // isset/!== null rather than !empty(): an explicitly-passed 0 or ''
+        // client_id must scope the query to "no client can match" instead of
+        // being silently treated as "no filter", which would return every
+        // client's rows. findOneForClient() already fails closed the same way.
+        if (isset($data['client_id']) && $data['client_id'] !== '') {
             $qb->andWhere('r.clientId = :clientId')->setParameter('clientId', (int) $data['client_id']);
         }
 

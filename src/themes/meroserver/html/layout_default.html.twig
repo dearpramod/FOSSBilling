@@ -365,15 +365,18 @@
 
             {# ===== Migration Center (module-gated) ===== #}
             {% if client and guest.extension_is_on({'mod': 'migrationcenter'}) %}
+            {% if _sidebar_unverified %}<div class="sb-lock-wrap">{% endif %}
             <a href="{{ '/migrationcenter'|url }}" title="Migration Center"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                      {% if 'migrationcenter' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}"
-               :class="sidebarCollapsed ? 'justify-center px-2' : ''">
+                      {% if 'migrationcenter' in request.uri %}bg-violet-50 text-primary border-l-[3px] border-l-primary rounded-r-md rounded-tl-none rounded-bl-none{% else %}text-slate-500 hover:bg-violet-50 hover:text-primary{% endif %}
+                      {% if _sidebar_unverified %} opacity-40 pointer-events-none{% endif %}"
+               :class="sidebarCollapsed ? 'justify-center px-2' : ''"{% if _sidebar_unverified %} aria-disabled="true"{% endif %}>
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                 </svg>
                 <span :class="sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'" class="transition-all duration-200 whitespace-nowrap">Migration Center</span>
             </a>
+            {% if _sidebar_unverified %}<div class="sb-lock-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Verify your email</div></div>{% endif %}
             {% endif %}
 
             {# ===== Order Services (collapsible group) ===== #}

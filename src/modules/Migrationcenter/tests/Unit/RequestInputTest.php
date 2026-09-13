@@ -85,6 +85,10 @@ describe('fromClientData', function (): void {
         RequestInput::fromClientData(validMigrationPayload(['username' => '']));
     })->throws(FOSSBilling\InformationException::class, 'The username at your previous host is required.');
 
+    test('rejects a username longer than 255 characters', function (): void {
+        RequestInput::fromClientData(validMigrationPayload(['username' => str_repeat('a', 256)]));
+    })->throws(FOSSBilling\InformationException::class, 'The username at your previous host is too long.');
+
     test('rejects a port outside the valid range', function (): void {
         RequestInput::fromClientData(validMigrationPayload(['port' => '70000']));
     })->throws(FOSSBilling\InformationException::class, 'The port must be a number between 1 and 65535.');

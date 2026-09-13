@@ -145,6 +145,16 @@ class Service implements InjectionAwareInterface
 
     public function getClientRequests(int $clientId): array
     {
+        // Fail closed: an invalid/zero client id must never widen the
+        // result set to every client's rows. Unreachable via the API today
+        // (the client API always passes an authenticated id > 0), but this
+        // keeps the guarantee explicit rather than relying solely on the
+        // repository's own filter, matching findOneForClient()'s fail-closed
+        // behaviour.
+        if ($clientId <= 0) {
+            return [];
+        }
+
         $requests = $this->repository()
             ->getSearchQueryBuilder(['client_id' => $clientId])
             ->getQuery()
@@ -166,10 +176,13 @@ class Service implements InjectionAwareInterface
             throw new \FOSSBilling\InformationException('This migration request can no longer be cancelled. Please contact support.');
         }
 
-        $request->setStatus(RequestStatus::CANCELLED);
-        $this->di['em']->flush();
-
-        return true;
+        // Route through the same transition path staff use (updateStatus)
+        // so a client withdrawal produces the same audit log line as every
+        // other status change. Deliberately pass notify: false — the client
+        // just clicked "Withdraw" themselves, so an email telling them their
+        // own request was withdrawn is noise, not information; staff-driven
+        // transitions still always notify the client.
+        return $this->transitionStatus($id, RequestStatus::CANCELLED, notify: false);
     }
 
     // ── Staff-facing ─────────────────────────────────────────────────────
@@ -235,6 +248,18 @@ class Service implements InjectionAwareInterface
 
     public function updateStatus(int $id, string $status): bool
     {
+        return $this->transitionStatus($id, $status, notify: true);
+    }
+
+    /**
+     * Shared status-transition path: validates the move, persists it, writes
+     * the one audit log line every transition gets, and optionally emails
+     * the client. Kept private so callers go through updateStatus() (staff)
+     * or cancelRequestForClient() (client), both of which log identically —
+     * only the notification differs.
+     */
+    private function transitionStatus(int $id, string $status, bool $notify): bool
+    {
         $request = $this->load($id);
         $current = $request->getStatus();
 
@@ -251,12 +276,14 @@ class Service implements InjectionAwareInterface
 
         $this->di['logger']->info(sprintf('Migration request %d moved from %s to %s.', $id, $current, $status));
 
-        $this->sendEmail([
-            'to_client' => $request->getClientId(),
-            'code' => 'mod_migrationcenter_status_changed',
-            'request' => $request->toApiArray(),
-            'status_spaced' => str_replace('_', ' ', $status),
-        ]);
+        if ($notify) {
+            $this->sendEmail([
+                'to_client' => $request->getClientId(),
+                'code' => 'mod_migrationcenter_status_changed',
+                'request' => $request->toApiArray(),
+                'status_spaced' => str_replace('_', ' ', $status),
+            ]);
+        }
 
         return true;
     }
