@@ -126,7 +126,6 @@ class Service implements InjectionAwareInterface
         $this->di['logger']->info(sprintf('Migration request %d created by client %d.', $id, $clientId));
 
         $apiArray = $request->toApiArray();
-        $client = $this->di['mod_service']('client')->get(['id' => $clientId]);
 
         $this->sendEmail([
             'to_client' => $clientId,
@@ -138,7 +137,7 @@ class Service implements InjectionAwareInterface
             'to_staff' => true,
             'code' => 'mod_migrationcenter_staff_new_request',
             'request' => $apiArray,
-            'client_name' => trim(($client->getFirstName() ?? '') . ' ' . ($client->getLastName() ?? '')),
+            'client_name' => $this->clientDisplayName($clientId),
         ]);
 
         return $id;
@@ -310,11 +309,33 @@ class Service implements InjectionAwareInterface
     {
         try {
             $this->di['mod_service']('email')->sendTemplate($payload);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->di['logger']->setChannel('email')->error('Failed to send migration center email', [
                 'code' => $payload['code'] ?? '',
                 'exception' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Resolves a client's display name for the staff notification email.
+     * Must never throw: a lookup failure here (e.g. the client vanished
+     * between the request being saved and the email being built) must not
+     * break createRequest(), which has already persisted successfully.
+     */
+    private function clientDisplayName(int $clientId): string
+    {
+        try {
+            $client = $this->di['mod_service']('client')->get(['id' => $clientId]);
+
+            return trim(($client->getFirstName() ?? '') . ' ' . ($client->getLastName() ?? ''));
+        } catch (\Throwable $e) {
+            $this->di['logger']->setChannel('email')->error('Could not resolve client name for migration notification', [
+                'client_id' => $clientId,
+                'exception' => $e->getMessage(),
+            ]);
+
+            return '';
         }
     }
 
